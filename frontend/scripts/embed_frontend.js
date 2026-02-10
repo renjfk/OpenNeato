@@ -1,14 +1,14 @@
 // Reads frontend build output, gzips each file, and generates a C header
 // with PROGMEM byte arrays for embedding in firmware.
 //
-// Usage: node scripts/embed_frontend.js
+// Usage: node frontend/scripts/embed_frontend.js
 
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
 
-const distDir = path.join(__dirname, "..", "frontend", "dist");
-const outHeader = path.join(__dirname, "..", "src", "web_assets.h");
+const distDir = path.join(__dirname, "..", "dist");
+const outHeader = path.join(__dirname, "..", "..", "firmware", "src", "web_assets.h");
 
 const files = [
     { src: "index.html", varName: "INDEX_HTML", contentType: "text/html" },

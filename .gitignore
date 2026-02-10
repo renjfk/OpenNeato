@@ -1,4 +1,4 @@
 .pio
-src/web_assets.h
+firmware/src/web_assets.h
 frontend/node_modules
 frontend/dist

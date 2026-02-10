@@ -272,29 +272,31 @@ D8/D9/D10 NOT supported (different board, password-locked serial).
   for analytics logs and diagnostics (Phase 6)
 ## Architecture
 
-Flat `src/` directory with header/source pairs. No subdirectories, no test framework.
+Two top-level directories: `firmware/` for ESP32 code, `frontend/` for the web UI.
+`platformio.ini` stays at the root so CLion/PlatformIO can load the project directly.
 
 ```
-src/
-  config.h             # Global defines, macros, LOG macro
-  main.cpp             # setup()/loop() entry point, global objects
-  serial_menu.h/cpp    # Generic interactive serial menu system
-  wifi_manager.h/cpp   # WiFi config, credential storage, network scanning
-  ota_handler.h/cpp    # ElegantOTA wrapper over async web server
-  web_server.h/cpp     # Serves embedded frontend assets from PROGMEM
-  web_assets.h         # Auto-generated — gzipped frontend as byte arrays
-frontend/
-  package.json         # Preact + Vite build config
-  tsconfig.json        # TypeScript configuration
-  vite.config.ts       # Vite build settings (deterministic output filenames)
-  index.html           # SPA entry point
+platformio.ini           # PIO config (src_dir = firmware/src)
+firmware/
   src/
-    main.tsx           # Preact render entry
-    app.tsx            # Root component
-scripts/
-  embed_frontend.js   # Gzips frontend dist, generates src/web_assets.h
-partition.csv          # Custom partition table (dual OTA slots, 1856KB each)
-platformio.ini         # Build environments, dependencies, OTA upload command
+    config.h             # Global defines, macros, LOG macro
+    main.cpp             # setup()/loop() entry point, global objects
+    serial_menu.h/cpp    # Generic interactive serial menu system
+    wifi_manager.h/cpp   # WiFi config, credential storage, network scanning
+    ota_handler.h/cpp    # ElegantOTA wrapper over async web server
+    web_server.h/cpp     # Serves embedded frontend assets from PROGMEM
+    web_assets.h         # Auto-generated — gzipped frontend as byte arrays
+  partition.csv          # Custom partition table (dual OTA slots, 1856KB each)
+frontend/
+  package.json           # Preact + Vite build config
+  tsconfig.json          # TypeScript configuration
+  vite.config.ts         # Vite build settings (deterministic output filenames)
+  index.html             # SPA entry point
+  src/
+    main.tsx             # Preact render entry
+    app.tsx              # Root component
+  scripts/
+    embed_frontend.js    # Gzips frontend dist, generates firmware/src/web_assets.h
 ```
 
 ## Build Commands

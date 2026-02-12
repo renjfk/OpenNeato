@@ -1,13 +1,15 @@
-# AGENTS.md — project-neato
+# AGENTS.md — OpenNeato
 
 Guidelines for AI agents working in this repository.
 
 ## Project Overview
 
-ESP32-C3 bridge for Neato Botvac robot vacuums (D3, D5, D7 series). The ESP32-C3
-communicates with the Botvac over UART (TX/RX pins) using Neato's serial command
-protocol, and exposes a web UI over WiFi so users can monitor and control the robot
-from a browser.
+**OpenNeato** is a community-driven, open-source replacement for Neato's discontinued
+cloud and mobile app. After Neato ceased operations, millions of Botvac robots
+(D3-D7 series) lost their only means of remote control. OpenNeato fills that gap
+with an ESP32-C3 bridge that communicates with the robot over UART using Neato's
+serial command protocol and exposes a local web UI over WiFi — no cloud, no app
+store, no account required.
 
 Built with PlatformIO + Arduino framework on espressif32 platform.
 

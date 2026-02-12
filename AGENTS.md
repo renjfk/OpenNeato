@@ -60,7 +60,18 @@ firmware through REST API. Everything runs on the device itself.
 - Compressed storage using heatshrink (window=10, lookahead=5, static alloc, ~2KB stack)
 - JSON-lines in SPIFFS (256KB partition, ~200KB cap), 32KB rotation threshold
 - Active log uncompressed, rotated files heatshrink-compressed (.jsonl.hs), oldest auto-deleted
-- Decompression support: web API supports `?decompress=true` for reading compressed logs
+- Transparent decompression: compressed logs are automatically decompressed when served via API
+  (async chunked streaming — never blocks the web server)
+- **Non-blocking I/O**: all SPIFFS and serial operations are async/deferred so API
+  request handlers never block the event loop:
+  - Log writes buffered in memory, flushed to SPIFFS in `loop()` (1s interval or 32-line cap)
+  - Log rotation: fast rename in `flushBuffer()`, incremental heatshrink compression
+    across `loop()` iterations (one 512-byte chunk per tick)
+  - Bulk log delete: one file removed per `loop()` iteration
+  - Space enforcement: one oldest file deleted per `loop()` call
+  - Serial commands: non-blocking queue state machine with callback-based completion
+  - Sensor/action API routes: `request->pause()` + callback + `weak.lock()` pattern
+  - Compressed log download: `beginChunkedResponse` with streaming decompression
 - REST API: list/download/delete logs, live system health, timezone config, time sync
 - Critical for LIDAR/mapping development: replay scan data without live robot
 
@@ -605,6 +616,10 @@ firmware/
                            #   hook (logs every serial command with status/queue/bytes),
                            #   log file management (list/read/delete), live system health
                            #   JSON, timezone NVS storage
+                           #   Non-blocking design: log writes buffered in memory,
+                           #   flushed to SPIFFS in loop(); log rotation uses fast
+                           #   rename + incremental heatshrink compression across
+                           #   loop() iterations; bulk delete deferred one file per tick
     neato_commands.h/cpp   # Command enum (24 commands), response structs (VersionData,
                            #   ChargerData, AnalogSensorData, DigitalSensorData,
                            #   MotorData, RobotState, ErrorData, AccelData, ButtonData,
@@ -670,7 +685,7 @@ frontend/
 | POST | `/api/clean/stop` | `NeatoSerial::cleanStop` |
 | POST | `/api/sound?id=N` | `NeatoSerial::playSound` |
 | GET | `/api/logs` | List log files with metadata (JSON array) |
-| GET | `/api/logs/{filename}` | Download a log file (raw or compressed) |
+| GET | `/api/logs/{filename}` | Download a log file (compressed files auto-decompressed) |
 | DELETE | `/api/logs/{filename}` | Delete a specific log file |
 | DELETE | `/api/logs` | Delete all log files |
 | GET | `/api/system` | Live system health (heap, uptime, RSSI, SPIFFS, NTP) |

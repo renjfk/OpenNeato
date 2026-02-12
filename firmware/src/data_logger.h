@@ -6,6 +6,7 @@
 #include <SPIFFS.h>
 #include <functional>
 #include <vector>
+#include <heatshrink_encoder.h>
 #include "config.h"
 
 class NeatoSerial;
@@ -26,6 +27,9 @@ public:
     void loop();
 
     // -- Public logging methods (called by other modules) --------------------
+    // These are safe to call from any context (request handlers, callbacks,
+    // event handlers). They only append to an in-memory buffer; actual SPIFFS
+    // I/O is deferred to loop().
 
     void logEvent(const String& type, const String& jsonPayload);
     void logError(const String& source, const String& message);
@@ -72,10 +76,39 @@ private:
     // Get current epoch (best available source)
     time_t now() const;
 
-    // Log writing
-    void writeLine(const String& jsonLine);
-    void rotateIfNeeded();
+    // -- Write buffer (non-blocking log writes) ------------------------------
+    // Log lines accumulate in memory; loop() flushes them to SPIFFS.
+    std::vector<String> writeBuffer;
+    unsigned long lastFlushMs = 0;
+    size_t currentFileSize = 0; // Tracked in memory to avoid SPIFFS stat on every write
+
+    void bufferLine(const String& jsonLine);
+    void flushBuffer();
+
+    // -- Deferred rotation ---------------------------------------------------
+    // After flush detects file too large, it renames current.jsonl to a temp
+    // uncompressed archive. Compression happens incrementally in loop().
+    bool rotationPending = false;
+    String pendingSrcPath;
+    String pendingDstPath;
+
+    // Incremental compression state (persists across loop() calls)
+    bool compressing = false;
+    File compressSrc;
+    File compressDst;
+    heatshrink_encoder compressEncoder;
+    bool compressInputDone = false; // No more source data to read
+    size_t compressTotalIn = 0;
+    size_t compressTotalOut = 0;
+
+    void startCompression();
+    bool compressStep(); // Returns true when compression is complete
+
     void enforceSpaceLimit();
+
+    // -- Deferred bulk delete ------------------------------------------------
+    bool bulkDeletePending = false;
+    std::vector<String> bulkDeletePaths;
 
     // Boot tasks
     void archiveLeftoverLog();
@@ -83,7 +116,7 @@ private:
     void fetchRobotTime();
     void syncRobotTime();
 
-    // Compression
+    // Blocking compression (used only in begin() during boot)
     bool compressFile(const String& srcPath, const String& dstPath);
 
     // NeatoSerial logger hook (enhanced with status, queue depth, response size)

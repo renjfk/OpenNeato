@@ -3,6 +3,8 @@
 #include "neato_serial.h"
 #include "data_logger.h"
 #include <SPIFFS.h>
+#include <heatshrink_decoder.h>
+#include <memory>
 
 // Default serializer for structs with toFields()
 template<typename T>
@@ -142,43 +144,122 @@ static String logListJson(const std::vector<LogFileInfo>& files) {
 void WebServer::registerLogRoutes() {
     // GET /api/logs[/filename] — list logs or download a specific file
     // A single BackwardCompatible handler matches both "/api/logs" and "/api/logs/..."
-    loggedRoute("/api/logs", HTTP_GET, [this](AsyncWebServerRequest *request) -> int {
+    // This route uses server.on() directly instead of loggedRoute() because
+    // compressed log downloads use chunked streaming (beginChunkedResponse) which
+    // must not block — loggedRoute's sync wrapper would block until completion.
+    server.on("/api/logs", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        unsigned long startMs = millis();
         String filename = request->url().substring(String("/api/logs/").length());
 
         if (filename.isEmpty()) {
-            request->send(200, "application/json", logListJson(logger.listLogs()));
-            return 200;
+            String json = logListJson(logger.listLogs());
+            logger.logRequest(HTTP_GET, "/api/logs", 200, millis() - startMs);
+            request->send(200, "application/json", json);
+            return;
         }
 
         // Resolve SPIFFS path
         String path = (filename == "current.jsonl") ? LOG_CURRENT_FILE : String(LOG_DIR) + "/" + filename;
 
         if (!SPIFFS.exists(path)) {
+            logger.logRequest(HTTP_GET, request->url().c_str(), 404, millis() - startMs);
             sendError(request, 404, "log not found");
-            return 404;
+            return;
         }
 
-        // Check if decompression is requested via query param
-        bool shouldDecompress = request->hasParam("decompress") && filename.endsWith(".hs");
+        // Compressed logs are always decompressed transparently for the client
+        if (filename.endsWith(".hs")) {
+            // Shared decompression context: file handle, decoder, and read buffer
+            // survive across chunked response filler callbacks via shared_ptr.
+            struct DecompCtx {
+                File file;
+                heatshrink_decoder hsd;
+                uint8_t inBuf[512];
+                size_t inBufLen = 0; // Bytes available in inBuf
+                size_t inBufOff = 0; // Current read offset in inBuf
+                bool inputDone = false; // No more file data to read
+                bool finished = false; // Decoder fully finished
 
-        if (shouldDecompress) {
-            String decompressed;
-            bool ok = logger.decompressLog(filename, [&decompressed](const uint8_t *data, size_t len) {
-                decompressed.concat(reinterpret_cast<const char *>(data), len);
-            });
+                ~DecompCtx() {
+                    if (file)
+                        file.close();
+                }
+            };
 
-            if (!ok) {
-                sendError(request, 500, "decompression failed");
-                return 500;
+            auto ctx = std::make_shared<DecompCtx>();
+            ctx->file = SPIFFS.open(path, FILE_READ);
+            if (!ctx->file) {
+                logger.logRequest(HTTP_GET, request->url().c_str(), 500, millis() - startMs);
+                sendError(request, 500, "failed to open log");
+                return;
             }
+            heatshrink_decoder_reset(&ctx->hsd);
 
-            request->send(200, "application/x-ndjson", decompressed);
-        } else {
-            String contentType = filename.endsWith(".hs") ? "application/octet-stream" : "application/x-ndjson";
-            AsyncWebServerResponse *response = request->beginResponse(SPIFFS, path, contentType, true /* download */);
+            logger.logRequest(HTTP_GET, request->url().c_str(), 200, millis() - startMs);
+
+            AsyncWebServerResponse *response = request->beginChunkedResponse(
+                    "application/x-ndjson", [ctx](uint8_t *buffer, size_t maxLen, size_t) -> size_t {
+                        if (ctx->finished)
+                            return 0; // Signal end of response
+
+                        size_t totalWritten = 0;
+
+                        while (totalWritten < maxLen) {
+                            // Try polling decompressed output first
+                            size_t polled = 0;
+                            HSD_poll_res pres = heatshrink_decoder_poll(&ctx->hsd, buffer + totalWritten,
+                                                                        maxLen - totalWritten, &polled);
+                            if (pres < 0) {
+                                ctx->finished = true;
+                                return totalWritten > 0 ? totalWritten : 0;
+                            }
+                            totalWritten += polled;
+
+                            if (pres == HSDR_POLL_MORE)
+                                continue; // More decompressed data available
+
+                            // Decoder needs more input — refill from file if needed
+                            if (ctx->inBufOff >= ctx->inBufLen) {
+                                if (ctx->inputDone) {
+                                    // No more file data; finish decoder
+                                    HSD_finish_res fres = heatshrink_decoder_finish(&ctx->hsd);
+                                    if (fres == HSDR_FINISH_DONE) {
+                                        ctx->finished = true;
+                                        return totalWritten;
+                                    }
+                                    // HSDR_FINISH_MORE — loop back to poll remaining output
+                                    continue;
+                                }
+
+                                // Read next chunk from file
+                                size_t bytesRead = ctx->file.read(ctx->inBuf, sizeof(ctx->inBuf));
+                                if (bytesRead == 0) {
+                                    ctx->inputDone = true;
+                                    continue;
+                                }
+                                ctx->inBufLen = bytesRead;
+                                ctx->inBufOff = 0;
+                            }
+
+                            // Sink input into decoder
+                            size_t sunk = 0;
+                            HSD_sink_res sres = heatshrink_decoder_sink(&ctx->hsd, ctx->inBuf + ctx->inBufOff,
+                                                                        ctx->inBufLen - ctx->inBufOff, &sunk);
+                            if (sres < 0) {
+                                ctx->finished = true;
+                                return totalWritten > 0 ? totalWritten : 0;
+                            }
+                            ctx->inBufOff += sunk;
+                        }
+
+                        return totalWritten;
+                    });
             request->send(response);
+        } else {
+            // Plain text log — serve directly from SPIFFS (async file response)
+            logger.logRequest(HTTP_GET, request->url().c_str(), 200, millis() - startMs);
+            request->send(SPIFFS, path, "application/x-ndjson");
         }
-        return 200;
     });
 
     // DELETE /api/logs[/filename] — delete all logs or a specific file

@@ -4,7 +4,6 @@
 #include <WiFi.h>
 #include <ctime>
 #include <esp_system.h>
-#include <heatshrink_encoder.h>
 #include <heatshrink_decoder.h>
 
 // -- Constructor -------------------------------------------------------------
@@ -28,7 +27,17 @@ void DataLogger::begin() {
     }
 
     // Compress any leftover uncompressed log from a previous run
+    // (blocking is acceptable during boot — no web server yet)
     archiveLeftoverLog();
+
+    // Seed currentFileSize from existing file (if any)
+    if (SPIFFS.exists(LOG_CURRENT_FILE)) {
+        File f = SPIFFS.open(LOG_CURRENT_FILE, FILE_READ);
+        if (f) {
+            currentFileSize = f.size();
+            f.close();
+        }
+    }
 
     // Initialize timezone NVS namespace if it doesn't exist
     Preferences prefs;
@@ -56,6 +65,8 @@ void DataLogger::begin() {
 
     // Log boot event
     logBootEvent();
+
+    lastFlushMs = millis();
 }
 
 void DataLogger::loop() {
@@ -75,6 +86,51 @@ void DataLogger::loop() {
     if (ntpSynced && millis() - lastRobotSync >= ROBOT_TIME_SYNC_INTERVAL_MS) {
         syncRobotTime();
         lastRobotSync = millis();
+    }
+
+    // Flush write buffer to SPIFFS when interval elapsed or buffer full
+    if (!writeBuffer.empty()) {
+        bool intervalElapsed = millis() - lastFlushMs >= LOG_FLUSH_INTERVAL_MS;
+        bool bufferFull = writeBuffer.size() >= LOG_FLUSH_MAX_LINES;
+        if (intervalElapsed || bufferFull) {
+            flushBuffer();
+        }
+    }
+
+    // Incremental compression (one chunk per loop iteration)
+    if (compressing) {
+        if (compressStep()) {
+            // Compression complete — clean up source file
+            compressSrc.close();
+            compressDst.close();
+
+            LOG("DLOG", "Compressed %u -> %u bytes (%.0f%%)", compressTotalIn, compressTotalOut,
+                compressTotalIn > 0
+                        ? (100.0f * static_cast<float>(compressTotalOut) / static_cast<float>(compressTotalIn))
+                        : 0.0f);
+
+            SPIFFS.remove(pendingSrcPath);
+            compressing = false;
+            enforceSpaceLimit();
+        }
+    }
+
+    // Deferred rotation: start compression if rotation was requested
+    if (rotationPending && !compressing) {
+        startCompression();
+        rotationPending = false;
+    }
+
+    // Deferred bulk delete: delete one file per loop iteration
+    if (bulkDeletePending && !bulkDeletePaths.empty()) {
+        String path = bulkDeletePaths.back();
+        bulkDeletePaths.pop_back();
+        SPIFFS.remove(path);
+        LOG("DLOG", "Bulk delete: %s", path.c_str());
+
+        if (bulkDeletePaths.empty()) {
+            bulkDeletePending = false;
+        }
     }
 }
 
@@ -163,53 +219,158 @@ void DataLogger::syncRobotTime() {
     });
 }
 
-// -- Log writing -------------------------------------------------------------
+// -- Write buffer (non-blocking log writes) ----------------------------------
 
-void DataLogger::writeLine(const String& jsonLine) {
+void DataLogger::bufferLine(const String& jsonLine) {
     if (!spiffsReady)
+        return;
+    writeBuffer.push_back(jsonLine);
+}
+
+void DataLogger::flushBuffer() {
+    if (writeBuffer.empty() || !spiffsReady)
         return;
 
     File f = SPIFFS.open(LOG_CURRENT_FILE, FILE_APPEND);
     if (!f) {
         LOG("DLOG", "Failed to open log file for writing");
+        writeBuffer.clear();
         return;
     }
 
-    f.println(jsonLine);
+    for (const auto& line: writeBuffer) {
+        size_t written = f.println(line);
+        currentFileSize += written;
+    }
     f.close();
+    writeBuffer.clear();
+    lastFlushMs = millis();
 
-    rotateIfNeeded();
+    // Check if rotation is needed (deferred — actual compression happens in loop())
+    if (currentFileSize >= LOG_MAX_FILE_SIZE && !rotationPending && !compressing) {
+        String baseName = String(LOG_DIR) + "/" + String(static_cast<long>(now()));
+        pendingSrcPath = baseName + ".jsonl";
+        pendingDstPath = baseName + ".jsonl.hs";
+        LOG("DLOG", "Rotating log -> %s (%u bytes)", pendingDstPath.c_str(), currentFileSize);
+
+        // Rename current log to uncompressed archive (fast, ~5ms)
+        SPIFFS.rename(LOG_CURRENT_FILE, pendingSrcPath);
+        currentFileSize = 0;
+        rotationPending = true;
+    }
 }
 
-void DataLogger::rotateIfNeeded() {
-    File f = SPIFFS.open(LOG_CURRENT_FILE, FILE_READ);
-    if (!f)
+// -- Incremental compression -------------------------------------------------
+
+void DataLogger::startCompression() {
+    compressSrc = SPIFFS.open(pendingSrcPath, FILE_READ);
+    if (!compressSrc) {
+        LOG("DLOG", "Compression failed: cannot open source %s", pendingSrcPath.c_str());
         return;
-
-    size_t fileSize = f.size();
-    f.close();
-
-    if (fileSize < LOG_MAX_FILE_SIZE)
-        return;
-
-    // Compress current log to timestamped archive
-    String baseName = String(LOG_DIR) + "/" + String(static_cast<long>(now()));
-    String compressedName = baseName + ".jsonl.hs";
-    LOG("DLOG", "Rotating log -> %s (%u bytes)", compressedName.c_str(), fileSize);
-
-    bool compressed = compressFile(LOG_CURRENT_FILE, compressedName);
-    if (compressed) {
-        // Compression succeeded — remove original
-        SPIFFS.remove(LOG_CURRENT_FILE);
-    } else {
-        // Compression failed — rename to uncompressed archive
-        String uncompressedName = baseName + ".jsonl";
-        LOG("DLOG", "Compression failed, archiving uncompressed");
-        SPIFFS.rename(LOG_CURRENT_FILE, uncompressedName);
     }
 
-    enforceSpaceLimit();
+    compressDst = SPIFFS.open(pendingDstPath, FILE_WRITE);
+    if (!compressDst) {
+        LOG("DLOG", "Compression failed: cannot open dest %s", pendingDstPath.c_str());
+        compressSrc.close();
+        return;
+    }
+
+    heatshrink_encoder_reset(&compressEncoder);
+    compressInputDone = false;
+    compressTotalIn = 0;
+    compressTotalOut = 0;
+    compressing = true;
 }
+
+bool DataLogger::compressStep() {
+    // Process one chunk of input per call (~5ms of SPIFFS I/O)
+    static const size_t CHUNK_SIZE = 512;
+    uint8_t inBuf[CHUNK_SIZE];
+    uint8_t outBuf[CHUNK_SIZE];
+
+    if (!compressInputDone) {
+        // Read one chunk from source
+        int bytesRead = compressSrc.read(inBuf, CHUNK_SIZE);
+        if (bytesRead <= 0) {
+            compressInputDone = true;
+        } else {
+            // Sink all bytes from this chunk into the encoder
+            size_t offset = 0;
+            while (offset < static_cast<size_t>(bytesRead)) {
+                size_t sunk = 0;
+                HSE_sink_res sres =
+                        heatshrink_encoder_sink(&compressEncoder, inBuf + offset, bytesRead - offset, &sunk);
+                if (sres < 0) {
+                    LOG("DLOG", "Heatshrink sink error");
+                    compressSrc.close();
+                    compressDst.close();
+                    SPIFFS.remove(pendingDstPath);
+                    compressing = false;
+                    // Fall back to uncompressed archive (source already renamed)
+                    return true;
+                }
+                offset += sunk;
+                compressTotalIn += sunk;
+
+                // Poll for compressed output
+                size_t outSz = 0;
+                HSE_poll_res pres;
+                do {
+                    pres = heatshrink_encoder_poll(&compressEncoder, outBuf, CHUNK_SIZE, &outSz);
+                    if (pres < 0) {
+                        LOG("DLOG", "Heatshrink poll error");
+                        compressSrc.close();
+                        compressDst.close();
+                        SPIFFS.remove(pendingDstPath);
+                        compressing = false;
+                        return true;
+                    }
+                    if (outSz > 0) {
+                        compressDst.write(outBuf, outSz);
+                        compressTotalOut += outSz;
+                    }
+                } while (pres == HSER_POLL_MORE);
+            }
+        }
+        return false; // More work to do
+    }
+
+    // Input exhausted — finish encoding
+    HSE_finish_res fres = heatshrink_encoder_finish(&compressEncoder);
+    if (fres < 0) {
+        LOG("DLOG", "Heatshrink finish error");
+        compressSrc.close();
+        compressDst.close();
+        SPIFFS.remove(pendingDstPath);
+        compressing = false;
+        return true;
+    }
+
+    // Poll remaining compressed output
+    size_t outSz = 0;
+    HSE_poll_res pres;
+    do {
+        pres = heatshrink_encoder_poll(&compressEncoder, outBuf, CHUNK_SIZE, &outSz);
+        if (pres < 0) {
+            LOG("DLOG", "Heatshrink poll error during finish");
+            compressSrc.close();
+            compressDst.close();
+            SPIFFS.remove(pendingDstPath);
+            compressing = false;
+            return true;
+        }
+        if (outSz > 0) {
+            compressDst.write(outBuf, outSz);
+            compressTotalOut += outSz;
+        }
+    } while (pres == HSER_POLL_MORE);
+
+    // HSER_FINISH_MORE means more finish passes needed
+    return (fres == HSER_FINISH_DONE);
+}
+
+// -- Boot-only blocking compression ------------------------------------------
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static) - uses spiffsReady, SPIFFS, LOG
 void DataLogger::archiveLeftoverLog() {
@@ -247,27 +408,27 @@ void DataLogger::archiveLeftoverLog() {
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static) - uses SPIFFS, LOG
 void DataLogger::enforceSpaceLimit() {
     size_t maxBytes = (SPIFFS.totalBytes() * LOG_MAX_SPIFFS_PERCENT) / 100;
-    while (SPIFFS.usedBytes() > maxBytes) {
-        // Find oldest archived log file (lowest numeric prefix)
-        String oldest;
-        File root = SPIFFS.open(LOG_DIR);
-        if (!root || !root.isDirectory())
-            break;
+    if (SPIFFS.usedBytes() <= maxBytes)
+        return;
 
-        File entry = root.openNextFile();
-        while (entry) {
-            String name = String(entry.name());
-            if (name.endsWith(".jsonl") || name.endsWith(".jsonl.hs")) {
-                if (oldest.isEmpty() || name < oldest) {
-                    oldest = name;
-                }
+    // Delete only one file per call — this runs from loop() so we avoid long blocking
+    String oldest;
+    File root = SPIFFS.open(LOG_DIR);
+    if (!root || !root.isDirectory())
+        return;
+
+    File entry = root.openNextFile();
+    while (entry) {
+        String name = String(entry.name());
+        if ((name.endsWith(".jsonl") || name.endsWith(".jsonl.hs")) && name != "current.jsonl") {
+            if (oldest.isEmpty() || name < oldest) {
+                oldest = name;
             }
-            entry = root.openNextFile();
         }
+        entry = root.openNextFile();
+    }
 
-        if (oldest.isEmpty())
-            break;
-
+    if (!oldest.isEmpty()) {
         String fullPath = String(LOG_DIR) + "/" + oldest;
         LOG("DLOG", "Space limit: deleting %s", fullPath.c_str());
         SPIFFS.remove(fullPath);
@@ -276,11 +437,11 @@ void DataLogger::enforceSpaceLimit() {
 
 // -- Public logging methods --------------------------------------------------
 
-// NOLINTNEXTLINE(readability-convert-member-functions-to-static) - uses now(), writeLine()
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static) - uses now(), bufferLine()
 void DataLogger::logEvent(const String& type, const String& jsonPayload) {
     String line =
             "{\"t\":" + String(static_cast<long>(now())) + ",\"typ\":\"" + type + "\",\"d\":{" + jsonPayload + "}}";
-    writeLine(line);
+    bufferLine(line);
 }
 
 void DataLogger::logError(const String& source, const String& message) {
@@ -543,26 +704,30 @@ void DataLogger::deleteAllLogs() {
     if (!spiffsReady)
         return;
 
-    // Remove current log
-    SPIFFS.remove(LOG_CURRENT_FILE);
+    // Collect all paths — actual deletion is deferred to loop() (one per iteration)
+    bulkDeletePaths.clear();
 
-    // Remove all compressed logs
-    File root = SPIFFS.open(LOG_DIR);
-    if (!root || !root.isDirectory())
-        return;
-
-    std::vector<String> toDelete;
-    File entry = root.openNextFile();
-    while (entry) {
-        String name = String(entry.name());
-        if (name.endsWith(".jsonl") || name.endsWith(".jsonl.hs")) {
-            toDelete.push_back(String(LOG_DIR) + "/" + name);
-        }
-        entry = root.openNextFile();
+    // Current log
+    if (SPIFFS.exists(LOG_CURRENT_FILE)) {
+        bulkDeletePaths.push_back(LOG_CURRENT_FILE);
+        currentFileSize = 0;
     }
 
-    for (const auto& path: toDelete) {
-        SPIFFS.remove(path);
+    // Archived logs
+    File root = SPIFFS.open(LOG_DIR);
+    if (root && root.isDirectory()) {
+        File entry = root.openNextFile();
+        while (entry) {
+            String name = String(entry.name());
+            if (name.endsWith(".jsonl") || name.endsWith(".jsonl.hs")) {
+                bulkDeletePaths.push_back(String(LOG_DIR) + "/" + name);
+            }
+            entry = root.openNextFile();
+        }
+    }
+
+    if (!bulkDeletePaths.empty()) {
+        bulkDeletePending = true;
     }
 }
 
@@ -613,7 +778,7 @@ void DataLogger::setTimezone(const String& tz) {
     }
 }
 
-// -- Compression -------------------------------------------------------------
+// -- Blocking compression (boot-time only) -----------------------------------
 
 bool DataLogger::compressFile(const String& srcPath, const String& dstPath) {
     File src = SPIFFS.open(srcPath, FILE_READ);

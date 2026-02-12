@@ -25,6 +25,8 @@ firmware through REST API. Everything runs on the device itself.
    compression, non-blocking I/O, command/request/event logging, NTP time sync
 4. **Firmware management** — Custom FirmwareManager (Update.h), MD5 validation,
    safe boot checkpoint, dual OTA partition auto-rollback
+5. **Mock API server** — Stateful Node.js dev server (Vite plugin), all REST
+   endpoints, realistic responses, `/api/mock/*` control endpoints
 
 Details for completed phases are documented in the Architecture, API routes, and
 reference sections below.
@@ -32,29 +34,6 @@ reference sections below.
 **Note for agents**: When a phase is completed, verify its details are covered in the
 Architecture/API/reference sections, then remove the full phase description from below
 and add a one-line summary to the completed list above. Do this before committing.
-
-### Mock API server
-- Lightweight Node.js dev server that mimics all implemented REST endpoints
-- Enables frontend development without a physical robot or ESP32
-- Lives in `frontend/mock/` — single JS file, zero production dependencies
-- Runs alongside Vite dev server: `npm run dev` starts both (Vite plugin
-  serves `/api/*` in-process, single port)
-- Covers every route in the current API table: sensor reads, actions, logs,
-  system health, firmware version, timezone
-- Realistic responses: uses actual field names and value ranges from the Neato
-  serial protocol (see Response Formats section) with plausible random variation
-- Stateful where it matters:
-  - Battery drains slowly over time, charges when `ExtPwrPresent` is set
-  - Cleaning state transitions (idle -> cleaning -> stopped) via action endpoints
-  - Robot state and UI state reflect current activity
-  - Error state set/cleared via endpoints
-  - LIDAR returns a synthetic room outline with noise
-- Latency simulation: adds small random delays (50-200ms) to mimic serial
-  command round-trip time
-- Mock control endpoints (`/api/mock/*`) for forcing edge-case states during
-  development — battery level, dock presence, error codes, etc. These don't
-  exist on the real device; they're curl-able helpers for testing
-- No authentication, no HTTPS — matches the real device behavior
 
 ### Web UI
 - SPA shell embedded in firmware binary (PROGMEM) — done (stub)

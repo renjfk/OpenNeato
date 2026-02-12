@@ -13,7 +13,7 @@ const zlib = require("zlib");
 const distDir = path.join(__dirname, "..", "dist");
 const outHeader = path.join(__dirname, "..", "..", "firmware", "src", "web_assets.h");
 
-// MIME type lookup by extension
+// MIME type lookup by extension (keep minimal, expand as needed)
 const mimeTypes = {
     ".html": "text/html",
     ".js": "application/javascript",
@@ -21,21 +21,7 @@ const mimeTypes = {
     ".json": "application/json",
     ".svg": "image/svg+xml",
     ".png": "image/png",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".gif": "image/gif",
     ".ico": "image/x-icon",
-    ".woff": "font/woff",
-    ".woff2": "font/woff2",
-    ".ttf": "font/ttf",
-    ".eot": "application/vnd.ms-fontobject",
-    ".map": "application/json",
-    ".txt": "text/plain",
-    ".xml": "application/xml",
-    ".webp": "image/webp",
-    ".webm": "video/webm",
-    ".mp3": "audio/mpeg",
-    ".wav": "audio/wav",
 };
 
 function getContentType(filePath) {

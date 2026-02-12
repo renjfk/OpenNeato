@@ -1,14 +1,67 @@
 #include "data_logger.h"
 #include "neato_serial.h"
-#include <Preferences.h>
+#include "system_manager.h"
 #include <WiFi.h>
 #include <ctime>
 #include <esp_system.h>
-#include <heatshrink_decoder.h>
+
+// -- CompressedLogReader (streaming decompression) ---------------------------
+
+size_t CompressedLogReader::read(uint8_t *buffer, size_t maxLen) {
+    if (finished)
+        return 0;
+
+    size_t totalWritten = 0;
+
+    while (totalWritten < maxLen) {
+        // Try polling decompressed output first
+        size_t polled = 0;
+        HSD_poll_res pres = heatshrink_decoder_poll(&hsd, buffer + totalWritten, maxLen - totalWritten, &polled);
+        if (pres < 0) {
+            finished = true;
+            return totalWritten;
+        }
+        totalWritten += polled;
+
+        if (pres == HSDR_POLL_MORE)
+            continue;
+
+        // Decoder needs more input — refill from file if needed
+        if (inBufOff >= inBufLen) {
+            if (inputDone) {
+                HSD_finish_res fres = heatshrink_decoder_finish(&hsd);
+                if (fres == HSDR_FINISH_DONE) {
+                    finished = true;
+                    return totalWritten;
+                }
+                continue;
+            }
+
+            size_t bytesRead = file.read(inBuf, sizeof(inBuf));
+            if (bytesRead == 0) {
+                inputDone = true;
+                continue;
+            }
+            inBufLen = bytesRead;
+            inBufOff = 0;
+        }
+
+        // Sink input into decoder
+        size_t sunk = 0;
+        HSD_sink_res sres = heatshrink_decoder_sink(&hsd, inBuf + inBufOff, inBufLen - inBufOff, &sunk);
+        if (sres < 0) {
+            finished = true;
+            return totalWritten;
+        }
+        inBufOff += sunk;
+    }
+
+    return totalWritten;
+}
 
 // -- Constructor -------------------------------------------------------------
 
-DataLogger::DataLogger(NeatoSerial& neato) : neato(neato) {}
+DataLogger::DataLogger(NeatoSerial& neato, SystemManager& sys) : neato(neato), sysMgr(sys) {}
 
 // -- Lifecycle ---------------------------------------------------------------
 
@@ -39,29 +92,9 @@ void DataLogger::begin() {
         }
     }
 
-    // Initialize timezone NVS namespace if it doesn't exist
-    Preferences prefs;
-    if (!prefs.begin(NTP_NVS_NAMESPACE, true)) {
-        // Namespace doesn't exist — create it with default
-        prefs.begin(NTP_NVS_NAMESPACE, false);
-        prefs.putString(NTP_NVS_TZ_KEY, NTP_DEFAULT_TZ);
-        prefs.end();
-        LOG("DLOG", "Initialized timezone namespace with default: %s", NTP_DEFAULT_TZ);
-    } else {
-        prefs.end();
-    }
-
-    // Configure NTP with timezone from NVS
-    String tz = getTimezone();
-    configTzTime(tz.c_str(), NTP_SERVER_1, NTP_SERVER_2);
-    LOG("DLOG", "NTP configured with TZ: %s", tz.c_str());
-
     // Register serial command logger hook with enhanced parameters
     neato.setLogger([this](const String& cmd, CommandStatus status, unsigned long ms, const String& raw, int qDepth,
                            size_t respBytes) { onCommand(cmd, status, ms, raw, qDepth, respBytes); });
-
-    // Fetch robot time for immediate clock
-    fetchRobotTime();
 
     // Log boot event
     logBootEvent();
@@ -70,24 +103,6 @@ void DataLogger::begin() {
 }
 
 void DataLogger::loop() {
-    // Detect NTP sync transition
-    if (!ntpSynced) {
-        time_t t = time(nullptr);
-        if (t > 1700000000) {
-            ntpSynced = true;
-            LOG("DLOG", "NTP synced: %ld", static_cast<long>(t));
-            logNtp("sync_ok", String(R"("epoch":)") + String(static_cast<long>(t)));
-            syncRobotTime();
-            lastRobotSync = millis();
-        }
-    }
-
-    // Periodic robot time re-sync from NTP
-    if (ntpSynced && millis() - lastRobotSync >= ROBOT_TIME_SYNC_INTERVAL_MS) {
-        syncRobotTime();
-        lastRobotSync = millis();
-    }
-
     // Flush write buffer to SPIFFS when interval elapsed or buffer full
     if (!writeBuffer.empty()) {
         bool intervalElapsed = millis() - lastFlushMs >= LOG_FLUSH_INTERVAL_MS;
@@ -134,91 +149,6 @@ void DataLogger::loop() {
     }
 }
 
-// -- Time --------------------------------------------------------------------
-
-time_t DataLogger::now() const {
-    // Prefer NTP
-    time_t t = time(nullptr);
-    if (t > 1700000000)
-        return t;
-
-    // Fall back to robot clock
-    if (robotTimeFetched && robotTimeBase > 0) {
-        return robotTimeBase + (millis() - robotTimeMillis) / 1000;
-    }
-
-    // Last resort: uptime as pseudo-timestamp
-    return static_cast<time_t>(millis() / 1000);
-}
-
-void DataLogger::fetchRobotTime() {
-    // Issue GetTime to read the robot's clock
-    neato.sendRaw("GetTime", [this](bool ok, const String& raw) {
-        if (!ok) {
-            LOG("DLOG", "GetTime failed");
-            logError("NTP", "GetTime failed, no robot clock available");
-            return;
-        }
-
-        // Parse "DayOfWeek HH:MM:SS" -> approximate epoch
-        // Robot doesn't provide date, so we construct a rough epoch
-        // Format: "Sunday 13:57:09" or similar
-        String line = raw;
-        line.trim();
-
-        int spaceIdx = line.indexOf(' ');
-        if (spaceIdx < 0)
-            return;
-
-        String timeStr = line.substring(spaceIdx + 1);
-        int h = 0, m = 0, s = 0;
-        // NOLINTNEXTLINE(cert-err34-c) - we check return value, conversion errors are handled
-        if (sscanf(timeStr.c_str(), "%d:%d:%d", &h, &m, &s) == 3) {
-            // Use a fixed date base (we only have time-of-day from robot)
-            // This gives us correct relative ordering within a day
-            struct tm tm = {};
-            tm.tm_year = 2025 - 1900;
-            tm.tm_mon = 0;
-            tm.tm_mday = 1;
-            tm.tm_hour = h;
-            tm.tm_min = m;
-            tm.tm_sec = s;
-            robotTimeBase = mktime(&tm);
-            robotTimeMillis = millis();
-            robotTimeFetched = true;
-            LOG("DLOG", "Robot time: %02d:%02d:%02d -> epoch %ld", h, m, s, static_cast<long>(robotTimeBase));
-        }
-    });
-}
-
-void DataLogger::triggerRobotTimeSync() {
-    if (!ntpSynced) {
-        LOG("DLOG", "Manual sync skipped: NTP not synced");
-        return;
-    }
-    syncRobotTime();
-}
-
-void DataLogger::syncRobotTime() {
-    // Push NTP time (local) to robot via SetTime
-    time_t t = time(nullptr);
-    if (t <= 1700000000)
-        return;
-
-    struct tm tm;
-    localtime_r(&t, &tm);
-
-    // SetTime Day <0-6> Hour <0-23> Min <0-59> Sec <0-59>
-    // tm_wday: 0=Sunday matches Neato's format
-    String cmd = "SetTime Day " + String(tm.tm_wday) + " Hour " + String(tm.tm_hour) + " Min " + String(tm.tm_min) +
-                 " Sec " + String(tm.tm_sec);
-
-    neato.sendRaw(cmd, [this](bool ok, const String&) {
-        logNtp("robot_time_set", String(R"("ok":)") + (ok ? "true" : "false"));
-        LOG("DLOG", "Robot clock sync %s", ok ? "OK" : "FAILED");
-    });
-}
-
 // -- Write buffer (non-blocking log writes) ----------------------------------
 
 void DataLogger::bufferLine(const String& jsonLine) {
@@ -248,7 +178,7 @@ void DataLogger::flushBuffer() {
 
     // Check if rotation is needed (deferred — actual compression happens in loop())
     if (currentFileSize >= LOG_MAX_FILE_SIZE && !rotationPending && !compressing) {
-        String baseName = String(LOG_DIR) + "/" + String(static_cast<long>(now()));
+        String baseName = String(LOG_DIR) + "/" + String(static_cast<long>(sysMgr.now()));
         pendingSrcPath = baseName + ".jsonl";
         pendingDstPath = baseName + ".jsonl.hs";
         LOG("DLOG", "Rotating log -> %s (%u bytes)", pendingDstPath.c_str(), currentFileSize);
@@ -437,10 +367,10 @@ void DataLogger::enforceSpaceLimit() {
 
 // -- Public logging methods --------------------------------------------------
 
-// NOLINTNEXTLINE(readability-convert-member-functions-to-static) - uses now(), bufferLine()
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static) - uses sysMgr.now(), bufferLine()
 void DataLogger::logEvent(const String& type, const String& jsonPayload) {
-    String line =
-            "{\"t\":" + String(static_cast<long>(now())) + ",\"typ\":\"" + type + "\",\"d\":{" + jsonPayload + "}}";
+    String line = "{\"t\":" + String(static_cast<long>(sysMgr.now())) + ",\"typ\":\"" + type + "\",\"d\":{" +
+                  jsonPayload + "}}";
     bufferLine(line);
 }
 
@@ -589,9 +519,9 @@ std::vector<LogFileInfo> DataLogger::listLogs() const {
     return files;
 }
 
-bool DataLogger::readLog(const String& filename, std::function<void(File&)> reader) const {
+std::shared_ptr<LogReader> DataLogger::readLog(const String& filename) const {
     if (!spiffsReady)
-        return false;
+        return nullptr;
 
     String path;
     if (filename == "current.jsonl") {
@@ -601,89 +531,16 @@ bool DataLogger::readLog(const String& filename, std::function<void(File&)> read
     }
 
     if (!SPIFFS.exists(path))
-        return false;
+        return nullptr;
 
     File f = SPIFFS.open(path, FILE_READ);
     if (!f)
-        return false;
+        return nullptr;
 
-    reader(f);
-    f.close();
-    return true;
-}
-
-bool DataLogger::decompressLog(const String& filename, std::function<void(const uint8_t *, size_t)> writer) const {
-    if (!spiffsReady)
-        return false;
-
-    String path = String(LOG_DIR) + "/" + filename;
-    if (!SPIFFS.exists(path))
-        return false;
-
-    File f = SPIFFS.open(path, FILE_READ);
-    if (!f)
-        return false;
-
-    // Initialize heatshrink decoder (static alloc, same config as encoder)
-    heatshrink_decoder hsd;
-    heatshrink_decoder_reset(&hsd);
-
-    uint8_t inBuf[512];
-    uint8_t outBuf[512];
-    size_t sunk = 0;
-    size_t polled = 0;
-    HSD_sink_res sres;
-    HSD_poll_res pres;
-
-    // Stream decompress: read compressed chunks, sink, poll, write decompressed output
-    while (f.available()) {
-        size_t bytesRead = f.read(inBuf, sizeof(inBuf));
-        if (bytesRead == 0)
-            break;
-
-        size_t offset = 0;
-        while (offset < bytesRead) {
-            sres = heatshrink_decoder_sink(&hsd, &inBuf[offset], bytesRead - offset, &sunk);
-            if (sres < 0) {
-                f.close();
-                return false; // Decoder error
-            }
-            offset += sunk;
-
-            // Poll for decompressed output
-            do {
-                pres = heatshrink_decoder_poll(&hsd, outBuf, sizeof(outBuf), &polled);
-                if (pres < 0) {
-                    f.close();
-                    return false;
-                }
-                if (polled > 0) {
-                    writer(outBuf, polled);
-                }
-            } while (pres == HSDR_POLL_MORE);
-        }
+    if (filename.endsWith(".hs")) {
+        return std::make_shared<CompressedLogReader>(std::move(f));
     }
-
-    // Finish decoder — flush any remaining output
-    HSD_finish_res fres = heatshrink_decoder_finish(&hsd);
-    if (fres < 0) {
-        f.close();
-        return false;
-    }
-
-    do {
-        pres = heatshrink_decoder_poll(&hsd, outBuf, sizeof(outBuf), &polled);
-        if (pres < 0) {
-            f.close();
-            return false;
-        }
-        if (polled > 0) {
-            writer(outBuf, polled);
-        }
-    } while (pres == HSDR_POLL_MORE);
-
-    f.close();
-    return true;
+    return std::make_shared<PlainLogReader>(std::move(f));
 }
 
 bool DataLogger::deleteLog(const String& filename) {
@@ -728,53 +585,6 @@ void DataLogger::deleteAllLogs() {
 
     if (!bulkDeletePaths.empty()) {
         bulkDeletePending = true;
-    }
-}
-
-// -- System health -----------------------------------------------------------
-
-String DataLogger::systemHealthJson() const {
-    String json = "{";
-    json += "\"heap\":" + String(ESP.getFreeHeap());
-    json += ",\"heapTotal\":" + String(ESP.getHeapSize());
-    json += ",\"uptime\":" + String(millis());
-    json += ",\"rssi\":" + String(WiFi.RSSI());
-    json += ",\"spiffsUsed\":" + String(spiffsReady ? SPIFFS.usedBytes() : 0);
-    json += ",\"spiffsTotal\":" + String(spiffsReady ? SPIFFS.totalBytes() : 0);
-    json += ",\"ntpSynced\":" + String(ntpSynced ? "true" : "false");
-    json += ",\"time\":" + String(static_cast<long>(now()));
-    json += R"(,"timeSource":")" + String(ntpSynced ? "ntp" : (robotTimeFetched ? "robot" : "millis")) + R"(")";
-    json += R"(,"tz":")" + jsonEscape(getTimezone()) + R"(")";
-    json += "}";
-    return json;
-}
-
-// -- Timezone ----------------------------------------------------------------
-
-String DataLogger::getTimezone() const {
-    Preferences prefs;
-    if (!prefs.begin(NTP_NVS_NAMESPACE, true)) {
-        // Namespace doesn't exist yet (first boot) — return default
-        return NTP_DEFAULT_TZ;
-    }
-    String tz = prefs.getString(NTP_NVS_TZ_KEY, NTP_DEFAULT_TZ);
-    prefs.end();
-    return tz;
-}
-
-void DataLogger::setTimezone(const String& tz) {
-    Preferences prefs;
-    prefs.begin(NTP_NVS_NAMESPACE, false);
-    prefs.putString(NTP_NVS_TZ_KEY, tz);
-    prefs.end();
-
-    // Apply immediately
-    configTzTime(tz.c_str(), NTP_SERVER_1, NTP_SERVER_2);
-    LOG("DLOG", "Timezone updated: %s", tz.c_str());
-
-    // Re-sync robot clock with new timezone
-    if (ntpSynced) {
-        syncRobotTime();
     }
 }
 

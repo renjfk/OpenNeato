@@ -44,12 +44,20 @@ enum CommandStatus {
 #define LOG_FLUSH_INTERVAL_MS 1000 // Flush write buffer to SPIFFS at most once per second
 #define LOG_FLUSH_MAX_LINES 32 // Also flush when buffer reaches this many lines
 
+// NVS (Non-Volatile Storage) — single shared namespace for all settings
+#define NVS_NAMESPACE "neato"
+
+// NVS keys — WiFi
+#define NVS_KEY_WIFI_SSID "wifi_ssid"
+#define NVS_KEY_WIFI_PASS "wifi_pass"
+
+// NVS keys — Time/NTP
+#define NVS_KEY_TIMEZONE "tz"
+
 // NTP / time sync
 #define NTP_SERVER_1 "pool.ntp.org"
 #define NTP_SERVER_2 "time.nist.gov"
 #define NTP_DEFAULT_TZ "UTC0" // POSIX TZ string, stored in NVS
-#define NTP_NVS_NAMESPACE "time"
-#define NTP_NVS_TZ_KEY "tz"
 #define ROBOT_TIME_SYNC_INTERVAL_MS 14400000 // Push NTP to robot every 4 hours
 
 // Logging

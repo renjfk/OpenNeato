@@ -583,39 +583,53 @@ structure. This avoids redundant codebase exploration and keeps agents productiv
 .gitignore                 # Ignores .pio/, node_modules/, dist/, .cache/, etc.
 platformio.ini             # PIO config (src_dir = firmware/src)
 scripts/
-  inject_version.py        # Pre-build script: injects FIRMWARE_VERSION env var into build flags
+  env_config.py            # Pre-build script: injects FIRMWARE_VERSION build flag,
+                           #   sets UPLOAD_PORT from NEATO_HOST env var for OTA uploads
 firmware/
   src/
     config.h               # Global defines, macros, LOG macro, pin/timing constants,
                            #   data logger settings (file sizes, NTP servers, TZ),
-                           #   CommandStatus enum (ok/timeout/parse_failed/serial_error)
-    main.cpp               # setup()/loop() entry point, global objects, WiFi event
-                           #   handlers -> dataLogger.logWifi(), OTA hook wiring
+                           #   NVS namespace/key defines, CommandStatus enum
+    main.cpp               # setup()/loop() entry point, global Preferences (single
+                           #   "neato" NVS namespace opened once, shared by ref),
+                           #   WiFi event handlers -> dataLogger.logWifi(), OTA hook,
+                           #   SystemManager wiring, robot time fallback via GetTime,
+                           #   NTP-to-robot clock sync, periodic re-sync (4h),
+                           #   factory reset (button hold clears NVS + restart)
     serial_menu.h/cpp      # Generic interactive serial menu system (state machine,
                            #   formatting helpers: printStatus, printError, etc.)
-    wifi_manager.h/cpp     # WiFi config, credential storage, network scanning,
-                           #   serial quick commands ([m]enu, [s]tatus)
+    wifi_manager.h/cpp     # WiFi config, credential storage (shared Preferences&),
+                           #   network scanning, serial quick commands ([m]enu, [s]tatus)
     firmware_manager.h/cpp # Firmware update using ESP32 Update.h directly,
                            #   registers POST /api/firmware/update route,
                            #   GET /api/firmware/version for update check,
                            #   MD5 hash validation, chunked upload, auto-reboot,
                            #   isInProgress() guard for loop(), LogCallback hook
+    system_manager.h/cpp   # NTP time sync, timezone (POSIX TZ in NVS), fallback
+                           #   clock from external sources, system health JSON
+                           #   (heap, uptime, RSSI, SPIFFS, NTP). Robot-agnostic —
+                           #   no NeatoSerial dependency. onNtpSync() callback for
+                           #   main.cpp to push time to robot. setFallbackClock()
+                           #   for external clock sources (e.g. robot GetTime).
     web_server.h/cpp       # Serves embedded frontend assets from PROGMEM, registers
                            #   all REST API routes (sensor GET, action POST),
                            #   log routes (list/download/delete), system routes
-                           #   (health, timezone, time sync). Request logging on
-                           #   all sensor/action routes via DataLogger.
+                           #   (health, timezone). Request logging on
+                           #   all sensor/action routes via DataLogger. System
+                           #   routes delegate to SystemManager for health/tz/NTP.
                            #   Template helpers: registerSensorRoute<T>(),
                            #   registerActionRoute(), sendGzipAsset(), sendError()
     web_assets.h           # Auto-generated — gzipped frontend as byte arrays
                            #   (INDEX_HTML_GZ, APP_JS_GZ with _LEN and _CONTENT_TYPE)
     data_logger.h/cpp      # On-device analytics (Phase 3): SPIFFS JSON-lines logging,
-                           #   NTP time sync with robot clock fallback, heatshrink
-                           #   compression on rotation, decompression support via API,
-                           #   space enforcement, boot event logging, NeatoSerial command
-                           #   hook (logs every serial command with status/queue/bytes),
-                           #   log file management (list/read/delete), live system health
-                           #   JSON, timezone NVS storage
+                           #   heatshrink compression on rotation, space enforcement,
+                           #   boot event logging, NeatoSerial command hook (logs every
+                           #   serial command with status/queue/bytes), log file management
+                           #   (list/read/delete). Delegates time to SystemManager.
+                           #   LogReader abstraction: readLog() returns shared_ptr<LogReader>,
+                           #   PlainLogReader (thin File wrapper) or CompressedLogReader
+                           #   (streaming heatshrink decoder) — web_server uses reader->read()
+                           #   with beginChunkedResponse, no decompression knowledge leaks out.
                            #   Non-blocking design: log writes buffered in memory,
                            #   flushed to SPIFFS in loop(); log rotation uses fast
                            #   rename + incremental heatshrink compression across
@@ -629,7 +643,8 @@ firmware/
                            #   WAITING_RESPONSE -> INTER_DELAY -> IDLE), typed
                            #   convenience methods (getCharger, getVersion, etc.),
                            #   action methods (cleanHouse, playSound, etc.),
-                           #   sendRaw() escape hatch, isBusy()/queueDepth() status,
+                           #   time methods (getTime, setTime), no sendRaw() public API,
+                           #   isBusy()/queueDepth() status,
                            #   LoggerCallback hook for DataLogger integration (6-param:
                            #   cmd, status, ms, raw, queueDepth, respBytes)
   lib/
@@ -691,7 +706,7 @@ frontend/
 | GET | `/api/system` | Live system health (heap, uptime, RSSI, SPIFFS, NTP) |
 | GET | `/api/timezone` | Current POSIX TZ string |
 | PUT | `/api/timezone` | Set POSIX TZ string (body: `{"tz":"..."}`) |
-| POST | `/api/time/sync` | Manually trigger robot clock sync from NTP |
+
 
 ## Build Commands
 
@@ -711,8 +726,9 @@ pio run -e Debug -t upload -t monitor
 # Serial monitor only
 pio run -e Debug -t monitor
 
-# OTA upload (device must be on network as neato.home)
+# OTA upload (defaults to neato.home, override with NEATO_HOST)
 pio run -e OTA -t upload
+NEATO_HOST=10.10.10.15 pio run -e OTA -t upload
 
 # Clean build artifacts
 pio run -e Debug --target clean
@@ -836,4 +852,5 @@ direct `Serial` calls outside of `serial_menu.cpp` are:
 - **USB**: Native USB CDC (not UART bridge) — `ARDUINO_USB_MODE=1`, `ARDUINO_USB_CDC_ON_BOOT=1`
 - **Reset button**: GPIO9 (BOOT button), active LOW with internal pull-up, hold 5s to reset credentials
 - **Flash layout**: Dual OTA slots (1856KB each), 256KB SPIFFS, 20KB NVS
-- **WiFi credentials**: Stored in NVS via `Preferences` library under namespace `"wifi"`
+- **NVS**: Single shared `"neato"` namespace (Preferences), opened once in main.cpp,
+  passed by reference to WiFiManager and SystemManager. Factory reset clears all keys.

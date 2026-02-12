@@ -5,11 +5,14 @@
 #include <ESPAsyncWebServer.h>
 #include <SPIFFS.h>
 #include <functional>
+#include <memory>
 #include <vector>
 #include <heatshrink_encoder.h>
+#include <heatshrink_decoder.h>
 #include "config.h"
 
 class NeatoSerial;
+class SystemManager;
 
 
 // Log file metadata for API listing
@@ -19,9 +22,47 @@ struct LogFileInfo {
     bool compressed = false;
 };
 
+// Streaming log reader — abstracts both plain and compressed log files.
+// Returned by DataLogger::readLog(), used by web server's chunked response.
+// Caller just calls read() repeatedly until it returns 0.
+struct LogReader {
+    virtual ~LogReader() = default;
+    // Fill buffer with up to maxLen bytes, return bytes written (0 = done)
+    virtual size_t read(uint8_t *buffer, size_t maxLen) = 0;
+};
+
+// Plain text log reader — thin wrapper around SPIFFS File
+struct PlainLogReader : public LogReader {
+    File file;
+    explicit PlainLogReader(File f) : file(std::move(f)) {}
+    ~PlainLogReader() override {
+        if (file)
+            file.close();
+    }
+    size_t read(uint8_t *buffer, size_t maxLen) override { return file.read(buffer, maxLen); }
+};
+
+// Compressed log reader — streaming heatshrink decompression
+struct CompressedLogReader : public LogReader {
+    File file;
+    heatshrink_decoder hsd;
+    uint8_t inBuf[512];
+    size_t inBufLen = 0;
+    size_t inBufOff = 0;
+    bool inputDone = false;
+    bool finished = false;
+
+    explicit CompressedLogReader(File f) : file(std::move(f)) { heatshrink_decoder_reset(&hsd); }
+    ~CompressedLogReader() override {
+        if (file)
+            file.close();
+    }
+    size_t read(uint8_t *buffer, size_t maxLen) override;
+};
+
 class DataLogger {
 public:
-    DataLogger(NeatoSerial& neato);
+    DataLogger(NeatoSerial& neato, SystemManager& sys);
 
     void begin();
     void loop();
@@ -41,40 +82,16 @@ public:
     // -- Log file management (for API) --------------------------------------
 
     std::vector<LogFileInfo> listLogs() const;
-    bool readLog(const String& filename, std::function<void(File&)> reader) const;
-    bool decompressLog(const String& filename, std::function<void(const uint8_t *, size_t)> writer) const;
+    std::shared_ptr<LogReader> readLog(const String& filename) const;
     bool deleteLog(const String& filename);
     void deleteAllLogs();
 
-    // -- System health (live, for GET /api/system) --------------------------
-
-    String systemHealthJson() const;
-
-    // -- Timezone -----------------------------------------------------------
-
-    String getTimezone() const;
-    void setTimezone(const String& tz);
-
-    // -- NTP status ---------------------------------------------------------
-
-    bool isNtpSynced() const { return ntpSynced; }
-    void triggerRobotTimeSync();
-
 private:
     NeatoSerial& neato;
-
-    // Time management
-    bool ntpSynced = false;
-    bool robotTimeFetched = false;
-    time_t robotTimeBase = 0; // Epoch from robot clock at boot
-    unsigned long robotTimeMillis = 0; // millis() when robot time was read
-    unsigned long lastRobotSync = 0;
+    SystemManager& sysMgr;
 
     // SPIFFS state
     bool spiffsReady = false;
-
-    // Get current epoch (best available source)
-    time_t now() const;
 
     // -- Write buffer (non-blocking log writes) ------------------------------
     // Log lines accumulate in memory; loop() flushes them to SPIFFS.
@@ -113,8 +130,6 @@ private:
     // Boot tasks
     void archiveLeftoverLog();
     void logBootEvent();
-    void fetchRobotTime();
-    void syncRobotTime();
 
     // Blocking compression (used only in begin() during boot)
     bool compressFile(const String& srcPath, const String& dstPath);

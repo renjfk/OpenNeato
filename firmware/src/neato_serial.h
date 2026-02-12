@@ -44,11 +44,11 @@ public:
     bool testModeOff(std::function<void(bool)> callback = nullptr);
     bool playSound(SoundId soundId, std::function<void(bool)> callback = nullptr);
     bool setLdsRotation(bool on, std::function<void(bool)> callback = nullptr);
+    bool setTime(int dayOfWeek, int hour, int min, int sec, std::function<void(bool)> callback = nullptr);
 
-    // -- Raw command (escape hatch) ------------------------------------------
+    // -- Time query --------------------------------------------------------------
 
-    bool sendRaw(const String& command, std::function<void(bool, const String&)> callback,
-                 unsigned long timeoutMs = NEATO_CMD_TIMEOUT_MS);
+    bool getTime(std::function<void(bool, const TimeData&)> callback);
 
     // -- Logger hook ---------------------------------------------------------
 

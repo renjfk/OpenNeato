@@ -1,20 +1,40 @@
 #include <Arduino.h>
+#include <Preferences.h>
 #include <WiFi.h>
 #include <esp_ota_ops.h>
 #include "config.h"
 #include "wifi_manager.h"
 #include "firmware_manager.h"
+#include "system_manager.h"
 #include "web_server.h"
 #include "neato_serial.h"
 #include "data_logger.h"
 
 // Global objects
+Preferences prefs;
 AsyncWebServer server(80);
 NeatoSerial neatoSerial;
-WiFiManager wifiManager;
+WiFiManager wifiManager(prefs);
 FirmwareManager firmwareManager(server);
-DataLogger dataLogger(neatoSerial);
-WebServer webServer(server, neatoSerial, dataLogger);
+SystemManager systemManager(prefs);
+DataLogger dataLogger(neatoSerial, systemManager);
+WebServer webServer(server, neatoSerial, dataLogger, systemManager);
+
+// Robot time sync state (managed here, not in SystemManager)
+unsigned long lastRobotSync = 0;
+
+// Push NTP time to robot clock via SetTime
+static void syncRobotClock() {
+    time_t t = time(nullptr);
+    if (t <= 1700000000)
+        return;
+
+    struct tm tm;
+    localtime_r(&t, &tm);
+
+    neatoSerial.setTime(tm.tm_wday, tm.tm_hour, tm.tm_min, tm.tm_sec,
+                        [](bool ok) { LOG("MAIN", "Robot clock sync %s", ok ? "OK" : "FAILED"); });
+}
 
 void setup() {
     Serial.begin(115200);
@@ -24,45 +44,11 @@ void setup() {
     LOG("BOOT", "ESP32-C3 Neato starting...");
     LOG("BOOT", "========================================");
 
+    // Open shared NVS namespace (stays open for the lifetime of the device)
+    prefs.begin(NVS_NAMESPACE, false);
+
     // Setup reset button
     pinMode(RESET_BUTTON_PIN, INPUT_PULLUP);
-    delay(100); // Small delay for pin to stabilize
-
-    // Read and log button state for debugging
-    int buttonState = digitalRead(RESET_BUTTON_PIN);
-    LOG("BOOT", "Button pin %d state: %s", RESET_BUTTON_PIN, buttonState == LOW ? "PRESSED" : "RELEASED");
-
-    // Check if button is held during boot for factory reset
-    if (buttonState == LOW) {
-        LOG("BOOT", "Reset button detected on boot!");
-        LOG("BOOT", "Hold for 5 seconds to reset WiFi credentials...");
-
-        unsigned long pressStart = millis();
-        bool resetConfirmed = false;
-        int countdown = 5;
-
-        while (digitalRead(RESET_BUTTON_PIN) == LOW) {
-            unsigned long elapsed = millis() - pressStart;
-            int currentCountdown = 5 - static_cast<int>(elapsed / 1000);
-
-            if (currentCountdown != countdown) {
-                countdown = currentCountdown;
-                LOG("BOOT", "Resetting in %d seconds...", countdown);
-            }
-
-            if (elapsed >= RESET_BUTTON_HOLD_TIME) {
-                LOG("BOOT", "RESETTING WiFi credentials!");
-                wifiManager.reset();
-                resetConfirmed = true;
-                break;
-            }
-            delay(100);
-        }
-
-        if (!resetConfirmed) {
-            LOG("BOOT", "Reset cancelled - button released too early");
-        }
-    }
 
     // Initialize Neato UART
     LOG("BOOT", "Initializing Neato serial...");
@@ -71,6 +57,18 @@ void setup() {
     // Initialize WiFi with provisioning
     LOG("BOOT", "Initializing WiFi...");
     wifiManager.begin();
+
+    // Initialize system manager (NTP, timezone)
+    LOG("BOOT", "Initializing system manager...");
+    systemManager.begin();
+
+    // Wire NTP sync callback: push time to robot, log the event
+    systemManager.onNtpSync([&] {
+        time_t t = time(nullptr);
+        dataLogger.logNtp("sync_ok", String(R"("epoch":)") + String(static_cast<long>(t)));
+        syncRobotClock();
+        lastRobotSync = millis();
+    });
 
     // Initialize web server and OTA only if WiFi is connected
     if (wifiManager.isConnected()) {
@@ -89,9 +87,27 @@ void setup() {
         LOG("BOOT", "Configure WiFi through serial menu");
     }
 
-    // Initialize data logger (SPIFFS, NTP, serial command hook)
+    // Initialize data logger (SPIFFS, serial command hook)
     LOG("BOOT", "Initializing data logger...");
     dataLogger.begin();
+
+    // Fetch robot time as fallback clock
+    neatoSerial.getTime([](bool ok, const TimeData& t) {
+        if (!ok) {
+            LOG("MAIN", "GetTime failed, no robot clock available");
+            return;
+        }
+        struct tm tm = {};
+        tm.tm_year = 2025 - 1900;
+        tm.tm_mon = 0;
+        tm.tm_mday = 1;
+        tm.tm_hour = t.hour;
+        tm.tm_min = t.minute;
+        tm.tm_sec = t.second;
+        time_t epoch = mktime(&tm);
+        systemManager.setFallbackClock(epoch);
+        LOG("MAIN", "Robot time: %02d:%02d:%02d -> epoch %ld", t.hour, t.minute, t.second, static_cast<long>(epoch));
+    });
 
     // Wire firmware update events to data logger
     firmwareManager.setLogger([](const String& event, const String& payload) { dataLogger.logOta(event, payload); });
@@ -139,13 +155,16 @@ void loop() {
             // Button just pressed
             buttonPressStart = millis();
             buttonWasPressed = true;
-            LOG("BUTTON", "Button pressed - hold for 5 seconds to reset");
+            LOG("BUTTON", "Button pressed - hold for 5 seconds to factory reset");
         } else {
             // Button still held
             unsigned long holdTime = millis() - buttonPressStart;
             if (holdTime >= RESET_BUTTON_HOLD_TIME) {
-                LOG("BUTTON", "RESETTING WiFi credentials!");
-                wifiManager.reset();
+                LOG("BUTTON", "FACTORY RESET!");
+                prefs.clear();
+                WiFi.disconnect(true, true);
+                delay(1000);
+                ESP.restart();
             }
         }
     } else {
@@ -154,8 +173,6 @@ void loop() {
             buttonWasPressed = false;
         }
     }
-
-    // Note: Serial commands are now handled by wifiManager.handleSerialInput()
 
     // Firmware update handling (only if connected)
     if (wifiManager.isConnected()) {
@@ -170,6 +187,15 @@ void loop() {
     // Pump Neato serial command queue
     neatoSerial.loop();
 
-    // Data logger housekeeping (NTP detection, robot time sync)
+    // System manager housekeeping (NTP detection)
+    systemManager.loop();
+
+    // Data logger housekeeping (flush buffer, compression, bulk delete)
     dataLogger.loop();
+
+    // Periodic robot time re-sync from NTP (every 4 hours)
+    if (systemManager.isNtpSynced() && millis() - lastRobotSync >= ROBOT_TIME_SYNC_INTERVAL_MS) {
+        syncRobotClock();
+        lastRobotSync = millis();
+    }
 }

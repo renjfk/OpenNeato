@@ -53,6 +53,8 @@ const char *commandToString(NeatoCommand cmd) {
             return "SetLDSRotation Off";
         case CMD_PLAY_SOUND:
             return "PlaySound";
+        case CMD_SET_TIME:
+            return "SetTime";
         default:
             return "";
     }
@@ -267,6 +269,15 @@ std::vector<Field> ButtonData::toFields() const {
             {"start", start ? "true" : "false", FIELD_BOOL},
             {"back", back ? "true" : "false", FIELD_BOOL},
             {"scrollDown", scrollDown ? "true" : "false", FIELD_BOOL},
+    };
+}
+
+std::vector<Field> TimeData::toFields() const {
+    return {
+            {"dayOfWeek", String(dayOfWeek), FIELD_INT},
+            {"hour", String(hour), FIELD_INT},
+            {"minute", String(minute), FIELD_INT},
+            {"second", String(second), FIELD_INT},
     };
 }
 
@@ -640,4 +651,36 @@ bool parseLdsScanData(const String& raw, LdsScanData& out) {
         foundData = true;
     }
     return foundData;
+}
+
+bool parseTimeData(const String& raw, TimeData& out) {
+    // Format: "Sunday 13:57:09" (DayOfWeek HH:MM:SS)
+    String line = raw;
+    line.trim();
+
+    // Map day name to number
+    static const char *days[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+    int spaceIdx = line.indexOf(' ');
+    if (spaceIdx < 0)
+        return false;
+
+    String dayName = line.substring(0, spaceIdx);
+    out.dayOfWeek = -1;
+    for (int i = 0; i < 7; i++) {
+        if (dayName.equalsIgnoreCase(days[i])) {
+            out.dayOfWeek = i;
+            break;
+        }
+    }
+
+    String timeStr = line.substring(spaceIdx + 1);
+    int h = 0, m = 0, s = 0;
+    // NOLINTNEXTLINE(cert-err34-c) - we check return value
+    if (sscanf(timeStr.c_str(), "%d:%d:%d", &h, &m, &s) != 3)
+        return false;
+
+    out.hour = h;
+    out.minute = m;
+    out.second = s;
+    return true;
 }

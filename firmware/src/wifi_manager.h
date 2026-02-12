@@ -8,7 +8,7 @@
 
 class WiFiManager {
 public:
-    WiFiManager();
+    explicit WiFiManager(Preferences& prefs);
 
     void begin();
 
@@ -18,10 +18,8 @@ public:
 
     bool isConnected() const;
 
-    void reset();
-
 private:
-    Preferences preferences;
+    Preferences& prefs;
     SerialMenu menu;
     SerialMenu networkMenu;
     bool inConfigMode = false;

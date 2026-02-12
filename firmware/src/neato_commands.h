@@ -43,7 +43,8 @@ enum NeatoCommand {
     CMD_TEST_MODE_OFF,
     CMD_SET_LDS_ROTATION_ON,
     CMD_SET_LDS_ROTATION_OFF,
-    CMD_PLAY_SOUND
+    CMD_PLAY_SOUND,
+    CMD_SET_TIME
 };
 
 // -- Sound IDs ---------------------------------------------------------------
@@ -199,6 +200,15 @@ struct ButtonData {
     std::vector<Field> toFields() const;
 };
 
+struct TimeData {
+    int dayOfWeek = -1; // 0=Sunday .. 6=Saturday
+    int hour = 0;
+    int minute = 0;
+    int second = 0;
+
+    std::vector<Field> toFields() const;
+};
+
 // LDS scan — special case, does not use toFields()
 struct LdsScanPoint {
     int angleDeg = 0;
@@ -228,5 +238,6 @@ bool parseErrorData(const String& raw, ErrorData& out);
 bool parseAccelData(const String& raw, AccelData& out);
 bool parseButtonData(const String& raw, ButtonData& out);
 bool parseLdsScanData(const String& raw, LdsScanData& out);
+bool parseTimeData(const String& raw, TimeData& out);
 
 #endif // NEATO_COMMANDS_H

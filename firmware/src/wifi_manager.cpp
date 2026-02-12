@@ -1,12 +1,10 @@
 #include "wifi_manager.h"
 
-WiFiManager::WiFiManager() : menu("WiFi Configuration Menu"), networkMenu("Available WiFi Networks") {}
+WiFiManager::WiFiManager(Preferences& prefs) :
+    prefs(prefs), menu("WiFi Configuration Menu"), networkMenu("Available WiFi Networks") {}
 
 void WiFiManager::begin() {
     LOG("WIFI", "Starting WiFi setup...");
-
-    // Initialize preferences
-    preferences.begin("wifi", false);
 
     // Try to load and connect with saved credentials
     String ssid, password;
@@ -37,7 +35,7 @@ void WiFiManager::showMenu() {
     menu.addItem("Scan WiFi networks", "Scan and select from available networks", [this]() { scanNetworks(); });
     menu.addItem("Enter SSID manually", "Type network name manually", [this]() { manualSSID(); });
     menu.addItem("Show current status", "Display WiFi connection status", [this]() { showStatus(); });
-    menu.addItem("Reset credentials", "Erase saved WiFi credentials", [this]() { resetCredentials(); });
+    menu.addItem("Reset all settings", "Erase all saved settings and restart", [this]() { resetCredentials(); });
 
     menu.show();
 }
@@ -239,10 +237,13 @@ void WiFiManager::showStatus() {
 }
 
 void WiFiManager::resetCredentials() {
-    menu.promptConfirmation("Reset WiFi credentials", [this](bool confirmed) {
+    menu.promptConfirmation("Reset all settings", [this](bool confirmed) {
         if (confirmed) {
-            menu.printStatus("Resetting credentials...");
-            reset();
+            menu.printStatus("Resetting all settings...");
+            prefs.clear();
+            WiFi.disconnect(true, true);
+            delay(1000);
+            ESP.restart();
         } else {
             menu.printStatus("Reset cancelled");
             menu.show();
@@ -271,32 +272,23 @@ bool WiFiManager::connectToWiFi(const String& ssid, const String& password) {
 }
 
 void WiFiManager::saveCredentials(const String& ssid, const String& password) {
-    preferences.putString("ssid", ssid);
-    preferences.putString("password", password);
+    prefs.putString(NVS_KEY_WIFI_SSID, ssid);
+    prefs.putString(NVS_KEY_WIFI_PASS, password);
     LOG("WIFI", "Credentials saved");
 }
 
 bool WiFiManager::loadCredentials(String& ssid, String& password) {
-    // Check if credentials exist before trying to load them
-    if (!preferences.isKey("ssid")) {
+    if (!prefs.isKey(NVS_KEY_WIFI_SSID)) {
         ssid = "";
         password = "";
         return false;
     }
 
-    ssid = preferences.getString("ssid", "");
-    password = preferences.getString("password", "");
+    ssid = prefs.getString(NVS_KEY_WIFI_SSID, "");
+    password = prefs.getString(NVS_KEY_WIFI_PASS, "");
     return ssid.length() > 0;
 }
 
 bool WiFiManager::isConnected() const {
     return WiFi.status() == WL_CONNECTED;
-}
-
-void WiFiManager::reset() {
-    LOG("WIFI", "Resetting WiFi credentials...");
-    preferences.clear();
-    WiFi.disconnect(true, true);
-    delay(1000);
-    ESP.restart();
 }

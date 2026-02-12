@@ -2,9 +2,8 @@
 #include "web_assets.h"
 #include "neato_serial.h"
 #include "data_logger.h"
+#include "system_manager.h"
 #include <SPIFFS.h>
-#include <heatshrink_decoder.h>
-#include <memory>
 
 // Default serializer for structs with toFields()
 template<typename T>
@@ -12,8 +11,8 @@ static std::function<String(const T&)> jsonFields() {
     return [](const T& data) { return fieldsToJson(data.toFields()); };
 }
 
-WebServer::WebServer(AsyncWebServer& server, NeatoSerial& neato, DataLogger& logger) :
-    server(server), neato(neato), logger(logger) {}
+WebServer::WebServer(AsyncWebServer& server, NeatoSerial& neato, DataLogger& logger, SystemManager& sys) :
+    server(server), neato(neato), logger(logger), sysMgr(sys) {}
 
 void WebServer::loggedRoute(const char *path, WebRequestMethodComposite httpMethod, SyncHandler handler) {
     server.on(path, httpMethod, [this, handler](AsyncWebServerRequest *request) {
@@ -71,7 +70,7 @@ void WebServer::registerActionRoute(const char *path, ActionDispatch dispatch) {
                 }
             })) {
             logger.logRequest(HTTP_POST, path, 503, 0);
-            sendError(request, 503, "queue full");
+            sendError(request, 503, "unavailable");
         }
     });
 }
@@ -158,108 +157,21 @@ void WebServer::registerLogRoutes() {
             return;
         }
 
-        // Resolve SPIFFS path
-        String path = (filename == "current.jsonl") ? LOG_CURRENT_FILE : String(LOG_DIR) + "/" + filename;
-
-        if (!SPIFFS.exists(path)) {
+        // Open log via DataLogger — handles path resolution and transparent decompression
+        auto reader = logger.readLog(filename);
+        if (!reader) {
             logger.logRequest(HTTP_GET, request->url().c_str(), 404, millis() - startMs);
             sendError(request, 404, "log not found");
             return;
         }
 
-        // Compressed logs are always decompressed transparently for the client
-        if (filename.endsWith(".hs")) {
-            // Shared decompression context: file handle, decoder, and read buffer
-            // survive across chunked response filler callbacks via shared_ptr.
-            struct DecompCtx {
-                File file;
-                heatshrink_decoder hsd;
-                uint8_t inBuf[512];
-                size_t inBufLen = 0; // Bytes available in inBuf
-                size_t inBufOff = 0; // Current read offset in inBuf
-                bool inputDone = false; // No more file data to read
-                bool finished = false; // Decoder fully finished
+        logger.logRequest(HTTP_GET, request->url().c_str(), 200, millis() - startMs);
 
-                ~DecompCtx() {
-                    if (file)
-                        file.close();
-                }
-            };
-
-            auto ctx = std::make_shared<DecompCtx>();
-            ctx->file = SPIFFS.open(path, FILE_READ);
-            if (!ctx->file) {
-                logger.logRequest(HTTP_GET, request->url().c_str(), 500, millis() - startMs);
-                sendError(request, 500, "failed to open log");
-                return;
-            }
-            heatshrink_decoder_reset(&ctx->hsd);
-
-            logger.logRequest(HTTP_GET, request->url().c_str(), 200, millis() - startMs);
-
-            AsyncWebServerResponse *response = request->beginChunkedResponse(
-                    "application/x-ndjson", [ctx](uint8_t *buffer, size_t maxLen, size_t) -> size_t {
-                        if (ctx->finished)
-                            return 0; // Signal end of response
-
-                        size_t totalWritten = 0;
-
-                        while (totalWritten < maxLen) {
-                            // Try polling decompressed output first
-                            size_t polled = 0;
-                            HSD_poll_res pres = heatshrink_decoder_poll(&ctx->hsd, buffer + totalWritten,
-                                                                        maxLen - totalWritten, &polled);
-                            if (pres < 0) {
-                                ctx->finished = true;
-                                return totalWritten > 0 ? totalWritten : 0;
-                            }
-                            totalWritten += polled;
-
-                            if (pres == HSDR_POLL_MORE)
-                                continue; // More decompressed data available
-
-                            // Decoder needs more input — refill from file if needed
-                            if (ctx->inBufOff >= ctx->inBufLen) {
-                                if (ctx->inputDone) {
-                                    // No more file data; finish decoder
-                                    HSD_finish_res fres = heatshrink_decoder_finish(&ctx->hsd);
-                                    if (fres == HSDR_FINISH_DONE) {
-                                        ctx->finished = true;
-                                        return totalWritten;
-                                    }
-                                    // HSDR_FINISH_MORE — loop back to poll remaining output
-                                    continue;
-                                }
-
-                                // Read next chunk from file
-                                size_t bytesRead = ctx->file.read(ctx->inBuf, sizeof(ctx->inBuf));
-                                if (bytesRead == 0) {
-                                    ctx->inputDone = true;
-                                    continue;
-                                }
-                                ctx->inBufLen = bytesRead;
-                                ctx->inBufOff = 0;
-                            }
-
-                            // Sink input into decoder
-                            size_t sunk = 0;
-                            HSD_sink_res sres = heatshrink_decoder_sink(&ctx->hsd, ctx->inBuf + ctx->inBufOff,
-                                                                        ctx->inBufLen - ctx->inBufOff, &sunk);
-                            if (sres < 0) {
-                                ctx->finished = true;
-                                return totalWritten > 0 ? totalWritten : 0;
-                            }
-                            ctx->inBufOff += sunk;
-                        }
-
-                        return totalWritten;
-                    });
-            request->send(response);
-        } else {
-            // Plain text log — serve directly from SPIFFS (async file response)
-            logger.logRequest(HTTP_GET, request->url().c_str(), 200, millis() - startMs);
-            request->send(SPIFFS, path, "application/x-ndjson");
-        }
+        // Stream log content via chunked response — reader handles decompression
+        AsyncWebServerResponse *response = request->beginChunkedResponse(
+                "application/x-ndjson",
+                [reader](uint8_t *buffer, size_t maxLen, size_t) -> size_t { return reader->read(buffer, maxLen); });
+        request->send(response);
     });
 
     // DELETE /api/logs[/filename] — delete all logs or a specific file
@@ -289,13 +201,13 @@ void WebServer::registerLogRoutes() {
 void WebServer::registerSystemRoutes() {
     // GET /api/system — live system health (heap, uptime, RSSI, SPIFFS, NTP)
     loggedRoute("/api/system", HTTP_GET, [this](AsyncWebServerRequest *request) -> int {
-        request->send(200, "application/json", logger.systemHealthJson());
+        request->send(200, "application/json", sysMgr.systemHealthJson());
         return 200;
     });
 
     // GET /api/timezone — current POSIX TZ string
     loggedRoute("/api/timezone", HTTP_GET, [this](AsyncWebServerRequest *request) -> int {
-        request->send(200, "application/json", R"({"tz":")" + logger.getTimezone() + R"("})");
+        request->send(200, "application/json", R"({"tz":")" + sysMgr.getTimezone() + R"("})");
         return 200;
     });
 
@@ -319,21 +231,10 @@ void WebServer::registerSystemRoutes() {
                         }
 
                         String tz = body.substring(openQuote + 1, closeQuote);
-                        logger.setTimezone(tz);
+                        sysMgr.setTimezone(tz);
                         request->send(200, "application/json", R"({"tz":")" + tz + R"("})");
                         return 200;
                     });
-
-    // POST /api/time/sync — manually trigger robot clock sync from NTP
-    loggedRoute("/api/time/sync", HTTP_POST, [this](AsyncWebServerRequest *request) -> int {
-        if (!logger.isNtpSynced()) {
-            sendError(request, 503, "NTP not synced yet");
-            return 503;
-        }
-        logger.triggerRobotTimeSync();
-        sendOk(request);
-        return 200;
-    });
 
     LOG("WEB", "System routes registered");
 }

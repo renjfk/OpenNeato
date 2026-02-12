@@ -8,16 +8,18 @@
 #include "data_logger.h"
 
 class NeatoSerial;
+class SystemManager;
 
 class WebServer {
 public:
-    WebServer(AsyncWebServer& server, NeatoSerial& neato, DataLogger& logger);
+    WebServer(AsyncWebServer& server, NeatoSerial& neato, DataLogger& logger, SystemManager& sys);
     void begin();
 
 private:
     AsyncWebServer& server;
     NeatoSerial& neato;
     DataLogger& logger;
+    SystemManager& sysMgr;
 
     void registerApiRoutes();
     void registerLogRoutes();
@@ -69,7 +71,7 @@ void WebServer::registerSensorRoute(const char *path, bool (NeatoSerial::*method
                 }
             })) {
             logger.logRequest(HTTP_GET, path, 503, 0);
-            sendError(request, 503, "queue full");
+            sendError(request, 503, "unavailable");
         }
     });
 }

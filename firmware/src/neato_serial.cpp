@@ -275,9 +275,19 @@ bool NeatoSerial::setLdsRotation(bool on, std::function<void(bool)> callback) {
     return enqueue(commandToString(cmd), commandTimeout(cmd), wrapAction(callback));
 }
 
-// -- Raw command (escape hatch) ----------------------------------------------
+// -- Time commands -----------------------------------------------------------
 
-bool NeatoSerial::sendRaw(const String& command, std::function<void(bool, const String&)> callback,
-                          unsigned long timeoutMs) {
-    return enqueue(command, timeoutMs, callback);
+bool NeatoSerial::getTime(std::function<void(bool, const TimeData&)> callback) {
+    return enqueue(commandToString(CMD_GET_TIME), commandTimeout(CMD_GET_TIME), [callback](bool ok, const String& raw) {
+        TimeData data;
+        if (ok)
+            ok = parseTimeData(raw, data);
+        callback(ok, data);
+    });
+}
+
+bool NeatoSerial::setTime(int dayOfWeek, int hour, int min, int sec, std::function<void(bool)> callback) {
+    String cmd = String(commandToString(CMD_SET_TIME)) + " Day " + String(dayOfWeek) + " Hour " + String(hour) +
+                 " Min " + String(min) + " Sec " + String(sec);
+    return enqueue(cmd, commandTimeout(CMD_SET_TIME), wrapAction(callback));
 }

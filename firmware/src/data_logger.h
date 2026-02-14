@@ -82,6 +82,11 @@ public:
     void logOta(const String& event, const std::vector<Field>& extra = {});
     void logNtp(const String& event, const std::vector<Field>& extra = {});
 
+    // Debug mode check — when set and returns true, sensor payloads are
+    // included in request log entries. Wired by main.cpp to SettingsManager.
+    using DebugCheck = std::function<bool()>;
+    void setDebugCheck(DebugCheck check) { debugCheck = check; }
+
     // -- Log file management (for API) --------------------------------------
 
     std::vector<LogFileInfo> listLogs() const;
@@ -92,6 +97,7 @@ public:
 private:
     NeatoSerial& neato;
     SystemManager& sysMgr;
+    DebugCheck debugCheck;
 
     // SPIFFS state
     bool spiffsReady = false;

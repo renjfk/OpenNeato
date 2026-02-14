@@ -2,12 +2,13 @@ import { useCallback, useEffect, useState } from "preact/hooks";
 import { api } from "../api";
 import backSvg from "../assets/icons/back.svg?raw";
 import clockSvg from "../assets/icons/clock.svg?raw";
+import databaseSvg from "../assets/icons/database.svg?raw";
 import moonSvg from "../assets/icons/moon.svg?raw";
 import sunSvg from "../assets/icons/sun.svg?raw";
 import { ErrorBanner } from "../components/error-banner";
 import { Icon } from "../components/icon";
 import { useNavigate } from "../components/router";
-import type { SystemData } from "../types";
+import type { SettingsData, SystemData } from "../types";
 
 type Theme = "system" | "dark" | "light";
 
@@ -70,6 +71,7 @@ interface SettingsViewProps {
 export function SettingsView({ theme, onThemeChange, system }: SettingsViewProps) {
     const navigate = useNavigate();
     const [tz, setTz] = useState<string>(system?.tz ?? "UTC0");
+    const [debugLog, setDebugLog] = useState(false);
     const [saving, setSaving] = useState(false);
     const [tzError, setTzError] = useState<string | null>(null);
 
@@ -78,12 +80,17 @@ export function SettingsView({ theme, onThemeChange, system }: SettingsViewProps
         if (system?.tz) setTz(system.tz);
     }, [system?.tz]);
 
+    // Fetch settings on mount to get debugLog state
+    useEffect(() => {
+        api.getSettings().then((s: SettingsData) => setDebugLog(s.debugLog));
+    }, []);
+
     const handleTzChange = useCallback(
         (newTz: string) => {
             setTz(newTz);
             setSaving(true);
             setTzError(null);
-            api.setTimezone(newTz)
+            api.updateSettings({ tz: newTz })
                 .then((res) => setTz(res.tz))
                 .catch((e: unknown) => {
                     if (system?.tz) setTz(system.tz);
@@ -93,6 +100,17 @@ export function SettingsView({ theme, onThemeChange, system }: SettingsViewProps
         },
         [system?.tz],
     );
+
+    const [debugSaving, setDebugSaving] = useState(false);
+
+    const handleDebugToggle = useCallback(() => {
+        const next = !debugLog;
+        setDebugLog(next);
+        setDebugSaving(true);
+        api.updateSettings({ debugLog: next })
+            .catch(() => setDebugLog(!next))
+            .finally(() => setDebugSaving(false));
+    }, [debugLog]);
 
     const presetLabel = findPresetLabel(tz);
     const isCustom = !presetLabel;
@@ -177,6 +195,30 @@ export function SettingsView({ theme, onThemeChange, system }: SettingsViewProps
                             Robot time: {formatRobotTime(system.time, tz)}
                         </div>
                     )}
+                </div>
+
+                <div class="settings-section">
+                    <div class="settings-section-title">Diagnostics</div>
+                    <div class="settings-toggle-row">
+                        <div class="settings-toggle-label">
+                            <span class="settings-toggle-title">Debug logging</span>
+                            <span class="settings-toggle-desc">Include serial responses in logs</span>
+                        </div>
+                        <button
+                            type="button"
+                            class={`settings-toggle${debugLog ? " on" : ""}${debugSaving ? " pending" : ""}`}
+                            onClick={handleDebugToggle}
+                            disabled={debugSaving}
+                            aria-label="Toggle debug logging"
+                        />
+                    </div>
+                    <button type="button" class="settings-nav-row" onClick={() => navigate("/logs")}>
+                        <div class="settings-nav-row-left">
+                            <Icon svg={databaseSvg} />
+                            Logs
+                        </div>
+                        <span class="settings-nav-chevron">&rsaquo;</span>
+                    </button>
                 </div>
             </div>
         </>

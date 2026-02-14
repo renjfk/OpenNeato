@@ -488,13 +488,15 @@ void DataLogger::onCommand(const String& cmd, CommandStatus status, unsigned lon
             break;
     }
 
-    // Log with enhanced metadata: status, queue depth, response size, partial response
-    logEvent("command", {{"cmd", cmd, FIELD_STRING},
-                         {"status", statusStr, FIELD_STRING},
-                         {"ms", String(ms), FIELD_INT},
-                         {"q", String(queueDepth), FIELD_INT},
-                         {"bytes", String(respBytes), FIELD_INT},
-                         {"resp", raw, FIELD_STRING}});
+    // Log command metadata; include raw response only when debug logging is enabled
+    std::vector<Field> fields = {{"cmd", cmd, FIELD_STRING},
+                                 {"status", statusStr, FIELD_STRING},
+                                 {"ms", String(ms), FIELD_INT},
+                                 {"q", String(queueDepth), FIELD_INT},
+                                 {"bytes", String(respBytes), FIELD_INT}};
+    if (debugCheck && debugCheck())
+        fields.push_back({"resp", raw, FIELD_STRING});
+    logEvent("command", fields);
 }
 
 // -- Log file management -----------------------------------------------------

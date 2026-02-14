@@ -8,15 +8,8 @@ SystemManager::SystemManager(Preferences& prefs) : prefs(prefs) {}
 // -- Lifecycle ---------------------------------------------------------------
 
 void SystemManager::begin() {
-    // Initialize default timezone if not set
-    if (!prefs.isKey(NVS_KEY_TIMEZONE)) {
-        prefs.putString(NVS_KEY_TIMEZONE, NTP_DEFAULT_TZ);
-        LOG("SYS", "Initialized timezone with default: %s", NTP_DEFAULT_TZ);
-    }
-
-    String tz = getTimezone();
-    configTzTime(tz.c_str(), NTP_SERVER_1, NTP_SERVER_2);
-    LOG("SYS", "NTP configured with TZ: %s", tz.c_str());
+    // NTP is configured by SettingsManager via applyTimezone() after settings are loaded
+    LOG("SYS", "System manager initialized (NTP pending timezone from settings)");
 }
 
 void SystemManager::loop() {
@@ -59,14 +52,9 @@ void SystemManager::setFallbackClock(time_t epoch) {
 
 // -- Timezone ----------------------------------------------------------------
 
-String SystemManager::getTimezone() const {
-    return prefs.getString(NVS_KEY_TIMEZONE, NTP_DEFAULT_TZ);
-}
-
-void SystemManager::setTimezone(const String& tz) {
-    prefs.putString(NVS_KEY_TIMEZONE, tz);
+void SystemManager::applyTimezone(const String& tz) {
     configTzTime(tz.c_str(), NTP_SERVER_1, NTP_SERVER_2);
-    LOG("SYS", "Timezone updated: %s", tz.c_str());
+    LOG("SYS", "NTP timezone applied: %s", tz.c_str());
 }
 
 // -- System health -----------------------------------------------------------
@@ -86,7 +74,7 @@ std::vector<Field> SystemHealth::toFields() const {
     };
 }
 
-SystemHealth SystemManager::getSystemHealth() const {
+SystemHealth SystemManager::getSystemHealth(const String& tz) const {
     SystemHealth h;
     h.heap = ESP.getFreeHeap();
     h.heapTotal = ESP.getHeapSize();
@@ -97,6 +85,6 @@ SystemHealth SystemManager::getSystemHealth() const {
     h.ntpSynced = ntpSynced;
     h.time = now();
     h.timeSource = ntpSynced ? "ntp" : (fallbackSet ? "fallback" : "millis");
-    h.tz = getTimezone();
+    h.tz = tz;
     return h;
 }

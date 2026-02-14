@@ -571,7 +571,8 @@ body {
     margin-top: 10px;
     font-size: 12px;
     font-weight: 500;
-    color: var(--text-muted);
+    color: var(--text);
+    opacity: 0.55;
 }
 
 .settings-robot-time span {
@@ -582,6 +583,413 @@ body {
     width: 14px;
     height: 14px;
     opacity: 0.5;
+}
+
+/* Settings nav row (link to sub-pages) */
+
+.settings-nav-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.settings-nav-row:active {
+    opacity: 0.7;
+}
+
+.settings-nav-row-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.settings-nav-row-left span {
+    display: flex;
+}
+
+.settings-nav-row-left svg {
+    width: 18px;
+    height: 18px;
+    opacity: 0.5;
+}
+
+.settings-nav-chevron {
+    font-size: 20px;
+    color: var(--text-muted);
+    line-height: 1;
+}
+
+.settings-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    margin-bottom: 10px;
+}
+
+.settings-toggle-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.settings-toggle-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+}
+
+.settings-toggle-desc {
+    font-size: 12px;
+    color: var(--text);
+    opacity: 0.55;
+}
+
+.settings-toggle {
+    position: relative;
+    width: 48px;
+    height: 26px;
+    border-radius: 7px;
+    border: 1px solid var(--text-muted);
+    background: var(--surface);
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+    transition:
+        background 0.2s,
+        border-color 0.2s;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.settings-toggle::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    background: var(--text-muted);
+    transition:
+        transform 0.2s,
+        background 0.2s;
+}
+
+.settings-toggle.pending {
+    animation: btn-pulse 1s ease-in-out infinite;
+}
+
+.settings-toggle.on {
+    border-color: var(--text);
+}
+
+.settings-toggle.on::after {
+    transform: translateX(22px);
+    background: var(--text);
+}
+
+/* Confirm dialog */
+
+.confirm-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+}
+
+.confirm-dialog {
+    width: 100%;
+    max-width: 300px;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px 20px 16px;
+    text-align: center;
+}
+
+.confirm-message {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 20px;
+    line-height: 1.4;
+}
+
+.confirm-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.confirm-btn {
+    padding: 12px 8px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    -webkit-tap-highlight-color: transparent;
+}
+
+.confirm-btn:active {
+    opacity: 0.7;
+}
+
+.confirm-btn.cancel {
+    background: var(--surface);
+    color: var(--text);
+}
+
+.confirm-btn.destructive {
+    background: rgba(255, 69, 58, 0.12);
+    border-color: rgba(255, 69, 58, 0.2);
+    color: var(--red);
+}
+
+/* Logs page */
+
+.logs-page {
+    flex: 1;
+    padding: 8px 20px;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.logs-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+.logs-delete-all-btn {
+    padding: 6px 14px;
+    border: 1px solid rgba(255, 69, 58, 0.2);
+    border-radius: 8px;
+    background: rgba(255, 69, 58, 0.08);
+    color: var(--red);
+    font-size: 12px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.logs-delete-all-btn:active {
+    opacity: 0.7;
+}
+
+.logs-delete-all-btn:disabled {
+    cursor: default;
+}
+
+.logs-delete-all-btn.pending {
+    animation: btn-pulse 1s ease-in-out infinite;
+}
+
+.logs-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 48px 20px;
+    color: var(--text-muted);
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.logs-empty span {
+    display: flex;
+}
+
+.logs-empty svg {
+    width: 28px;
+    height: 28px;
+    opacity: 0.3;
+}
+
+.logs-file-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.logs-file-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    overflow: hidden;
+}
+
+.logs-file-info {
+    flex: 1;
+    padding: 12px 16px;
+    border: none;
+    background: none;
+    color: var(--text);
+    text-align: left;
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    min-width: 0;
+}
+
+.logs-file-info:active {
+    opacity: 0.7;
+}
+
+.logs-file-name {
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.logs-file-meta {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.logs-file-delete {
+    flex-shrink: 0;
+    width: 40px;
+    height: 100%;
+    min-height: 44px;
+    border: none;
+    border-left: 1px solid var(--border);
+    background: none;
+    color: var(--red);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.5;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.logs-file-delete:active {
+    opacity: 1;
+}
+
+.logs-file-delete:disabled {
+    cursor: default;
+}
+
+.logs-file-delete.pending {
+    animation: btn-pulse 1s ease-in-out infinite;
+}
+
+.logs-file-delete span {
+    display: flex;
+}
+
+.logs-file-delete svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Log detail entries */
+
+.logs-entries {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.logs-entry {
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+}
+
+.logs-entry-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.logs-entry-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.logs-entry-badge.blue {
+    background: rgba(59, 158, 255, 0.12);
+    color: var(--blue);
+}
+
+.logs-entry-badge.green {
+    background: rgba(52, 199, 89, 0.12);
+    color: var(--green);
+}
+
+.logs-entry-badge.amber {
+    background: rgba(229, 151, 42, 0.12);
+    color: var(--amber);
+}
+
+.logs-entry-badge.red {
+    background: rgba(255, 69, 58, 0.12);
+    color: var(--red);
+}
+
+.logs-entry-badge.dim {
+    background: var(--card-bg);
+    color: var(--text-muted);
+}
+
+.logs-entry-time {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.logs-entry-body {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-dim);
+    word-break: break-all;
+    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    line-height: 1.5;
 }
 
 /* Responsive — larger phones */

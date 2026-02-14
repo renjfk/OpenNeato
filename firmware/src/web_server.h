@@ -10,10 +10,12 @@
 class NeatoSerial;
 class SystemManager;
 class FirmwareManager;
+class SettingsManager;
 
 class WebServer {
 public:
-    WebServer(AsyncWebServer& server, NeatoSerial& neato, DataLogger& logger, SystemManager& sys, FirmwareManager& fw);
+    WebServer(AsyncWebServer& server, NeatoSerial& neato, DataLogger& logger, SystemManager& sys, FirmwareManager& fw,
+              SettingsManager& settings);
     void begin();
 
 private:
@@ -22,10 +24,12 @@ private:
     DataLogger& logger;
     SystemManager& sysMgr;
     FirmwareManager& fwMgr;
+    SettingsManager& settingsMgr;
 
     void registerApiRoutes();
     void registerLogRoutes();
     void registerSystemRoutes();
+    void registerSettingsRoutes();
     void registerFirmwareRoutes();
     static void sendGzipAsset(AsyncWebServerRequest *request, const uint8_t *data, size_t len, const char *contentType);
     static void sendError(AsyncWebServerRequest *request, int code, const String& msg);

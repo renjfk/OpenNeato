@@ -54,6 +54,9 @@ enum CommandStatus {
 // NVS keys — Time/NTP
 #define NVS_KEY_TIMEZONE "tz"
 
+// NVS keys — Settings
+#define NVS_KEY_DEBUG_LOG "debug_log"
+
 // NTP / time sync
 #define NTP_SERVER_1 "pool.ntp.org"
 #define NTP_SERVER_2 "time.nist.gov"

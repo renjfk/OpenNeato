@@ -544,8 +544,9 @@ Laser_RPM,52428 Charger_MaxPWM,65536 Charger_PWM,-858993460 Charger_mAH,52428
 - Consumer-facing UI, not a debug tool — show human-readable status, not raw sensor dumps
 - Mobile-first responsive design with breakpoints at 400px, 600px, 900px
 - Dark theme as default, user-selectable theme (auto/light/dark) via settings page
-- Hash-based routing (`#/` dashboard, `#/settings` settings) — persists across refresh,
-  supports browser back/forward via `Router`/`Route` components and `useRoute` hook
+- Hash-based routing (`#/` dashboard, `#/settings` settings, `#/logs` logs) — persists
+  across refresh, supports browser back/forward via `Router`/`Route` components and
+  `useRoute` hook
 
 **Layout structure:**
 - Header: "OpenNeato" branding left, gear icon (settings) right
@@ -563,6 +564,17 @@ Laser_RPM,52428 Charger_MaxPWM,65536 Charger_PWM,-858993460 Charger_mAH,52428
   error banner on failure with server error message
 - Robot time display: dimmed small text below timezone selector showing current
   robot time (from `GET /api/system` `time` field) adjusted by selected TZ offset
+- Diagnostics section: "Logs" nav row (database icon + chevron) navigates to `#/logs`
+
+**Logs page:**
+- Navigated from settings Diagnostics section, back button returns to settings
+- List view: summary bar (file count + total size + "Delete All" button), file rows
+  with name, date (parsed from epoch filename), size, compressed badge, delete button
+- Detail view: tapping a file fetches its content, parses JSON-lines, displays entries
+  with colored type badges (BOOT/WIFI/NTP/CMD/HTTP/EVT/OTA), timestamps, monospace
+  summary of remaining fields. Back button returns to list view.
+- Delete: per-file delete button (alert icon, red), "Delete All" button in summary bar
+- Empty state: centered database icon + "No log files" / "Empty log" message
 
 **Visual design:**
 - Dark theme: Radial gradient background (`#38383e` → `#232328` → `#161618`)
@@ -630,13 +642,16 @@ firmware/
   src/
     config.h               # Global defines, macros, LOG macro, pin/timing constants,
                            #   data logger settings (file sizes, NTP servers, TZ),
-                           #   NVS namespace/key defines, CommandStatus enum
+                           #   NVS namespace/key defines (NVS_KEY_DEBUG_LOG),
+                           #   CommandStatus enum
     main.cpp               # setup()/loop() entry point, global Preferences (single
                            #   "neato" NVS namespace opened once, shared by ref),
                            #   WiFi event handlers -> dataLogger.logWifi(), OTA hook,
-                           #   SystemManager wiring, robot time fallback via GetTime,
-                           #   NTP-to-robot clock sync, periodic re-sync (4h),
-                           #   factory reset (button hold clears NVS + restart)
+                           #   SettingsManager wiring (tz change callback ->
+                           #   SystemManager::applyTimezone), robot time fallback
+                           #   via GetTime, NTP-to-robot clock sync, periodic
+                           #   re-sync (4h), factory reset (button hold clears
+                           #   NVS + restart)
     serial_menu.h/cpp      # Generic interactive serial menu system (state machine,
                            #   formatting helpers: printStatus, printError, etc.)
     wifi_manager.h/cpp     # WiFi config, credential storage (shared Preferences&),
@@ -647,23 +662,30 @@ firmware/
                            #   getFirmwareVersion(), MD5 validation, auto-reboot,
                            #   isInProgress()/getProgress()/getError() queries,
                            #   LogCallback hook. Routes registered by WebServer.
-    system_manager.h/cpp   # NTP time sync, timezone (POSIX TZ in NVS), fallback
-                           #   clock from external sources. SystemHealth struct
-                           #   (JsonSerializable) returned by getSystemHealth()
-                           #   with heap, uptime, RSSI, SPIFFS, NTP fields.
-                           #   Robot-agnostic — no NeatoSerial dependency.
-                           #   onNtpSync() callback for main.cpp to push time
-                           #   to robot. setFallbackClock() for external clock
+    settings_manager.h/cpp # Unified settings management: owns all user-configurable
+                           #   NVS keys (tz, debug_log). Settings struct extends
+                           #   JsonSerializable with toFields() and fromFields().
+                           #   begin() loads from NVS, apply(json) does partial
+                           #   updates via fromJson() (only fields present get
+                           #   written). onTzChange() callback mechanism.
+    system_manager.h/cpp   # NTP time sync, applyTimezone() for POSIX TZ (called
+                           #   via SettingsManager callback, no longer owns TZ in
+                           #   NVS). SystemHealth struct (JsonSerializable) returned
+                           #   by getSystemHealth(tz) with heap, uptime, RSSI,
+                           #   SPIFFS, NTP fields. Robot-agnostic — no NeatoSerial
+                           #   dependency. onNtpSync() callback for main.cpp to push
+                           #   time to robot. setFallbackClock() for external clock
                            #   sources (e.g. robot GetTime).
     web_server.h/cpp       # Serves embedded frontend assets from PROGMEM, registers
                            #   all REST API routes (sensor GET, action POST),
                            #   firmware routes (version, OTA upload), log routes
-                           #   (list/download/delete), system routes (health, timezone).
-                           #   Request logging on all sensor/action routes via DataLogger.
-                           #   System routes delegate to SystemManager for health/tz/NTP.
-                           #   Firmware routes delegate to FirmwareManager for version/update.
-                           #   Template helpers: registerSensorRoute<T>(),
-                           #   registerActionRoute(), sendGzipAsset(), sendError()
+                           #   (list/download/delete), system routes (health),
+                           #   settings routes (GET/PUT /api/settings via
+                           #   SettingsManager). Request logging on all sensor/action
+                           #   routes via DataLogger. Firmware routes delegate to
+                           #   FirmwareManager for version/update. Template helpers:
+                           #   registerSensorRoute<T>(), registerActionRoute(),
+                           #   sendGzipAsset(), sendError()
     web_assets.h           # Auto-generated — WebAsset struct + WEB_ASSETS[] registry
                            #   of all dist/ files (gzipped PROGMEM byte arrays, paths,
                            #   MIME types). Web server iterates registry to register routes.
@@ -683,14 +705,22 @@ firmware/
                            #   Non-blocking design: log writes buffered in memory,
                            #   flushed to SPIFFS in loop(); log rotation uses fast
                            #   rename + incremental heatshrink compression across
-                           #   loop() iterations; bulk delete deferred one file per tick
-    json_fields.h/cpp      # Lightweight field-based JSON serialization: Field struct,
-                           #   FieldType enum (INT, FLOAT, BOOL, STRING),
+                           #   loop() iterations; bulk delete deferred one file per tick.
+                           #   DebugCheck callback: when set and returns true, raw
+                           #   serial responses are included in command log entries
+                           #   via the "resp" field. Wired to SettingsManager.debugLog
+                           #   in main.cpp.
+    json_fields.h/cpp      # Lightweight field-based JSON serialization and parsing:
+                           #   Field struct, FieldType enum (INT, FLOAT, BOOL, STRING),
                            #   fieldsToJson() wraps in braces, fieldsToJsonInner()
                            #   returns bare key-value pairs (for embedding in envelopes).
+                           #   fieldsFromJson() parses flat JSON object into Field vector
+                           #   (inverse of fieldsToJson), findField() for key lookup.
                            #   jsonEscape() for safe string embedding. JsonSerializable
-                           #   base struct with toFields()/toJson(). Used by
-                           #   neato_commands, data_logger, system_manager, web_server.
+                           #   base struct with toFields()/toJson() for serialization and
+                           #   fromFields()/fromJson() for deserialization. Used by
+                           #   neato_commands, data_logger, system_manager, settings_manager,
+                           #   web_server.
     neato_commands.h/cpp   # Command enum (24 commands), response structs (VersionData,
                            #   ChargerData, AnalogSensorData, DigitalSensorData,
                            #   MotorData, RobotState, ErrorData, AccelData, ButtonData,
@@ -730,9 +760,10 @@ frontend/
   src/
     main.tsx               # Preact render entry point
     app.tsx                # Root shell: theme management, polling, Router with
-                           #   Route declarations for dashboard and settings views
-    types.ts               # TypeScript interfaces (ChargerData, AnalogSensorData, etc.)
-    api.ts                 # Typed fetch wrappers for all API endpoints (get/post/put
+                           #   Route declarations for dashboard, settings, logs views
+    types.ts               # TypeScript interfaces (ChargerData, AnalogSensorData,
+                           #   LogFileInfo, SettingsData, etc.)
+    api.ts                 # Typed fetch wrappers for all API endpoints (get/post/put/del
                            #   with server error parsing from JSON body)
     style.css              # Single CSS file with all styles + responsive breakpoints
     svg.d.ts               # TypeScript declaration for *.svg?raw imports
@@ -743,13 +774,18 @@ frontend/
       icon.tsx             # SVG renderer component using dangerouslySetInnerHTML
       battery-icon.tsx     # Dynamic battery with clipPath + color thresholds
       error-banner.tsx     # Reusable error banner (title + message, alert icon)
+      confirm-dialog.tsx   # Reusable confirm modal (overlay + blur, Cancel/Delete
+                           #   buttons, destructive action styling)
       router.tsx           # Router (context provider), Route (path matcher),
                            #   useNavigate/usePath hooks for any component
     views/
       dashboard.tsx        # Dashboard view: status bar, hero area, info cards,
                            #   action buttons, pending state, helpers
       settings.tsx         # Settings view: appearance theme selector, timezone
-                           #   dropdown with POSIX TZ presets, robot time display
+                           #   dropdown with POSIX TZ presets, robot time display,
+                           #   debug logging toggle (fetches/updates via settings API)
+      logs.tsx             # Logs view: file list with size/date, detail view with
+                           #   parsed JSON-lines entries, type badges, delete actions
     assets/
       robot.svg            # Main robot illustration (30KB, vectorized 4-layer greyscale)
       icons/               # SVG icons loaded via ?raw import (alert, back, battery,
@@ -791,8 +827,8 @@ frontend/
 | DELETE | `/api/logs/{filename}` | Delete a specific log file |
 | DELETE | `/api/logs` | Delete all log files |
 | GET | `/api/system` | Live system health (heap, uptime, RSSI, SPIFFS, NTP) |
-| GET | `/api/timezone` | Current POSIX TZ string |
-| PUT | `/api/timezone` | Set POSIX TZ string (body: `{"tz":"..."}`) |
+| GET | `/api/settings` | All user settings (tz, debugLog) via SettingsManager |
+| PUT | `/api/settings` | Partial settings update (body: `{"tz":"...","debugLog":true}`) |
 
 
 ## Build Commands

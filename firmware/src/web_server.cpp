@@ -3,11 +3,13 @@
 #include "neato_serial.h"
 #include "data_logger.h"
 #include "system_manager.h"
+#include "settings_manager.h"
 #include "firmware_manager.h"
 #include <SPIFFS.h>
 
 WebServer::WebServer(AsyncWebServer& server, NeatoSerial& neato, DataLogger& logger, SystemManager& sys,
-                     FirmwareManager& fw) : server(server), neato(neato), logger(logger), sysMgr(sys), fwMgr(fw) {}
+                     FirmwareManager& fw, SettingsManager& settings) :
+    server(server), neato(neato), logger(logger), sysMgr(sys), fwMgr(fw), settingsMgr(settings) {}
 
 void WebServer::loggedRoute(const char *path, WebRequestMethodComposite httpMethod, SyncHandler handler) {
     server.on(path, httpMethod, [this, handler](AsyncWebServerRequest *request) {
@@ -84,6 +86,7 @@ void WebServer::begin() {
     registerApiRoutes();
     registerLogRoutes();
     registerSystemRoutes();
+    registerSettingsRoutes();
     registerFirmwareRoutes();
 
     LOG("WEB", "Frontend and API routes registered");
@@ -187,47 +190,37 @@ void WebServer::registerLogRoutes() {
     LOG("WEB", "Log routes registered");
 }
 
-// -- System health and timezone endpoints ------------------------------------
+// -- System health endpoint ---------------------------------------------------
 
 void WebServer::registerSystemRoutes() {
     // GET /api/system — live system health (heap, uptime, RSSI, SPIFFS, NTP)
     loggedRoute("/api/system", HTTP_GET, [this](AsyncWebServerRequest *request) -> int {
-        request->send(200, "application/json", sysMgr.getSystemHealth().toJson());
+        request->send(200, "application/json", sysMgr.getSystemHealth(settingsMgr.get().tz).toJson());
         return 200;
     });
 
-    // GET /api/timezone — current POSIX TZ string
-    loggedRoute("/api/timezone", HTTP_GET, [this](AsyncWebServerRequest *request) -> int {
-        request->send(200, "application/json", fieldsToJson({{"tz", sysMgr.getTimezone(), FIELD_STRING}}));
+    LOG("WEB", "System routes registered");
+}
+
+// -- Settings endpoint -------------------------------------------------------
+
+void WebServer::registerSettingsRoutes() {
+    // GET /api/settings — all user-configurable settings
+    loggedRoute("/api/settings", HTTP_GET, [this](AsyncWebServerRequest *request) -> int {
+        request->send(200, "application/json", settingsMgr.get().toJson());
         return 200;
     });
 
-    // PUT /api/timezone — set POSIX TZ string (body: {"tz":"..."})
-    loggedBodyRoute("/api/timezone", HTTP_PUT,
+    // PUT /api/settings — partial update (only fields present are written)
+    loggedBodyRoute("/api/settings", HTTP_PUT,
                     [this](AsyncWebServerRequest *request, uint8_t *data, size_t len) -> int {
                         String body = String(reinterpret_cast<const char *>(data), len);
-
-                        // Simple JSON parse: find "tz":"..." value
-                        int tzStart = body.indexOf(R"("tz")");
-                        if (tzStart < 0) {
-                            sendError(request, 400, "missing tz field");
-                            return 400;
-                        }
-                        int colonIdx = body.indexOf(':', tzStart);
-                        int openQuote = body.indexOf('"', colonIdx + 1);
-                        int closeQuote = body.indexOf('"', openQuote + 1);
-                        if (openQuote < 0 || closeQuote < 0) {
-                            sendError(request, 400, "invalid tz value");
-                            return 400;
-                        }
-
-                        String tz = body.substring(openQuote + 1, closeQuote);
-                        sysMgr.setTimezone(tz);
-                        request->send(200, "application/json", fieldsToJson({{"tz", tz, FIELD_STRING}}));
+                        settingsMgr.apply(body);
+                        request->send(200, "application/json", settingsMgr.get().toJson());
                         return 200;
                     });
 
-    LOG("WEB", "System routes registered");
+    LOG("WEB", "Settings routes registered");
 }
 
 // -- Firmware endpoints -------------------------------------------------------

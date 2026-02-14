@@ -6,6 +6,7 @@
 #include "wifi_manager.h"
 #include "firmware_manager.h"
 #include "system_manager.h"
+#include "settings_manager.h"
 #include "web_server.h"
 #include "neato_serial.h"
 #include "data_logger.h"
@@ -17,8 +18,9 @@ NeatoSerial neatoSerial;
 WiFiManager wifiManager(prefs);
 FirmwareManager firmwareManager;
 SystemManager systemManager(prefs);
+SettingsManager settingsManager(prefs);
 DataLogger dataLogger(neatoSerial, systemManager);
-WebServer webServer(server, neatoSerial, dataLogger, systemManager, firmwareManager);
+WebServer webServer(server, neatoSerial, dataLogger, systemManager, firmwareManager, settingsManager);
 
 // Robot time sync state (managed here, not in SystemManager)
 unsigned long lastRobotSync = 0;
@@ -58,9 +60,15 @@ void setup() {
     LOG("BOOT", "Initializing WiFi...");
     wifiManager.begin();
 
-    // Initialize system manager (NTP, timezone)
+    // Initialize system manager (NTP detection, time)
     LOG("BOOT", "Initializing system manager...");
     systemManager.begin();
+
+    // Initialize settings (loads from NVS, wires timezone to NTP)
+    LOG("BOOT", "Initializing settings...");
+    settingsManager.onTzChange([&](const String& tz) { systemManager.applyTimezone(tz); });
+    settingsManager.begin();
+    systemManager.applyTimezone(settingsManager.get().tz);
 
     // Wire NTP sync callback: push time to robot, log the event
     systemManager.onNtpSync([&] {
@@ -87,6 +95,7 @@ void setup() {
 
     // Initialize data logger (SPIFFS, serial command hook)
     LOG("BOOT", "Initializing data logger...");
+    dataLogger.setDebugCheck([&]() { return settingsManager.get().debugLog; });
     dataLogger.begin();
 
     // Fetch robot time as fallback clock

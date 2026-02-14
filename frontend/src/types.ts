@@ -38,10 +38,17 @@ export interface SystemData {
     tz: string;
 }
 
-export interface TimezoneData {
+export interface SettingsData {
     tz: string;
+    debugLog: boolean;
 }
 
 export interface FirmwareVersion {
     version: string;
+}
+
+export interface LogFileInfo {
+    name: string;
+    size: number;
+    compressed: boolean;
 }

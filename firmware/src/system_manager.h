@@ -39,12 +39,12 @@ public:
     // External clock fallback (e.g. robot clock parsed from GetTime)
     void setFallbackClock(time_t epoch);
 
-    // Timezone (POSIX TZ string, stored in NVS)
-    String getTimezone() const;
-    void setTimezone(const String& tz);
+    // Apply a timezone string (reconfigures NTP, does NOT store to NVS)
+    void applyTimezone(const String& tz);
 
-    // System health snapshot (heap, uptime, RSSI, SPIFFS, NTP, time, timezone)
-    SystemHealth getSystemHealth() const;
+    // System health snapshot (heap, uptime, RSSI, SPIFFS, NTP, time)
+    // Caller must supply tz string (owned by SettingsManager, not SystemManager)
+    SystemHealth getSystemHealth(const String& tz) const;
 
     // Callback fired once when NTP first syncs
     using NtpSyncCallback = std::function<void()>;

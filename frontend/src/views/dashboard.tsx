@@ -7,6 +7,7 @@ import clockSvg from "../assets/icons/clock.svg?raw";
 import databaseSvg from "../assets/icons/database.svg?raw";
 import gearSvg from "../assets/icons/gear.svg?raw";
 import houseSvg from "../assets/icons/house.svg?raw";
+import idleSvg from "../assets/icons/idle.svg?raw";
 import sparkleSvg from "../assets/icons/sparkle.svg?raw";
 import spotSvg from "../assets/icons/spot.svg?raw";
 import stopSvg from "../assets/icons/stop.svg?raw";
@@ -40,7 +41,7 @@ const STATUS_ICONS: Record<string, string> = {
 };
 
 const MODE_ICONS: Record<string, string> = {
-    sparkle: sparkleSvg,
+    idle: idleSvg,
     house: houseSvg,
     spot: spotSvg,
     bolt: boltSvg,
@@ -56,7 +57,7 @@ function modeInfo(
     if (docked) return { label: "Docked", color: "amber", icon: "bolt" };
     if (isSpot) return { label: "Spot", color: "blue", icon: "spot" };
     if (isCleaning) return { label: "House", color: "blue", icon: "house" };
-    return { label: "Idle", color: "green", icon: "sparkle" };
+    return { label: "Idle", color: "green", icon: "idle" };
 }
 
 function battColor(pct: number): string {

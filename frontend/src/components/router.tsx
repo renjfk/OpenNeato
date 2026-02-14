@@ -29,11 +29,16 @@ export function Router({ children }: RouterProps) {
 
 interface RouteProps {
     path: string;
+    prefix?: boolean;
     children: ComponentChildren;
 }
 
-export function Route({ path, children }: RouteProps) {
+export function Route({ path, prefix, children }: RouteProps) {
     const current = usePath();
-    if (current !== path) return null;
+    if (prefix) {
+        if (current !== path && !current.startsWith(`${path}/`)) return null;
+    } else {
+        if (current !== path) return null;
+    }
     return children as VNode;
 }

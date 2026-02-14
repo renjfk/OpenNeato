@@ -4,6 +4,7 @@ import { Route, Router } from "./components/router";
 import { usePolling } from "./hooks/use-polling";
 import type { ChargerData, ErrorData, FirmwareVersion, StateData, SystemData } from "./types";
 import { DashboardView } from "./views/dashboard";
+import { LogsView } from "./views/logs";
 import { SettingsView } from "./views/settings";
 
 type Theme = "system" | "dark" | "light";
@@ -50,6 +51,9 @@ export function App() {
             </Route>
             <Route path="/settings">
                 <SettingsView theme={theme} onThemeChange={setTheme} system={system.data} />
+            </Route>
+            <Route path="/logs" prefix>
+                <LogsView />
             </Route>
         </Router>
     );

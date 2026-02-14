@@ -76,6 +76,7 @@ const state = {
     errorMessage: "",
     testMode: false,
     tz: "UTC0",
+    debugLog: false,
     ...SCENARIOS[SCENARIO],
 };
 
@@ -139,6 +140,23 @@ const mockLogContent = [
     '{"ts":1700000200,"type":"command","cmd":"GetCharger","status":"ok","ms":85,"q":0,"bytes":312}',
     '{"ts":1700000202,"type":"command","cmd":"GetState","status":"ok","ms":42,"q":0,"bytes":95}',
     '{"ts":1700000210,"type":"request","method":"GET","path":"/api/charger","status":200,"ms":92}',
+    '{"ts":1700000215,"type":"command","cmd":"GetErr","status":"ok","ms":38,"q":0,"bytes":64}',
+    '{"ts":1700000220,"type":"request","method":"GET","path":"/api/state","status":200,"ms":48}',
+    '{"ts":1700000300,"type":"command","cmd":"GetAnalogSensors","status":"ok","ms":120,"q":1,"bytes":480}',
+    '{"ts":1700000305,"type":"request","method":"POST","path":"/api/clean/house","status":200,"ms":210}',
+    '{"ts":1700000306,"type":"command","cmd":"Clean House","status":"ok","ms":95,"q":0,"bytes":28}',
+    '{"ts":1700000400,"type":"event","msg":"cleaning_started","mode":"house"}',
+    '{"ts":1700000500,"type":"command","cmd":"GetMotors","status":"ok","ms":110,"q":2,"bytes":520}',
+    '{"ts":1700000600,"type":"command","cmd":"GetLDSScan","status":"ok","ms":450,"q":0,"bytes":8200}',
+    '{"ts":1700000602,"type":"command","cmd":"GetAnalogSensors","status":"ok","ms":95,"q":1,"bytes":480}',
+    '{"ts":1700000604,"type":"command","cmd":"GetDigitalSensors","status":"ok","ms":35,"q":0,"bytes":210}',
+    '{"ts":1700000610,"type":"request","method":"GET","path":"/api/sensors/analog","status":200,"ms":102}',
+    '{"ts":1700000612,"type":"request","method":"GET","path":"/api/sensors/digital","status":200,"ms":41}',
+    '{"ts":1700000615,"type":"request","method":"GET","path":"/api/lidar","status":200,"ms":460}',
+    '{"ts":1700000620,"type":"command","cmd":"GetLDSScan","status":"ok","ms":440,"q":1,"bytes":8140}',
+    '{"ts":1700000625,"type":"command","cmd":"GetAccel","status":"ok","ms":28,"q":0,"bytes":96}',
+    '{"ts":1700000630,"type":"request","method":"GET","path":"/api/accel","status":200,"ms":34}',
+    '{"ts":1700000700,"type":"event","msg":"cleaning_completed","duration":600}',
 ].join("\n");
 
 // --- Derive UI/robot state from current state ---
@@ -341,8 +359,8 @@ const routes = {
         });
     },
 
-    "GET /api/timezone": (_req, res) => {
-        jsonResponse(res, { tz: state.tz });
+    "GET /api/settings": (_req, res) => {
+        jsonResponse(res, { tz: state.tz, debugLog: state.debugLog });
     },
 
     "GET /api/firmware/version": (_req, res) => {
@@ -380,15 +398,15 @@ const handleRequest = async (req, res) => {
         return sendError(res, "method not allowed", 405);
     }
 
-    // PUT /api/timezone — simulate NVS write + configTzTime delay
-    if (req.method === "PUT" && path === "/api/timezone") {
+    // PUT /api/settings — partial update, simulate NVS write delay
+    if (req.method === "PUT" && path === "/api/settings") {
         const body = await readBody(req);
         try {
             const data = JSON.parse(body);
-            if (!data.tz) return sendError(res, "missing tz field", 400);
             await new Promise((r) => setTimeout(r, rand(300, 600)));
-            state.tz = data.tz;
-            return jsonResponse(res, { tz: state.tz });
+            if (data.tz !== undefined) state.tz = data.tz;
+            if (data.debugLog !== undefined) state.debugLog = data.debugLog;
+            return jsonResponse(res, { tz: state.tz, debugLog: state.debugLog });
         } catch {
             return sendError(res, "invalid JSON", 400);
         }

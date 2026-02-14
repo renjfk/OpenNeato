@@ -39,6 +39,27 @@ reference sections below.
 Architecture/API/reference sections, then remove the full phase description from below
 and add a one-line summary to the completed list above. Do this before committing.
 
+### Async response cache
+- Generic `AsyncCache<T>` class — template-based, reusable for any async data
+  source (serial commands, HTTP requests, sensor reads, etc.)
+- Caller provides a fetch function `std::function<void(Callback<T>)>` — the
+  cache is agnostic to how data is produced
+- Solves the multiple-consumer problem: when several HTTP requests need the
+  same data concurrently, only one fetch is dispatched; all waiters receive
+  the same result
+- Cache stores the last value and a timestamp; subsequent requests within the
+  TTL window return the cached value instantly without triggering a fetch
+- TTL per cache instance — caller decides freshness requirements
+- Atomic fetch: if a cache miss triggers a fetch and a second request arrives
+  before the result, the second request waits for the in-flight result instead
+  of dispatching a duplicate fetch
+- Explicit invalidation API for action-triggered staleness (e.g. after
+  `cleanHouse`, invalidate the state cache so next poll gets fresh data)
+- No heap allocation per request — cache entries are pre-allocated members
+- Primary consumer: `NeatoSerial` — each typed getter (getCharger, getState,
+  etc.) owns an `AsyncCache<T>` instance internally, so caching and dedup are
+  transparent to all callers (web_server routes, polling loops, etc.)
+
 ### Power control
 - **Power on/off from web UI** — frontend and mock server already implemented
   (`POST /api/power/off`, `POST /api/power/on`), firmware backend still needed:

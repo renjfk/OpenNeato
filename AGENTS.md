@@ -544,7 +544,8 @@ Laser_RPM,52428 Charger_MaxPWM,65536 Charger_PWM,-858993460 Charger_mAH,52428
 - Consumer-facing UI, not a debug tool — show human-readable status, not raw sensor dumps
 - Mobile-first responsive design with breakpoints at 400px, 600px, 900px
 - Dark theme as default, user-selectable theme (auto/light/dark) via settings page
-- Page-swap navigation: dashboard (default) and settings page
+- Hash-based routing (`#/` dashboard, `#/settings` settings) — persists across refresh,
+  supports browser back/forward via `Router`/`Route` components and `useRoute` hook
 
 **Layout structure:**
 - Header: "OpenNeato" branding left, gear icon (settings) right
@@ -557,6 +558,11 @@ Laser_RPM,52428 Charger_MaxPWM,65536 Charger_PWM,-858993460 Charger_mAH,52428
 - Header: back button (left), "Settings" title (center), spacer (right)
 - Appearance section: 3-button theme selector (Auto, Light, Dark)
 - Theme preference persisted in localStorage, defaults to system if unset
+- Timezone section: dropdown with 16 common POSIX TZ presets (UTC offset shown),
+  saves to device via `PUT /api/timezone`, pulse animation while saving,
+  error banner on failure with server error message
+- Robot time display: dimmed small text below timezone selector showing current
+  robot time (from `GET /api/system` `time` field) adjusted by selected TZ offset
 
 **Visual design:**
 - Dark theme: Radial gradient background (`#38383e` → `#232328` → `#161618`)
@@ -601,29 +607,6 @@ Laser_RPM,52428 Charger_MaxPWM,65536 Charger_PWM,-858993460 Charger_mAH,52428
 /* Larger phones: ≥400px */
 /* Tablets: ≥600px (max-width: 600px body) */
 /* Desktop: ≥900px (max-width: 700px body) */
-```
-
-**File structure:**
-```
-frontend/src/
-  types.ts              # TypeScript interfaces (ChargerData, AnalogSensorData, etc.)
-  api.ts                # Typed fetch wrappers for all API endpoints
-  hooks/
-    use-polling.ts      # Generic polling hook with configurable interval
-  components/
-    icon.tsx            # SVG renderer component using dangerouslySetInnerHTML
-    battery-icon.tsx    # Dynamic battery with clipPath + color thresholds
-    settings.tsx        # Settings page with theme selector and back navigation
-  assets/
-    icons/              # SVG icons loaded via ?raw import (alert, back, battery,
-                        #   bolt, check, clock, database, gear, house, moon,
-                        #   sparkle, spot, stop, sun, tag, wifi, wifi-off)
-    robot.svg           # Main robot illustration (30KB, vectorized)
-  style.css             # Single CSS file with all styles + responsive breakpoints
-  app.tsx               # Root component with page routing, theme state, polling,
-                        #   pending state, action handlers
-  main.tsx              # Preact render entry point
-  svg.d.ts              # TypeScript declaration for *.svg?raw imports
 ```
 
 ## Architecture
@@ -746,18 +729,27 @@ frontend/
   index.html               # SPA entry point
   src/
     main.tsx               # Preact render entry point
-    app.tsx                # Root component with page routing, theme state, polling,
-                           #   pending state, action handlers
+    app.tsx                # Root shell: theme management, polling, Router with
+                           #   Route declarations for dashboard and settings views
     types.ts               # TypeScript interfaces (ChargerData, AnalogSensorData, etc.)
-    api.ts                 # Typed fetch wrappers for all API endpoints
+    api.ts                 # Typed fetch wrappers for all API endpoints (get/post/put
+                           #   with server error parsing from JSON body)
     style.css              # Single CSS file with all styles + responsive breakpoints
     svg.d.ts               # TypeScript declaration for *.svg?raw imports
     hooks/
       use-polling.ts       # Generic polling hook with configurable interval
+      use-route.ts         # Hash-based routing hook (reads/writes location.hash)
     components/
       icon.tsx             # SVG renderer component using dangerouslySetInnerHTML
       battery-icon.tsx     # Dynamic battery with clipPath + color thresholds
-      settings.tsx         # Settings page with theme selector and back navigation
+      error-banner.tsx     # Reusable error banner (title + message, alert icon)
+      router.tsx           # Router (context provider), Route (path matcher),
+                           #   useNavigate/usePath hooks for any component
+    views/
+      dashboard.tsx        # Dashboard view: status bar, hero area, info cards,
+                           #   action buttons, pending state, helpers
+      settings.tsx         # Settings view: appearance theme selector, timezone
+                           #   dropdown with POSIX TZ presets, robot time display
     assets/
       robot.svg            # Main robot illustration (30KB, vectorized 4-layer greyscale)
       icons/               # SVG icons loaded via ?raw import (alert, back, battery,

@@ -380,12 +380,13 @@ const handleRequest = async (req, res) => {
         return sendError(res, "method not allowed", 405);
     }
 
-    // PUT /api/timezone
+    // PUT /api/timezone — simulate NVS write + configTzTime delay
     if (req.method === "PUT" && path === "/api/timezone") {
         const body = await readBody(req);
         try {
             const data = JSON.parse(body);
             if (!data.tz) return sendError(res, "missing tz field", 400);
+            await new Promise((r) => setTimeout(r, rand(300, 600)));
             state.tz = data.tz;
             return jsonResponse(res, { tz: state.tz });
         } catch {

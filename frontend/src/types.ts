@@ -38,6 +38,10 @@ export interface SystemData {
     tz: string;
 }
 
+export interface TimezoneData {
+    tz: string;
+}
+
 export interface FirmwareVersion {
     version: string;
 }

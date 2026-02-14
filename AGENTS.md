@@ -28,7 +28,9 @@ firmware through REST API. Everything runs on the device itself.
 4. **Firmware management** — Custom FirmwareManager (Update.h), MD5 validation,
    safe boot checkpoint, dual OTA partition auto-rollback
 5. **Mock API server** — Stateful Node.js dev server (Vite plugin), all REST
-   endpoints, realistic responses, `/api/mock/*` control endpoints
+   endpoints, realistic responses. Edit state object directly for testing scenarios.
+6. **Web UI dashboard** — Preact SPA with dark/light theme, mobile-first responsive
+   design, robot illustration, live status cards, action buttons. Embedded in firmware.
 
 Details for completed phases are documented in the Architecture, API routes, and
 reference sections below.
@@ -37,14 +39,16 @@ reference sections below.
 Architecture/API/reference sections, then remove the full phase description from below
 and add a one-line summary to the completed list above. Do this before committing.
 
-### Web UI
-- SPA shell embedded in firmware binary (PROGMEM) — done (stub)
-- Build pipeline: compile frontend assets, gzip, generate C header, compile
-  into firmware — done
-- Basic layout and navigation structure
-- Live sensor dashboard (battery, motors, bumpers, cliff sensors, etc.)
-- Responsive design for mobile and desktop browsers
-- Builds on stable, tested API — renders real data from day one
+### Power control
+- **Power on/off from web UI** — frontend and mock server already implemented
+  (`POST /api/power/off`, `POST /api/power/on`), firmware backend still needed:
+  - Off: `TestMode On` → `SetSystemMode Shutdown` (requires TestMode)
+  - On: Unclear — Neato has no serial "wake" command; robot may only wake via
+    button press, dock contact, or scheduled clean. Investigate whether sending
+    any serial data wakes the MCU from shutdown. If not, power-on may need to be
+    a no-op (robot wakes on its own, ESP detects state change via polling)
+  - Add `CMD_SET_SYSTEM_MODE` to command enum, `setSystemMode()` to NeatoSerial,
+    register `POST /api/power/off` and `POST /api/power/on` routes in web_server
 
 ### Manual control
 - Drive the robot manually from the web UI (forward, back, rotate)
@@ -516,6 +520,110 @@ Laser_RPM,52428 Charger_MaxPWM,65536 Charger_PWM,-858993460 Charger_mAH,52428
   keeping the frontend small is still important (Preact helps here)
 - **SPIFFS freed**: With frontend in firmware, the full SPIFFS partition is available
   for analytics logs and diagnostics (Phase 3)
+- **Mock server**: `frontend/mock/server.js` runs as Vite plugin, simulates all API
+  endpoints with stateful responses. To test scenarios (low battery, errors, charging),
+  edit the `SCENARIO` constant at the top of the file and save (Vite auto-reloads).
+  Available scenarios (3-letter codes): `ok` (normal idle), `off` (offline),
+  `shd` (shutdown), `cls` (house cleaning), `spt` (spot cleaning), `chg` (charging 62%),
+  `ch2` (charging 25%), `ful` (full on dock), `mid` (battery 45%), `low` (battery 12%),
+  `ded` (battery 0%), `err` (brush stuck). State is static (no dynamic simulation).
+
+### Web UI Design
+
+**Core principles:**
+- Consumer-facing UI, not a debug tool — show human-readable status, not raw sensor dumps
+- Mobile-first responsive design with breakpoints at 400px, 600px, 900px
+- Dark theme as default, user-selectable theme (auto/light/dark) via settings page
+- Page-swap navigation: dashboard (default) and settings page
+
+**Layout structure:**
+- Header: "OpenNeato" branding left, gear icon (settings) right
+- On/Off pill: Sliding toggle with power icon knob, "On"/"Off" labels in gaps
+- Hero area: Robot illustration (right) + info cards (left) with glass-effect cards
+- Info cards: Status, Battery, Mode — each showing icon + label + value
+- Action bar: 3 equal-width buttons (House, Spot, Stop) with 34px icons
+
+**Settings page:**
+- Full page swap (gear icon → settings, back arrow → dashboard)
+- Header: back button (left), "Settings" title (center), spacer (right)
+- Appearance section: 3-button theme selector (Auto, Light, Dark)
+- Theme preference persisted in localStorage, defaults to system if unset
+
+**Visual design:**
+- Dark theme: Radial gradient background (`#38383e` → `#232328` → `#161618`)
+- Light theme: Radial gradient background (`#eff0f5` → `#f5f5f9` → `#ffffff`),
+  lighter surfaces (`#e5e5ea`), translucent cards (`rgba(0,0,0,0.06)`)
+- Glass-effect cards: `backdrop-filter: blur(12px)` with translucent backgrounds
+- Button icon color: `var(--btn-color)` — `#c6c2bc` dark, `#6e6e73` light
+- Battery thresholds: red ≤25%, amber 26-50%, light green 51-75%, full green 76%+
+
+**Power toggle pill:**
+- Sliding knob with power icon, "On"/"Off" labels positioned in gaps beside knob
+- On state: knob slides right, "On" visible left, lighter background
+- Off state: knob slides left, "Off" visible right, grey background
+- 300ms cubic-bezier slide animation
+- Disabled with pulse animation during pending state (waiting for backend confirmation)
+
+**Pending state pattern:**
+- Single `pending` flag shared across power pill and action buttons
+- On click: button disabled immediately, pulse animation indicates waiting
+- Clears when polled `uiState` changes (backend confirms the action)
+- Find/sound actions excluded (fire-and-forget, no state change)
+
+**Icon system:**
+- SVG files in `frontend/src/assets/icons/`, loaded via Vite `?raw` import
+- `Icon` component renders raw SVG strings via `dangerouslySetInnerHTML`
+- Single-color icons use `currentColor` (spot, stop, gear, power, back, sun, moon)
+- Multi-color icons hardcode colors (battery shell, house outline)
+- Battery icon: Dynamic fill rectangle clipped via `<clipPath>` based on charge %
+
+**Robot illustration:**
+- Vectorized D-shape Neato vacuum from 3/4 perspective
+- 4 greyscale layers: `#cac5a2` (highlights), `#666362`, `#3e3c3c`, `#191613` (shadows)
+- 1px white outline via 4-directional `drop-shadow` filters
+- Responsive positioning: mobile (left: 220px, half off-screen), tablets+ (fits within viewport)
+- `overflow: hidden` on `.hero-area` clips right edge on mobile
+
+**Theme implementation:**
+- CSS variables in `:root` (dark defaults)
+- `.light` class on `<html>` for explicit light mode
+- `.system-theme` class + `@media (prefers-color-scheme: light)` for auto mode
+- Dark mode: no extra class needed (`:root` defaults)
+- `applyTheme()` in app.tsx sets the correct class on `document.documentElement`
+- Theme persisted to localStorage only on user interaction (not on initial mount)
+- All theme-sensitive values use CSS variables (surfaces, cards, buttons, pill, text)
+
+**Responsive breakpoints:**
+```css
+/* Mobile default: <400px */
+/* Larger phones: ≥400px */
+/* Tablets: ≥600px (max-width: 600px body) */
+/* Desktop: ≥900px (max-width: 700px body) */
+```
+
+**File structure:**
+```
+frontend/src/
+  types.ts              # TypeScript interfaces (ChargerData, AnalogSensorData, etc.)
+  api.ts                # Typed fetch wrappers for all API endpoints
+  hooks/
+    use-polling.ts      # Generic polling hook with configurable interval
+  components/
+    icon.tsx            # SVG renderer component using dangerouslySetInnerHTML
+    battery-icon.tsx    # Dynamic battery with clipPath + color thresholds
+    settings.tsx        # Settings page with theme selector and back navigation
+  assets/
+    icons/              # SVG icons loaded via ?raw import (alert, back, battery,
+                        #   bolt, check, gear, house, moon, power, sparkle,
+                        #   spot, stop, sun, wifi-off)
+    robot.svg           # Main robot illustration (30KB, vectorized)
+  style.css             # Single CSS file with all styles + responsive breakpoints
+  app.tsx               # Root component with page routing, theme state, polling,
+                        #   pending state, action handlers
+  main.tsx              # Preact render entry point
+  svg.d.ts              # TypeScript declaration for *.svg?raw imports
+```
+
 ## Architecture
 
 Two top-level directories: `firmware/` for ESP32 code, `frontend/` for the web UI.
@@ -620,12 +728,28 @@ frontend/
                            #   dev server: loads mock API plugin for /api/* routes)
   index.html               # SPA entry point
   src/
-    main.tsx               # Preact render entry
-    app.tsx                # Root component (stub)
+    main.tsx               # Preact render entry point
+    app.tsx                # Root component with page routing, theme state, polling,
+                           #   pending state, action handlers
+    types.ts               # TypeScript interfaces (ChargerData, AnalogSensorData, etc.)
+    api.ts                 # Typed fetch wrappers for all API endpoints
+    style.css              # Single CSS file with all styles + responsive breakpoints
+    svg.d.ts               # TypeScript declaration for *.svg?raw imports
+    hooks/
+      use-polling.ts       # Generic polling hook with configurable interval
+    components/
+      icon.tsx             # SVG renderer component using dangerouslySetInnerHTML
+      battery-icon.tsx     # Dynamic battery with clipPath + color thresholds
+      settings.tsx         # Settings page with theme selector and back navigation
+    assets/
+      robot.svg            # Main robot illustration (30KB, vectorized 4-layer greyscale)
+      icons/               # SVG icons loaded via ?raw import (alert, back, battery,
+                           #   bolt, check, gear, house, moon, power, sparkle,
+                           #   spot, stop, sun, wifi-off)
   mock/
     server.js              # Mock API server (plain Node.js http, zero deps),
-                           #   stateful simulation of all REST endpoints,
-                           #   /api/mock/* control endpoints for edge-case testing
+                           #   SCENARIO selector for quick state switching,
+                           #   stateful simulation of all REST endpoints.
   scripts/
     embed_frontend.js      # Auto-discovers all dist/ files, gzips each, generates
                            #   firmware/src/web_assets.h with WebAsset registry
@@ -664,41 +788,42 @@ frontend/
 
 ## Build Commands
 
+### Firmware
+
 ```bash
-# Build (Debug env — serial upload, dev version)
-pio run -e Debug
-
-# Build with specific firmware version
-FIRMWARE_VERSION=1.0.0 pio run -e Debug
-
-# Build and upload via USB serial
-pio run -e Debug -t upload
-
-# Upload and open serial monitor
-pio run -e Debug -t upload -t monitor
-
-# Serial monitor only
-pio run -e Debug -t monitor
-
-# OTA upload (defaults to neato.home, override with NEATO_HOST)
-pio run -e OTA -t upload
-NEATO_HOST=10.10.10.15 pio run -e OTA -t upload
-
-# Clean build artifacts
-pio run -e Debug --target clean
-
-# Static analysis (clang-tidy)
-pio check -e Debug
-
-# Format code (clang-format)
-clang-format -i firmware/src/*.cpp firmware/src/*.h
+pio run -e Debug                        # Build (serial upload, dev version)
+FIRMWARE_VERSION=1.0.0 pio run -e Debug # Build with specific version
+pio run -e Debug -t upload              # Build and upload via USB serial
+pio run -e Debug -t upload -t monitor   # Upload and open serial monitor
+pio run -e Debug -t monitor             # Serial monitor only
+pio run -e OTA -t upload                # OTA upload (defaults to neato.home)
+NEATO_HOST=10.10.10.15 pio run -e OTA -t upload  # OTA to specific host
+pio run -e Debug --target clean         # Clean build artifacts
+pio check -e Debug                      # Static analysis (clang-tidy)
+clang-format -i firmware/src/*.cpp firmware/src/*.h  # Format code
 ```
 
 **Monitor baud rate**: 115200
 
-Verify changes by building successfully with `pio run -e Debug` and running
+Verify firmware changes by building with `pio run -e Debug` and running
 `pio check -e Debug` with zero defects. Code style is enforced by
 `.clang-format` at the project root.
+
+### Frontend
+
+```bash
+cd frontend
+npm run dev          # Start Vite dev server with mock API
+npm run build        # Lint + build + embed assets into firmware header
+npm run check        # Biome lint and format check (no changes)
+npm run fix          # Auto-fix safe issues (formatting, import order)
+npm run fix:unsafe   # Also apply unsafe fixes (template literals, etc.)
+```
+
+Frontend build runs `biome check` before `vite build` — lint/format errors
+fail the build. Style is enforced by Biome (`frontend/biome.json`):
+4-space indent, double quotes, semicolons, 120-char line width, recommended
+lint rules.
 
 ## Dependencies (all pinned)
 

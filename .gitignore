@@ -1,4 +1,5 @@
 .pio
+.cache
 firmware/src/web_assets.h
 frontend/node_modules
 frontend/dist

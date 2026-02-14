@@ -1,6 +1,7 @@
 // Mock API server for Neato web UI development
 // Mimics all firmware REST endpoints with realistic stateful responses
 // Runs as a Vite plugin — hooks into Vite's dev server middleware
+// To test different scenarios, edit the `state` object directly and reload
 
 // --- Helpers ---
 
@@ -14,8 +15,7 @@ const jsonResponse = (res, data, status = 200) => {
 };
 
 const sendOk = (res) => jsonResponse(res, { ok: true });
-const sendError = (res, msg, status = 500) =>
-    jsonResponse(res, { error: msg }, status);
+const sendError = (res, msg, status = 500) => jsonResponse(res, { error: msg }, status);
 
 const readBody = (req) =>
     new Promise((resolve) => {
@@ -25,82 +25,68 @@ const readBody = (req) =>
     });
 
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-const randf = (min, max, decimals = 2) =>
-    parseFloat((Math.random() * (max - min) + min).toFixed(decimals));
+const randf = (min, max, decimals = 2) => parseFloat((Math.random() * (max - min) + min).toFixed(decimals));
+
+// --- Scenario selector ---
+// Change this value to switch between test states. Save and Vite hot-reloads.
+//   "ok"  — Robot idle, online, battery 85%
+//   "off" — Device unreachable (connection lost)
+//   "shd" — Robot powered off (shutdown)
+//   "cls" — House cleaning in progress
+//   "spt" — Spot cleaning in progress
+//   "chg" — On dock, charging, battery 62%
+//   "ch2" — On dock, charging, battery 25%
+//   "ful" — Fully charged, on dock, battery 100%
+//   "mid" — Battery at 45%, not charging
+//   "low" — Battery at 12%, not charging
+//   "ded" — Battery empty (0%)
+//   "err" — Robot has error (brush stuck)
+const SCENARIO = "ok";
 
 // --- Robot state ---
 
+const SCENARIOS = {
+    ok: {},
+    off: { offline: true },
+    shd: { uiState: "UIMGR_STATE_SHUTDOWN", robotState: "ST_C_Shutdown" },
+    cls: { cleaning: true },
+    spt: { spotCleaning: true },
+    chg: { fuelPercent: 62, chargingActive: true, extPwrPresent: true },
+    ch2: { fuelPercent: 25, chargingActive: true, extPwrPresent: true },
+    ful: { fuelPercent: 100, chargingActive: false, extPwrPresent: true },
+    mid: { fuelPercent: 45 },
+    low: { fuelPercent: 12 },
+    ded: { fuelPercent: 0 },
+    err: {
+        hasError: true,
+        errorCode: 234,
+        errorMessage: "My Brush is stuck. Please free it from debris",
+    },
+};
+
 const state = {
-    // Battery / charger
+    offline: false,
     fuelPercent: 85,
-    vBattV: 14.58,
     chargingActive: false,
     extPwrPresent: false,
-
-    // Cleaning
     cleaning: false,
     spotCleaning: false,
     uiState: "UIMGR_STATE_IDLE",
     robotState: "ST_C_Idle",
-
-    // Error
     hasError: false,
     errorCode: 200,
     errorMessage: "",
-
-    // Test mode
     testMode: false,
-
-    // Timezone
     tz: "UTC0",
-
-    // Wheel odometry (accumulates when cleaning)
-    leftWheelPos: 0,
-    rightWheelPos: 0,
+    ...SCENARIOS[SCENARIO],
 };
 
 // Boot time for uptime calculation
 const bootTime = Date.now();
 
-// --- Error code lookup ---
+// --- Derived helpers ---
 
-const ERROR_MESSAGES = {
-    207: "I had to reset my system. Please press START to clean",
-    222: "Please put my Dirt Bin back in",
-    224: "My Brush is overheated. Please wait while I cool down",
-    226: "I am unable to navigate. Please clear my path",
-    228: "My Bumper is stuck. Please free it",
-    229: "Please put me down on the floor",
-    231: "My Left Wheel is stuck. Please free it from debris",
-    232: "My Right Wheel is stuck. Please free it from debris",
-    234: "My Brush is stuck. Please free it from debris",
-    236: "My Vacuum is stuck. Please visit web support",
-    238: "My Battery has a critical error. Please visit web support",
-    245: "Please Dust me off so that I can see",
-};
-
-// --- State simulation timer ---
-
-setInterval(() => {
-    // Battery drain / charge
-    if (state.extPwrPresent && state.chargingActive) {
-        state.fuelPercent = Math.min(100, state.fuelPercent + 0.1);
-        state.vBattV = 12.0 + (state.fuelPercent / 100) * 4.6;
-    } else if (state.cleaning || state.spotCleaning) {
-        state.fuelPercent = Math.max(0, state.fuelPercent - 0.05);
-        state.vBattV = 12.0 + (state.fuelPercent / 100) * 4.6;
-    } else {
-        // Idle drain — very slow
-        state.fuelPercent = Math.max(0, state.fuelPercent - 0.002);
-        state.vBattV = 12.0 + (state.fuelPercent / 100) * 4.6;
-    }
-
-    // Wheel position accumulates when cleaning
-    if (state.cleaning || state.spotCleaning) {
-        state.leftWheelPos += rand(80, 120);
-        state.rightWheelPos += rand(80, 120);
-    }
-}, 2000);
+const vBattFromFuel = (fuel) => parseFloat((12.0 + (fuel / 100) * 4.6).toFixed(2));
 
 // --- LIDAR synthetic room generator ---
 
@@ -160,6 +146,7 @@ const mockLogContent = [
 // --- Derive UI/robot state from current state ---
 
 const deriveStates = () => {
+    if (state.uiState === "UIMGR_STATE_SHUTDOWN") return;
     if (state.testMode) {
         state.uiState = "UIMGR_STATE_TESTMODE";
         state.robotState = "ST_C_TestMode";
@@ -179,7 +166,7 @@ const deriveStates = () => {
 
 const routes = {
     // Sensor routes
-    "GET /api/version": (req, res) => {
+    "GET /api/version": (_req, res) => {
         jsonResponse(res, {
             modelName: "BotVacD5",
             serialNumber: "OPS01234AA,0000001,D",
@@ -190,11 +177,8 @@ const routes = {
         });
     },
 
-    "GET /api/charger": (req, res) => {
+    "GET /api/charger": (_req, res) => {
         const fuel = Math.round(state.fuelPercent);
-        const dischargeMAH = Math.round(
-            ((100 - state.fuelPercent) / 100) * 2800
-        );
         jsonResponse(res, {
             fuelPercent: fuel,
             batteryOverTemp: false,
@@ -205,19 +189,18 @@ const routes = {
             emptyFuel: fuel === 0,
             batteryFailure: false,
             extPwrPresent: state.extPwrPresent,
-            vBattV: parseFloat(state.vBattV.toFixed(2)),
+            vBattV: vBattFromFuel(fuel),
             vExtV: state.extPwrPresent ? 22.3 : 0.0,
-            chargerMAH: state.chargingActive ? rand(100, 2000) : 0,
-            dischargeMAH,
+            chargerMAH: state.chargingActive ? 1200 : 0,
+            dischargeMAH: Math.round(((100 - fuel) / 100) * 2800),
         });
     },
 
-    "GET /api/sensors/analog": (req, res) => {
-        const battMV = Math.round(state.vBattV * 1000);
+    "GET /api/sensors/analog": (_req, res) => {
         const cleaning = state.cleaning || state.spotCleaning;
         jsonResponse(res, {
-            batteryVoltage: battMV,
-            batteryCurrent: cleaning ? rand(-800, -400) : rand(-250, -100),
+            batteryVoltage: Math.round(vBattFromFuel(state.fuelPercent) * 1000),
+            batteryCurrent: cleaning ? -600 : -150,
             batteryTemp: rand(21000, 25000),
             externalVoltage: state.extPwrPresent ? 22300 : 0,
             accelX: rand(-20, 20),
@@ -233,7 +216,7 @@ const routes = {
         });
     },
 
-    "GET /api/sensors/digital": (req, res) => {
+    "GET /api/sensors/digital": (_req, res) => {
         jsonResponse(res, {
             dcJackIn: state.extPwrPresent,
             dustbinIn: true,
@@ -248,7 +231,7 @@ const routes = {
         });
     },
 
-    "GET /api/motors": (req, res) => {
+    "GET /api/motors": (_req, res) => {
         const cleaning = state.cleaning || state.spotCleaning;
         jsonResponse(res, {
             brushRPM: cleaning ? rand(1100, 1300) : 0,
@@ -268,7 +251,7 @@ const routes = {
         });
     },
 
-    "GET /api/state": (req, res) => {
+    "GET /api/state": (_req, res) => {
         deriveStates();
         jsonResponse(res, {
             uiState: state.uiState,
@@ -276,7 +259,7 @@ const routes = {
         });
     },
 
-    "GET /api/error": (req, res) => {
+    "GET /api/error": (_req, res) => {
         jsonResponse(res, {
             hasError: state.hasError,
             errorCode: state.errorCode,
@@ -284,7 +267,7 @@ const routes = {
         });
     },
 
-    "GET /api/accel": (req, res) => {
+    "GET /api/accel": (_req, res) => {
         jsonResponse(res, {
             pitchDeg: randf(-2, 2),
             rollDeg: randf(-2, 2),
@@ -295,7 +278,7 @@ const routes = {
         });
     },
 
-    "GET /api/buttons": (req, res) => {
+    "GET /api/buttons": (_req, res) => {
         jsonResponse(res, {
             softKey: false,
             scrollUp: false,
@@ -305,48 +288,63 @@ const routes = {
         });
     },
 
-    "GET /api/lidar": (req, res) => {
+    "GET /api/lidar": (_req, res) => {
         jsonResponse(res, generateLidarScan());
     },
 
     // Action routes
-    "POST /api/clean/house": (req, res) => {
+    "POST /api/clean/house": (_req, res) => {
         state.cleaning = true;
         state.spotCleaning = false;
         deriveStates();
         sendOk(res);
     },
 
-    "POST /api/clean/spot": (req, res) => {
+    "POST /api/clean/spot": (_req, res) => {
         state.spotCleaning = true;
         state.cleaning = false;
         deriveStates();
         sendOk(res);
     },
 
-    "POST /api/clean/stop": (req, res) => {
+    "POST /api/clean/stop": (_req, res) => {
         state.cleaning = false;
         state.spotCleaning = false;
         deriveStates();
         sendOk(res);
     },
 
-    "POST /api/sound": (req, res) => {
+    "POST /api/sound": (_req, res) => {
         // Accept and ignore — just acknowledge
         sendOk(res);
     },
 
+    // Power routes
+    "POST /api/power/off": (_req, res) => {
+        state.cleaning = false;
+        state.spotCleaning = false;
+        state.uiState = "UIMGR_STATE_SHUTDOWN";
+        state.robotState = "ST_C_Shutdown";
+        sendOk(res);
+    },
+
+    "POST /api/power/on": (_req, res) => {
+        state.uiState = "UIMGR_STATE_IDLE";
+        state.robotState = "ST_C_Idle";
+        sendOk(res);
+    },
+
     // Log routes
-    "GET /api/logs": (req, res) => {
+    "GET /api/logs": (_req, res) => {
         jsonResponse(res, mockLogs);
     },
 
-    "DELETE /api/logs": (req, res) => {
+    "DELETE /api/logs": (_req, res) => {
         sendOk(res);
     },
 
     // System routes
-    "GET /api/system": (req, res) => {
+    "GET /api/system": (_req, res) => {
         jsonResponse(res, {
             heap: rand(160000, 200000),
             heapTotal: 327680,
@@ -361,74 +359,24 @@ const routes = {
         });
     },
 
-    "GET /api/timezone": (req, res) => {
+    "GET /api/timezone": (_req, res) => {
         jsonResponse(res, { tz: state.tz });
     },
 
-    "GET /api/firmware/version": (req, res) => {
+    "GET /api/firmware/version": (_req, res) => {
         jsonResponse(res, { version: "0.0.0-dev" });
-    },
-
-    // --- Mock control endpoints ---
-
-    "POST /api/mock/battery": (req, res, query) => {
-        const pct = parseInt(query.percent, 10);
-        if (isNaN(pct) || pct < 0 || pct > 100) {
-            return sendError(res, "percent must be 0-100", 400);
-        }
-        state.fuelPercent = pct;
-        state.vBattV = 12.0 + (pct / 100) * 4.6;
-        jsonResponse(res, {
-            fuelPercent: pct,
-            vBattV: parseFloat(state.vBattV.toFixed(2)),
-        });
-    },
-
-    "POST /api/mock/dock": (req, res, query) => {
-        const connected = query.connected === "true";
-        state.extPwrPresent = connected;
-        state.chargingActive = connected;
-        if (!connected) state.chargingActive = false;
-        jsonResponse(res, {
-            extPwrPresent: state.extPwrPresent,
-            chargingActive: state.chargingActive,
-        });
-    },
-
-    "POST /api/mock/error": (req, res, query) => {
-        if (query.clear === "true") {
-            state.hasError = false;
-            state.errorCode = 200;
-            state.errorMessage = "";
-        } else {
-            const code = parseInt(query.code, 10);
-            if (isNaN(code)) {
-                return sendError(res, "code required", 400);
-            }
-            state.hasError = true;
-            state.errorCode = code;
-            state.errorMessage = ERROR_MESSAGES[code] || `Error ${code}`;
-        }
-        jsonResponse(res, {
-            hasError: state.hasError,
-            errorCode: state.errorCode,
-            errorMessage: state.errorMessage,
-        });
-    },
-
-    "POST /api/mock/state": (req, res, query) => {
-        if (query.ui) state.uiState = query.ui;
-        if (query.robot) state.robotState = query.robot;
-        jsonResponse(res, {
-            uiState: state.uiState,
-            robotState: state.robotState,
-        });
     },
 };
 
 // --- Core request handler ---
 
 const handleRequest = async (req, res) => {
+    // Simulate device unreachable — drop connection
+    if (state.offline) {
+        req.destroy();
+        return;
+    }
+
     const parsed = new URL(req.url, "http://localhost");
     const path = parsed.pathname;
     const query = Object.fromEntries(parsed.searchParams);

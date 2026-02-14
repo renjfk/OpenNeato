@@ -1,4 +1,4 @@
-import type { StateData, ChargerData, ErrorData, SystemData, FirmwareVersion } from "./types";
+import type { ChargerData, ErrorData, FirmwareVersion, StateData, SystemData } from "./types";
 
 async function get<T>(url: string): Promise<T> {
     const res = await fetch(url);
@@ -21,4 +21,6 @@ export const api = {
     cleanSpot: () => post("/api/clean/spot"),
     cleanStop: () => post("/api/clean/stop"),
     playSound: (id: number) => post(`/api/sound?id=${id}`),
+    shutdown: () => post("/api/power/off"),
+    wakeUp: () => post("/api/power/on"),
 };

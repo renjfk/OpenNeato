@@ -6,9 +6,9 @@
 //
 // Usage: node frontend/scripts/embed_frontend.js
 
-const fs = require("fs");
-const path = require("path");
-const zlib = require("zlib");
+const fs = require("node:fs");
+const path = require("node:path");
+const zlib = require("node:zlib");
 
 const distDir = path.join(__dirname, "..", "dist");
 const outHeader = path.join(__dirname, "..", "..", "firmware", "src", "web_assets.h");
@@ -55,11 +55,11 @@ function toVarName(relPath) {
 function toHexArray(buffer) {
     const bytes = [];
     for (let i = 0; i < buffer.length; i++) {
-        bytes.push("0x" + buffer[i].toString(16).padStart(2, "0"));
+        bytes.push(`0x${buffer[i].toString(16).padStart(2, "0")}`);
     }
     const lines = [];
     for (let i = 0; i < bytes.length; i += 12) {
-        lines.push("    " + bytes.slice(i, i + 12).join(", "));
+        lines.push(`    ${bytes.slice(i, i + 12).join(", ")}`);
     }
     return lines.join(",\n");
 }
@@ -101,11 +101,9 @@ for (const relPath of relPaths) {
     const contentType = getContentType(relPath);
     const varName = toVarName(relPath);
     // URL path: always forward-slash, rooted
-    const urlPath = "/" + relPath.split(path.sep).join("/");
+    const urlPath = `/${relPath.split(path.sep).join("/")}`;
 
-    console.log(
-        `${urlPath}: ${raw.length} bytes -> ${gzipped.length} bytes gzipped (${contentType})`
-    );
+    console.log(`${urlPath}: ${raw.length} bytes -> ${gzipped.length} bytes gzipped (${contentType})`);
 
     header += `// ${urlPath} (${raw.length} bytes raw, ${gzipped.length} bytes gzipped)
 static const char ${varName}_PATH[] PROGMEM = "${urlPath}";

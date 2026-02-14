@@ -1,17 +1,38 @@
-// Battery icon with 4 fill ticks that reflect charge level and color
+// Battery icon matching SVGRepo style with dynamic charge fill
 
-export function BatteryIcon({ pct, color }: { pct: number; color: string }) {
-    const c = `var(--${color})`;
-    const ticks = pct > 87 ? 4 : pct > 62 ? 3 : pct > 37 ? 2 : pct > 12 ? 1 : 0;
+export function BatteryIcon({ pct }: { pct: number }) {
+    // Fill width inside the battery body (8 to 48 = 40 units range)
+    const fillWidth = Math.round((pct / 100) * 40);
+    const fillRight = 8 + fillWidth;
+
+    // Color the fill based on charge level
+    const fillColor = pct <= 25 ? "var(--red)" : pct <= 50 ? "var(--amber)" : pct <= 75 ? "#8fdf3f" : "var(--green)";
 
     return (
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="2" y="7" width="18" height="10" rx="2" stroke={c} stroke-width="1.5" />
-            <path d="M22 11v2" stroke={c} stroke-width="1.5" stroke-linecap="round" />
-            {ticks >= 1 && <rect x="4.5" y="9.5" width="2.5" height="5" rx="0.5" fill={c} />}
-            {ticks >= 2 && <rect x="8.5" y="9.5" width="2.5" height="5" rx="0.5" fill={c} />}
-            {ticks >= 3 && <rect x="12.5" y="9.5" width="2.5" height="5" rx="0.5" fill={c} />}
-            {ticks >= 4 && <rect x="16.5" y="9.5" width="1.5" height="5" rx="0.5" fill={c} />}
+        <svg
+            viewBox="0 0 64 64"
+            width="28"
+            height="28"
+            xmlns="http://www.w3.org/2000/svg"
+            role="img"
+            aria-label="Battery"
+        >
+            <defs>
+                {/* Clip to battery interior: main body + nub */}
+                <clipPath id="batt-clip">
+                    <rect x="8" y="20" width="40" height="24" />
+                    <rect x="48" y="28" width="8" height="8" />
+                </clipPath>
+            </defs>
+            {/* Dark outer shell */}
+            <path
+                fill="#394240"
+                d="M60,20h-4v-4c0-2.211-1.789-4-4-4H4c-2.211,0-4,1.789-4,4v32c0,2.211,1.789,4,4,4h48c2.211,0,4-1.789,4-4v-4h4c2.211,0,4-1.789,4-4V24C64,21.789,62.211,20,60,20z M56,36h-8v8H8V20h40v8h8V36z"
+            />
+            {/* Charge fill clipped to interior */}
+            {pct > 0 && (
+                <rect x="8" y="20" width={fillRight - 8} height="24" fill={fillColor} clip-path="url(#batt-clip)" />
+            )}
         </svg>
     );
 }

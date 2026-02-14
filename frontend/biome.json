@@ -1,0 +1,22 @@
+{
+    "$schema": "https://biomejs.dev/schemas/2.3.15/schema.json",
+
+    "files": {
+        "includes": ["src/**", "mock/**", "scripts/**", "vite.config.ts"]
+    },
+    "formatter": {
+        "indentStyle": "space",
+        "indentWidth": 4,
+        "lineWidth": 120
+    },
+    "javascript": {
+        "formatter": {
+            "quoteStyle": "double"
+        }
+    },
+    "linter": {
+        "rules": {
+            "recommended": true
+        }
+    }
+}

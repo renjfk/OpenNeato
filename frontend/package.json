@@ -4,13 +4,17 @@
   "version": "0.0.1",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node scripts/embed_frontend.js",
-    "preview": "vite preview"
+    "build": "biome check && vite build && node scripts/embed_frontend.js",
+    "preview": "vite preview",
+    "check": "biome check",
+    "fix": "biome check --write",
+    "fix:unsafe": "biome check --write --unsafe"
   },
   "dependencies": {
     "preact": "^10.25.4"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.3.15",
     "@preact/preset-vite": "^2.9.4",
     "typescript": "^5.7.3",
     "vite": "^6.0.7"

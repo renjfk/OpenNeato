@@ -3,19 +3,7 @@
 
 #include <Arduino.h>
 #include <vector>
-
-// -- Field system for generic serialization ----------------------------------
-
-enum FieldType { FIELD_INT, FIELD_FLOAT, FIELD_BOOL, FIELD_STRING };
-
-struct Field {
-    String key;
-    String value;
-    FieldType type;
-};
-
-// Generic serializer — works with any struct that implements toFields()
-String fieldsToJson(const std::vector<Field>& fields);
+#include "json_fields.h"
 
 // -- Command enum ------------------------------------------------------------
 
@@ -81,7 +69,7 @@ unsigned long commandTimeout(NeatoCommand cmd);
 
 // -- Response structs --------------------------------------------------------
 
-struct VersionData {
+struct VersionData : public JsonSerializable {
     String modelName;
     String serialNumber;
     String softwareVersion; // "Major.Minor.Build"
@@ -89,10 +77,10 @@ struct VersionData {
     String ldsSerial;
     String mainBoardVersion;
 
-    std::vector<Field> toFields() const;
+    std::vector<Field> toFields() const override;
 };
 
-struct ChargerData {
+struct ChargerData : public JsonSerializable {
     int fuelPercent = -1;
     bool batteryOverTemp = false;
     bool chargingActive = false;
@@ -107,10 +95,10 @@ struct ChargerData {
     int chargerMAH = 0;
     int dischargeMAH = 0;
 
-    std::vector<Field> toFields() const;
+    std::vector<Field> toFields() const override;
 };
 
-struct AnalogSensorData {
+struct AnalogSensorData : public JsonSerializable {
     int batteryVoltage = 0; // mV
     int batteryCurrent = 0; // mA (negative = discharging)
     int batteryTemp = 0; // milli-Celsius
@@ -126,10 +114,10 @@ struct AnalogSensorData {
     int dropSensorLeft = 0; // mm
     int dropSensorRight = 0; // mm
 
-    std::vector<Field> toFields() const;
+    std::vector<Field> toFields() const override;
 };
 
-struct DigitalSensorData {
+struct DigitalSensorData : public JsonSerializable {
     bool dcJackIn = false;
     bool dustbinIn = false;
     bool leftWheelExtended = false;
@@ -141,10 +129,10 @@ struct DigitalSensorData {
     bool rFrontBit = false;
     bool rLdsBit = false;
 
-    std::vector<Field> toFields() const;
+    std::vector<Field> toFields() const override;
 };
 
-struct MotorData {
+struct MotorData : public JsonSerializable {
     int brushMaxPWM = 0;
     int brushRPM = 0;
     int brushMA = 0;
@@ -161,25 +149,25 @@ struct MotorData {
     int sideBrushMA = 0;
     int laserRPM = 0;
 
-    std::vector<Field> toFields() const;
+    std::vector<Field> toFields() const override;
 };
 
-struct RobotState {
+struct RobotState : public JsonSerializable {
     String uiState; // e.g. "UIMGR_STATE_STANDBY"
     String robotState; // e.g. "ST_C_Standby"
 
-    std::vector<Field> toFields() const;
+    std::vector<Field> toFields() const override;
 };
 
-struct ErrorData {
+struct ErrorData : public JsonSerializable {
     bool hasError = false;
     int errorCode = 200; // 200 = UI_ALERT_INVALID = no error
     String errorMessage;
 
-    std::vector<Field> toFields() const;
+    std::vector<Field> toFields() const override;
 };
 
-struct AccelData {
+struct AccelData : public JsonSerializable {
     float pitchDeg = 0.0f;
     float rollDeg = 0.0f;
     float xInG = 0.0f;
@@ -187,26 +175,26 @@ struct AccelData {
     float zInG = 0.0f;
     float sumInG = 0.0f;
 
-    std::vector<Field> toFields() const;
+    std::vector<Field> toFields() const override;
 };
 
-struct ButtonData {
+struct ButtonData : public JsonSerializable {
     bool softKey = false;
     bool scrollUp = false;
     bool start = false;
     bool back = false;
     bool scrollDown = false;
 
-    std::vector<Field> toFields() const;
+    std::vector<Field> toFields() const override;
 };
 
-struct TimeData {
+struct TimeData : public JsonSerializable {
     int dayOfWeek = -1; // 0=Sunday .. 6=Saturday
     int hour = 0;
     int minute = 0;
     int second = 0;
 
-    std::vector<Field> toFields() const;
+    std::vector<Field> toFields() const override;
 };
 
 // LDS scan — special case, does not use toFields()

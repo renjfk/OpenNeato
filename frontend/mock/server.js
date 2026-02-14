@@ -31,7 +31,6 @@ const randf = (min, max, decimals = 2) => parseFloat((Math.random() * (max - min
 // Change this value to switch between test states. Save and Vite hot-reloads.
 //   "ok"  — Robot idle, online, battery 85%
 //   "off" — Device unreachable (connection lost)
-//   "shd" — Robot powered off (shutdown)
 //   "cls" — House cleaning in progress
 //   "spt" — Spot cleaning in progress
 //   "chg" — On dock, charging, battery 62%
@@ -48,7 +47,6 @@ const SCENARIO = "ok";
 const SCENARIOS = {
     ok: {},
     off: { offline: true },
-    shd: { uiState: "UIMGR_STATE_SHUTDOWN", robotState: "ST_C_Shutdown" },
     cls: { cleaning: true },
     spt: { spotCleaning: true },
     chg: { fuelPercent: 62, chargingActive: true, extPwrPresent: true },
@@ -146,7 +144,6 @@ const mockLogContent = [
 // --- Derive UI/robot state from current state ---
 
 const deriveStates = () => {
-    if (state.uiState === "UIMGR_STATE_SHUTDOWN") return;
     if (state.testMode) {
         state.uiState = "UIMGR_STATE_TESTMODE";
         state.robotState = "ST_C_TestMode";
@@ -316,21 +313,6 @@ const routes = {
 
     "POST /api/sound": (_req, res) => {
         // Accept and ignore — just acknowledge
-        sendOk(res);
-    },
-
-    // Power routes
-    "POST /api/power/off": (_req, res) => {
-        state.cleaning = false;
-        state.spotCleaning = false;
-        state.uiState = "UIMGR_STATE_SHUTDOWN";
-        state.robotState = "ST_C_Shutdown";
-        sendOk(res);
-    },
-
-    "POST /api/power/on": (_req, res) => {
-        state.uiState = "UIMGR_STATE_IDLE";
-        state.robotState = "ST_C_Idle";
         sendOk(res);
     },
 

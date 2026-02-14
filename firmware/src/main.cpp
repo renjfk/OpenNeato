@@ -15,10 +15,10 @@ Preferences prefs;
 AsyncWebServer server(80);
 NeatoSerial neatoSerial;
 WiFiManager wifiManager(prefs);
-FirmwareManager firmwareManager(server);
+FirmwareManager firmwareManager;
 SystemManager systemManager(prefs);
 DataLogger dataLogger(neatoSerial, systemManager);
-WebServer webServer(server, neatoSerial, dataLogger, systemManager);
+WebServer webServer(server, neatoSerial, dataLogger, systemManager, firmwareManager);
 
 // Robot time sync state (managed here, not in SystemManager)
 unsigned long lastRobotSync = 0;
@@ -65,7 +65,7 @@ void setup() {
     // Wire NTP sync callback: push time to robot, log the event
     systemManager.onNtpSync([&] {
         time_t t = time(nullptr);
-        dataLogger.logNtp("sync_ok", String(R"("epoch":)") + String(static_cast<long>(t)));
+        dataLogger.logNtp("sync_ok", {{"epoch", String(static_cast<long>(t)), FIELD_INT}});
         syncRobotClock();
         lastRobotSync = millis();
     });
@@ -74,8 +74,6 @@ void setup() {
     if (wifiManager.isConnected()) {
         LOG("BOOT", "Initializing web server...");
         webServer.begin();
-        LOG("BOOT", "Initializing firmware updater...");
-        firmwareManager.begin();
         LOG("BOOT", "Starting HTTP server...");
         server.begin();
 
@@ -110,19 +108,20 @@ void setup() {
     });
 
     // Wire firmware update events to data logger
-    firmwareManager.setLogger([](const String& event, const String& payload) { dataLogger.logOta(event, payload); });
+    firmwareManager.setLogger(
+            [](const String& event, const std::vector<Field>& extra) { dataLogger.logOta(event, extra); });
 
     // Wire WiFi events to data logger
     WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
         switch (event) {
             case ARDUINO_EVENT_WIFI_STA_CONNECTED:
-                dataLogger.logWifi("connected", "");
+                dataLogger.logWifi("connected");
                 break;
             case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-                dataLogger.logWifi("disconnected", "\"reason\":" + String(info.wifi_sta_disconnected.reason));
+                dataLogger.logWifi("disconnected", {{"reason", String(info.wifi_sta_disconnected.reason), FIELD_INT}});
                 break;
             case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-                dataLogger.logWifi("got_ip", "\"ip\":\"" + WiFi.localIP().toString() + "\"");
+                dataLogger.logWifi("got_ip", {{"ip", WiFi.localIP().toString(), FIELD_STRING}});
                 break;
             default:
                 break;

@@ -71,19 +71,32 @@ void SystemManager::setTimezone(const String& tz) {
 
 // -- System health -----------------------------------------------------------
 
-// NOLINTNEXTLINE(readability-convert-member-functions-to-static) - uses member state
-String SystemManager::systemHealthJson() const {
-    String json = "{";
-    json += "\"heap\":" + String(ESP.getFreeHeap());
-    json += ",\"heapTotal\":" + String(ESP.getHeapSize());
-    json += ",\"uptime\":" + String(millis());
-    json += ",\"rssi\":" + String(WiFi.RSSI());
-    json += ",\"spiffsUsed\":" + String(SPIFFS.usedBytes());
-    json += ",\"spiffsTotal\":" + String(SPIFFS.totalBytes());
-    json += ",\"ntpSynced\":" + String(ntpSynced ? "true" : "false");
-    json += ",\"time\":" + String(static_cast<long>(now()));
-    json += R"(,"timeSource":")" + String(ntpSynced ? "ntp" : (fallbackSet ? "fallback" : "millis")) + R"(")";
-    json += R"(,"tz":")" + getTimezone() + R"(")";
-    json += "}";
-    return json;
+std::vector<Field> SystemHealth::toFields() const {
+    return {
+            {"heap", String(heap), FIELD_INT},
+            {"heapTotal", String(heapTotal), FIELD_INT},
+            {"uptime", String(uptime), FIELD_INT},
+            {"rssi", String(rssi), FIELD_INT},
+            {"spiffsUsed", String(spiffsUsed), FIELD_INT},
+            {"spiffsTotal", String(spiffsTotal), FIELD_INT},
+            {"ntpSynced", ntpSynced ? "true" : "false", FIELD_BOOL},
+            {"time", String(static_cast<long>(time)), FIELD_INT},
+            {"timeSource", timeSource, FIELD_STRING},
+            {"tz", tz, FIELD_STRING},
+    };
+}
+
+SystemHealth SystemManager::getSystemHealth() const {
+    SystemHealth h;
+    h.heap = ESP.getFreeHeap();
+    h.heapTotal = ESP.getHeapSize();
+    h.uptime = millis();
+    h.rssi = WiFi.RSSI();
+    h.spiffsUsed = SPIFFS.usedBytes();
+    h.spiffsTotal = SPIFFS.totalBytes();
+    h.ntpSynced = ntpSynced;
+    h.time = now();
+    h.timeSource = ntpSynced ? "ntp" : (fallbackSet ? "fallback" : "millis");
+    h.tz = getTimezone();
+    return h;
 }

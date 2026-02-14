@@ -70,25 +70,6 @@ unsigned long commandTimeout(NeatoCommand cmd) {
     }
 }
 
-// -- Generic serializers -----------------------------------------------------
-
-String fieldsToJson(const std::vector<Field>& fields) {
-    String json = "{";
-    for (size_t i = 0; i < fields.size(); i++) {
-        if (i > 0)
-            json += ",";
-        json += "\"" + fields[i].key + "\":";
-        if (fields[i].type == FIELD_STRING) {
-            json += "\"" + fields[i].value + "\"";
-        } else {
-            // INT, FLOAT, BOOL all render as-is (42, 14.58, true/false)
-            json += fields[i].value;
-        }
-    }
-    json += "}";
-    return json;
-}
-
 // -- CSV parsing helpers -----------------------------------------------------
 
 // Find value for a given label in "Label,Value\r\n" formatted response.
@@ -675,7 +656,6 @@ bool parseTimeData(const String& raw, TimeData& out) {
 
     String timeStr = line.substring(spaceIdx + 1);
     int h = 0, m = 0, s = 0;
-    // NOLINTNEXTLINE(cert-err34-c) - we check return value
     if (sscanf(timeStr.c_str(), "%d:%d:%d", &h, &m, &s) != 3)
         return false;
 

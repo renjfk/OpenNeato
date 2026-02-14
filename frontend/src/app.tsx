@@ -4,7 +4,7 @@ import { BatteryIcon } from "./components/battery-icon";
 import { Icon } from "./components/icon";
 import { Settings } from "./components/settings";
 import { usePolling } from "./hooks/use-polling";
-import type { ChargerData, ErrorData, StateData, SystemData } from "./types";
+import type { ChargerData, ErrorData, FirmwareVersion, StateData, SystemData } from "./types";
 
 type Theme = "system" | "dark" | "light";
 
@@ -28,12 +28,15 @@ function loadTheme(): Theme {
 import alertSvg from "./assets/icons/alert.svg?raw";
 import boltSvg from "./assets/icons/bolt.svg?raw";
 import checkSvg from "./assets/icons/check.svg?raw";
+import clockSvg from "./assets/icons/clock.svg?raw";
+import databaseSvg from "./assets/icons/database.svg?raw";
 import gearSvg from "./assets/icons/gear.svg?raw";
 import houseSvg from "./assets/icons/house.svg?raw";
-import powerSvg from "./assets/icons/power.svg?raw";
 import sparkleSvg from "./assets/icons/sparkle.svg?raw";
 import spotSvg from "./assets/icons/spot.svg?raw";
 import stopSvg from "./assets/icons/stop.svg?raw";
+import tagSvg from "./assets/icons/tag.svg?raw";
+import wifiSvg from "./assets/icons/wifi.svg?raw";
 import wifiOffSvg from "./assets/icons/wifi-off.svg?raw";
 // SVG assets (inlined at build time via Vite ?raw)
 import robotSvg from "./assets/robot.svg?raw";
@@ -82,6 +85,26 @@ function battColor(pct: number): string {
     return "green";
 }
 
+function formatUptime(ms: number): string {
+    const s = Math.floor(ms / 1000);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    const rm = m % 60;
+    if (h < 24) return rm ? `${h}h ${rm}m` : `${h}h`;
+    const d = Math.floor(h / 24);
+    const rh = h % 24;
+    return rh ? `${d}d ${rh}h` : `${d}d`;
+}
+
+function wifiStrength(rssi: number): string {
+    if (rssi >= -50) return "Excellent";
+    if (rssi >= -60) return "Good";
+    if (rssi >= -70) return "Fair";
+    return "Weak";
+}
+
 // -- Main App --
 
 export function App() {
@@ -100,14 +123,14 @@ export function App() {
     const state = usePolling<StateData>(api.getState, 2000);
     const charger = usePolling<ChargerData>(api.getCharger, 5000);
     const error = usePolling<ErrorData>(api.getError, 2000);
-    const _system = usePolling<SystemData>(api.getSystem, 10000);
+    const system = usePolling<SystemData>(api.getSystem, 10000);
+    const firmware = usePolling<FirmwareVersion>(api.getFirmwareVersion, 60000);
 
     const connErr = state.error && charger.error;
     const hasData = state.data || charger.data;
     const offline = connErr && !hasData;
 
     const si = state.data ? statusInfo(state.data.uiState) : { label: "...", color: "amber", icon: "check" };
-    const isOn = hasData && !state.data?.uiState?.includes("SHUTDOWN");
 
     // Pending state — disabled until backend confirms state change
     const [pending, setPending] = useState(false);
@@ -117,12 +140,6 @@ export function App() {
         lastUiState.current = state.data.uiState;
         if (pending) setPending(false);
     }
-
-    const handlePowerToggle = useCallback(() => {
-        setPending(true);
-        if (isOn) api.shutdown();
-        else api.wakeUp();
-    }, [isOn]);
 
     const handleAction = useCallback((action: () => Promise<unknown>) => {
         setPending(true);
@@ -155,20 +172,41 @@ export function App() {
                 </button>
             </div>
 
-            {/* On/Off toggle pill */}
-            <button
-                type="button"
-                class={`power-pill${isOn ? " on" : ""}${pending ? " pending" : ""}`}
-                onClick={handlePowerToggle}
-                disabled={offline || pending}
-                aria-label={isOn ? "Turn off" : "Turn on"}
-            >
-                <span class="power-pill-label">On</span>
-                <div class="power-pill-knob">
-                    <Icon svg={powerSvg} />
+            {/* Status bar */}
+            {system.data && !offline && (
+                <div class="status-bar">
+                    <div class="status-bar-item">
+                        <div class="status-bar-label">WiFi</div>
+                        <div class="status-bar-value">
+                            <Icon svg={wifiSvg} />
+                            {wifiStrength(system.data.rssi)}
+                        </div>
+                    </div>
+                    <div class="status-bar-item">
+                        <div class="status-bar-label">Uptime</div>
+                        <div class="status-bar-value">
+                            <Icon svg={clockSvg} />
+                            {formatUptime(system.data.uptime)}
+                        </div>
+                    </div>
+                    <div class="status-bar-item">
+                        <div class="status-bar-label">Storage</div>
+                        <div class="status-bar-value">
+                            <Icon svg={databaseSvg} />
+                            {Math.round((system.data.spiffsUsed / system.data.spiffsTotal) * 100)}%
+                        </div>
+                    </div>
+                    {firmware.data && (
+                        <div class="status-bar-item">
+                            <div class="status-bar-label">Firmware</div>
+                            <div class="status-bar-value">
+                                <Icon svg={tagSvg} />
+                                {firmware.data.version}
+                            </div>
+                        </div>
+                    )}
                 </div>
-                <span class="power-pill-label">Off</span>
-            </button>
+            )}
 
             {/* Error banner */}
             {error.data?.hasError && (
@@ -190,11 +228,6 @@ export function App() {
                 <div class="conn-error">
                     <Icon svg={wifiOffSvg} />
                     Unable to reach robot
-                </div>
-            ) : !isOn ? (
-                <div class="conn-error">
-                    <Icon svg={powerSvg} />
-                    Robot is off
                 </div>
             ) : (
                 <div class="hero-area">
@@ -243,7 +276,7 @@ export function App() {
                         type="button"
                         class={`action-btn primary${pending ? " pending" : ""}`}
                         onClick={() => handleAction(api.cleanHouse)}
-                        disabled={!isOn || isCleaning || pending}
+                        disabled={offline || isCleaning || pending}
                     >
                         <Icon svg={houseSvg} />
                         House
@@ -252,7 +285,7 @@ export function App() {
                         type="button"
                         class={`action-btn${pending ? " pending" : ""}`}
                         onClick={() => handleAction(api.cleanSpot)}
-                        disabled={!isOn || isCleaning || pending}
+                        disabled={offline || isCleaning || pending}
                     >
                         <Icon svg={spotSvg} />
                         Spot
@@ -261,7 +294,7 @@ export function App() {
                         type="button"
                         class={`action-btn${pending ? " pending" : ""}`}
                         onClick={() => handleAction(api.cleanStop)}
-                        disabled={!isOn || !isCleaning || pending}
+                        disabled={offline || !isCleaning || pending}
                     >
                         <Icon svg={stopSvg} />
                         Stop

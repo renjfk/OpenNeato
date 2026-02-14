@@ -60,17 +60,6 @@ and add a one-line summary to the completed list above. Do this before committin
   etc.) owns an `AsyncCache<T>` instance internally, so caching and dedup are
   transparent to all callers (web_server routes, polling loops, etc.)
 
-### Power control
-- **Power on/off from web UI** — frontend and mock server already implemented
-  (`POST /api/power/off`, `POST /api/power/on`), firmware backend still needed:
-  - Off: `TestMode On` → `SetSystemMode Shutdown` (requires TestMode)
-  - On: Unclear — Neato has no serial "wake" command; robot may only wake via
-    button press, dock contact, or scheduled clean. Investigate whether sending
-    any serial data wakes the MCU from shutdown. If not, power-on may need to be
-    a no-op (robot wakes on its own, ESP detects state change via polling)
-  - Add `CMD_SET_SYSTEM_MODE` to command enum, `setSystemMode()` to NeatoSerial,
-    register `POST /api/power/off` and `POST /api/power/on` routes in web_server
-
 ### Manual control
 - Drive the robot manually from the web UI (forward, back, rotate)
 - Start/stop/pause cleaning cycles
@@ -559,7 +548,6 @@ Laser_RPM,52428 Charger_MaxPWM,65536 Charger_PWM,-858993460 Charger_mAH,52428
 
 **Layout structure:**
 - Header: "OpenNeato" branding left, gear icon (settings) right
-- On/Off pill: Sliding toggle with power icon knob, "On"/"Off" labels in gaps
 - Hero area: Robot illustration (right) + info cards (left) with glass-effect cards
 - Info cards: Status, Battery, Mode — each showing icon + label + value
 - Action bar: 3 equal-width buttons (House, Spot, Stop) with 34px icons
@@ -578,15 +566,8 @@ Laser_RPM,52428 Charger_MaxPWM,65536 Charger_PWM,-858993460 Charger_mAH,52428
 - Button icon color: `var(--btn-color)` — `#c6c2bc` dark, `#6e6e73` light
 - Battery thresholds: red ≤25%, amber 26-50%, light green 51-75%, full green 76%+
 
-**Power toggle pill:**
-- Sliding knob with power icon, "On"/"Off" labels positioned in gaps beside knob
-- On state: knob slides right, "On" visible left, lighter background
-- Off state: knob slides left, "Off" visible right, grey background
-- 300ms cubic-bezier slide animation
-- Disabled with pulse animation during pending state (waiting for backend confirmation)
-
 **Pending state pattern:**
-- Single `pending` flag shared across power pill and action buttons
+- Single `pending` flag shared across action buttons
 - On click: button disabled immediately, pulse animation indicates waiting
 - Clears when polled `uiState` changes (backend confirms the action)
 - Find/sound actions excluded (fire-and-forget, no state change)
@@ -612,7 +593,7 @@ Laser_RPM,52428 Charger_MaxPWM,65536 Charger_PWM,-858993460 Charger_mAH,52428
 - Dark mode: no extra class needed (`:root` defaults)
 - `applyTheme()` in app.tsx sets the correct class on `document.documentElement`
 - Theme persisted to localStorage only on user interaction (not on initial mount)
-- All theme-sensitive values use CSS variables (surfaces, cards, buttons, pill, text)
+- All theme-sensitive values use CSS variables (surfaces, cards, buttons, text)
 
 **Responsive breakpoints:**
 ```css
@@ -635,8 +616,8 @@ frontend/src/
     settings.tsx        # Settings page with theme selector and back navigation
   assets/
     icons/              # SVG icons loaded via ?raw import (alert, back, battery,
-                        #   bolt, check, gear, house, moon, power, sparkle,
-                        #   spot, stop, sun, wifi-off)
+                        #   bolt, check, clock, database, gear, house, moon,
+                        #   sparkle, spot, stop, sun, tag, wifi, wifi-off)
     robot.svg           # Main robot illustration (30KB, vectorized)
   style.css             # Single CSS file with all styles + responsive breakpoints
   app.tsx               # Root component with page routing, theme state, polling,
@@ -677,23 +658,27 @@ firmware/
                            #   formatting helpers: printStatus, printError, etc.)
     wifi_manager.h/cpp     # WiFi config, credential storage (shared Preferences&),
                            #   network scanning, serial quick commands ([m]enu, [s]tatus)
-    firmware_manager.h/cpp # Firmware update using ESP32 Update.h directly,
-                           #   registers POST /api/firmware/update route,
-                           #   GET /api/firmware/version for update check,
-                           #   MD5 hash validation, chunked upload, auto-reboot,
-                           #   isInProgress() guard for loop(), LogCallback hook
+    firmware_manager.h/cpp # Firmware update business logic using ESP32 Update.h,
+                           #   no web server dependency — pure update lifecycle:
+                           #   beginUpdate(), writeChunk(), endUpdate(),
+                           #   getFirmwareVersion(), MD5 validation, auto-reboot,
+                           #   isInProgress()/getProgress()/getError() queries,
+                           #   LogCallback hook. Routes registered by WebServer.
     system_manager.h/cpp   # NTP time sync, timezone (POSIX TZ in NVS), fallback
-                           #   clock from external sources, system health JSON
-                           #   (heap, uptime, RSSI, SPIFFS, NTP). Robot-agnostic —
-                           #   no NeatoSerial dependency. onNtpSync() callback for
-                           #   main.cpp to push time to robot. setFallbackClock()
-                           #   for external clock sources (e.g. robot GetTime).
+                           #   clock from external sources. SystemHealth struct
+                           #   (JsonSerializable) returned by getSystemHealth()
+                           #   with heap, uptime, RSSI, SPIFFS, NTP fields.
+                           #   Robot-agnostic — no NeatoSerial dependency.
+                           #   onNtpSync() callback for main.cpp to push time
+                           #   to robot. setFallbackClock() for external clock
+                           #   sources (e.g. robot GetTime).
     web_server.h/cpp       # Serves embedded frontend assets from PROGMEM, registers
                            #   all REST API routes (sensor GET, action POST),
-                           #   log routes (list/download/delete), system routes
-                           #   (health, timezone). Request logging on
-                           #   all sensor/action routes via DataLogger. System
-                           #   routes delegate to SystemManager for health/tz/NTP.
+                           #   firmware routes (version, OTA upload), log routes
+                           #   (list/download/delete), system routes (health, timezone).
+                           #   Request logging on all sensor/action routes via DataLogger.
+                           #   System routes delegate to SystemManager for health/tz/NTP.
+                           #   Firmware routes delegate to FirmwareManager for version/update.
                            #   Template helpers: registerSensorRoute<T>(),
                            #   registerActionRoute(), sendGzipAsset(), sendError()
     web_assets.h           # Auto-generated — WebAsset struct + WEB_ASSETS[] registry
@@ -704,6 +689,10 @@ firmware/
                            #   boot event logging, NeatoSerial command hook (logs every
                            #   serial command with status/queue/bytes), log file management
                            #   (list/read/delete). Delegates time to SystemManager.
+                           #   All logging methods use typed fields (std::vector<Field>)
+                           #   instead of raw JSON string fragments — logEvent(),
+                           #   logWifi(), logOta(), logNtp() accept Field vectors,
+                           #   serialized via fieldsToJsonInner() from json_fields.
                            #   LogReader abstraction: readLog() returns shared_ptr<LogReader>,
                            #   PlainLogReader (thin File wrapper) or CompressedLogReader
                            #   (streaming heatshrink decoder) — web_server uses reader->read()
@@ -712,11 +701,18 @@ firmware/
                            #   flushed to SPIFFS in loop(); log rotation uses fast
                            #   rename + incremental heatshrink compression across
                            #   loop() iterations; bulk delete deferred one file per tick
+    json_fields.h/cpp      # Lightweight field-based JSON serialization: Field struct,
+                           #   FieldType enum (INT, FLOAT, BOOL, STRING),
+                           #   fieldsToJson() wraps in braces, fieldsToJsonInner()
+                           #   returns bare key-value pairs (for embedding in envelopes).
+                           #   jsonEscape() for safe string embedding. JsonSerializable
+                           #   base struct with toFields()/toJson(). Used by
+                           #   neato_commands, data_logger, system_manager, web_server.
     neato_commands.h/cpp   # Command enum (24 commands), response structs (VersionData,
                            #   ChargerData, AnalogSensorData, DigitalSensorData,
                            #   MotorData, RobotState, ErrorData, AccelData, ButtonData,
-                           #   LdsScanData), CSV parsers, Field/toFields() system,
-                           #   fieldsToJson() generic serializer, SoundId enum
+                           #   LdsScanData), CSV parsers, toFields() implementations,
+                           #   SoundId enum
     neato_serial.h/cpp     # UART command queue state machine (IDLE -> SENDING ->
                            #   WAITING_RESPONSE -> INTER_DELAY -> IDLE), typed
                            #   convenience methods (getCharger, getVersion, etc.),
@@ -765,8 +761,8 @@ frontend/
     assets/
       robot.svg            # Main robot illustration (30KB, vectorized 4-layer greyscale)
       icons/               # SVG icons loaded via ?raw import (alert, back, battery,
-                           #   bolt, check, gear, house, moon, power, sparkle,
-                           #   spot, stop, sun, wifi-off)
+                           #   bolt, check, clock, database, gear, house, moon,
+                           #   sparkle, spot, stop, sun, tag, wifi, wifi-off)
   mock/
     server.js              # Mock API server (plain Node.js http, zero deps),
                            #   SCENARIO selector for quick state switching,
@@ -944,7 +940,7 @@ direct `Serial` calls outside of `serial_menu.cpp` are:
 - **Composition over inheritance**: Classes own their collaborators as members
 - **Callbacks via lambdas**: `std::function` with `[this]` capture for menu actions
 - **State machine**: `InputMode` enum drives serial input behavior in `SerialMenu`
-- **No inheritance or virtual methods** in this codebase
+
 
 ## Hardware Notes
 

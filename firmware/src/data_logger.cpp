@@ -59,6 +59,16 @@ size_t CompressedLogReader::read(uint8_t *buffer, size_t maxLen) {
     return totalWritten;
 }
 
+// -- LogFileInfo -------------------------------------------------------------
+
+std::vector<Field> LogFileInfo::toFields() const {
+    return {
+            {"name", name, FIELD_STRING},
+            {"size", String(size), FIELD_INT},
+            {"compressed", compressed ? "true" : "false", FIELD_BOOL},
+    };
+}
+
 // -- Constructor -------------------------------------------------------------
 
 DataLogger::DataLogger(NeatoSerial& neato, SystemManager& sys) : neato(neato), sysMgr(sys) {}
@@ -302,7 +312,6 @@ bool DataLogger::compressStep() {
 
 // -- Boot-only blocking compression ------------------------------------------
 
-// NOLINTNEXTLINE(readability-convert-member-functions-to-static) - uses spiffsReady, SPIFFS, LOG
 void DataLogger::archiveLeftoverLog() {
     if (!SPIFFS.exists(LOG_CURRENT_FILE))
         return;
@@ -335,7 +344,6 @@ void DataLogger::archiveLeftoverLog() {
     }
 }
 
-// NOLINTNEXTLINE(readability-convert-member-functions-to-static) - uses SPIFFS, LOG
 void DataLogger::enforceSpaceLimit() {
     size_t maxBytes = (SPIFFS.totalBytes() * LOG_MAX_SPIFFS_PERCENT) / 100;
     if (SPIFFS.usedBytes() <= maxBytes)
@@ -367,15 +375,14 @@ void DataLogger::enforceSpaceLimit() {
 
 // -- Public logging methods --------------------------------------------------
 
-// NOLINTNEXTLINE(readability-convert-member-functions-to-static) - uses sysMgr.now(), bufferLine()
-void DataLogger::logEvent(const String& type, const String& jsonPayload) {
+void DataLogger::logEvent(const String& type, const std::vector<Field>& fields) {
     String line = "{\"t\":" + String(static_cast<long>(sysMgr.now())) + ",\"typ\":\"" + type + "\",\"d\":{" +
-                  jsonPayload + "}}";
+                  fieldsToJsonInner(fields) + "}}";
     bufferLine(line);
 }
 
 void DataLogger::logError(const String& source, const String& message) {
-    logEvent("error", "\"src\":\"" + jsonEscape(source) + "\",\"msg\":\"" + jsonEscape(message) + "\"");
+    logEvent("error", {{"src", source, FIELD_STRING}, {"msg", message, FIELD_STRING}});
 }
 
 static const char *httpMethodStr(WebRequestMethodComposite method) {
@@ -394,20 +401,28 @@ static const char *httpMethodStr(WebRequestMethodComposite method) {
 }
 
 void DataLogger::logRequest(WebRequestMethodComposite method, const String& path, int status, unsigned long ms) {
-    logEvent("request", "\"method\":\"" + String(httpMethodStr(method)) + "\",\"path\":\"" + jsonEscape(path) +
-                                "\",\"status\":" + String(status) + ",\"ms\":" + String(ms));
+    logEvent("request", {{"method", httpMethodStr(method), FIELD_STRING},
+                         {"path", path, FIELD_STRING},
+                         {"status", String(status), FIELD_INT},
+                         {"ms", String(ms), FIELD_INT}});
 }
 
-void DataLogger::logWifi(const String& event, const String& jsonPayload) {
-    logEvent("wifi", "\"event\":\"" + jsonEscape(event) + "\"" + (jsonPayload.length() > 0 ? "," + jsonPayload : ""));
+void DataLogger::logWifi(const String& event, const std::vector<Field>& extra) {
+    std::vector<Field> fields = {{"event", event, FIELD_STRING}};
+    fields.insert(fields.end(), extra.begin(), extra.end());
+    logEvent("wifi", fields);
 }
 
-void DataLogger::logOta(const String& event, const String& jsonPayload) {
-    logEvent("ota", "\"event\":\"" + jsonEscape(event) + "\"" + (jsonPayload.length() > 0 ? "," + jsonPayload : ""));
+void DataLogger::logOta(const String& event, const std::vector<Field>& extra) {
+    std::vector<Field> fields = {{"event", event, FIELD_STRING}};
+    fields.insert(fields.end(), extra.begin(), extra.end());
+    logEvent("ota", fields);
 }
 
-void DataLogger::logNtp(const String& event, const String& jsonPayload) {
-    logEvent("ntp", "\"event\":\"" + jsonEscape(event) + "\"" + (jsonPayload.length() > 0 ? "," + jsonPayload : ""));
+void DataLogger::logNtp(const String& event, const std::vector<Field>& extra) {
+    std::vector<Field> fields = {{"event", event, FIELD_STRING}};
+    fields.insert(fields.end(), extra.begin(), extra.end());
+    logEvent("ntp", fields);
 }
 
 void DataLogger::logBootEvent() {
@@ -446,7 +461,7 @@ void DataLogger::logBootEvent() {
             break;
     }
 
-    logEvent("boot", "\"reason\":\"" + reasonStr + "\",\"heap\":" + String(ESP.getFreeHeap()));
+    logEvent("boot", {{"reason", reasonStr, FIELD_STRING}, {"heap", String(ESP.getFreeHeap()), FIELD_INT}});
 }
 
 // -- NeatoSerial logger hook -------------------------------------------------
@@ -474,9 +489,12 @@ void DataLogger::onCommand(const String& cmd, CommandStatus status, unsigned lon
     }
 
     // Log with enhanced metadata: status, queue depth, response size, partial response
-    logEvent("command", "\"cmd\":\"" + jsonEscape(cmd) + "\",\"status\":\"" + String(statusStr) +
-                                "\",\"ms\":" + String(ms) + ",\"q\":" + String(queueDepth) +
-                                ",\"bytes\":" + String(respBytes) + ",\"resp\":\"" + jsonEscape(raw) + "\"");
+    logEvent("command", {{"cmd", cmd, FIELD_STRING},
+                         {"status", statusStr, FIELD_STRING},
+                         {"ms", String(ms), FIELD_INT},
+                         {"q", String(queueDepth), FIELD_INT},
+                         {"bytes", String(respBytes), FIELD_INT},
+                         {"resp", raw, FIELD_STRING}});
 }
 
 // -- Log file management -----------------------------------------------------
@@ -694,38 +712,3 @@ bool DataLogger::compressFile(const String& srcPath, const String& dstPath) {
 }
 
 // -- Helpers -----------------------------------------------------------------
-
-String DataLogger::jsonEscape(const String& s) {
-    String out;
-    out.reserve(s.length() + 16);
-    for (unsigned int i = 0; i < s.length(); i++) {
-        char c = s.charAt(i);
-        switch (c) {
-            case '"':
-                out += "\\\"";
-                break;
-            case '\\':
-                out += "\\\\";
-                break;
-            case '\n':
-                out += "\\n";
-                break;
-            case '\r':
-                out += "\\r";
-                break;
-            case '\t':
-                out += "\\t";
-                break;
-            default:
-                if (c < 0x20) {
-                    char buf[8];
-                    snprintf(buf, sizeof(buf), "\\u%04x", c);
-                    out += buf;
-                } else {
-                    out += c;
-                }
-                break;
-        }
-    }
-    return out;
-}

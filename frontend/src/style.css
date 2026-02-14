@@ -24,12 +24,6 @@
     --bg-gradient-center: #38383e;
     --bg-gradient-mid: #232328;
     --bg-gradient-outer: #161618;
-    --toggle-off-bg: #333336;
-    --pill-on-bg: #d1d1d6;
-    --pill-text: #aaa;
-    --pill-text-on: #333;
-    --pill-knob-bg: #1a1a1c;
-    --pill-knob-color: #ccc;
     --gear-btn-bg: #333336;
     --gear-icon-color: #9a9a9e;
     --card-bg: rgba(30, 30, 32, 0.8);
@@ -56,12 +50,6 @@
     --bg-gradient-center: #eff0f5;
     --bg-gradient-mid: #f5f5f9;
     --bg-gradient-outer: #ffffff;
-    --toggle-off-bg: #d1d1d6;
-    --pill-on-bg: #c8c8cc;
-    --pill-text: #888;
-    --pill-text-on: #444;
-    --pill-knob-bg: #fff;
-    --pill-knob-color: #888;
     --gear-btn-bg: #e5e5ea;
     --gear-icon-color: #6e6e73;
     --btn-color: #6e6e73;
@@ -87,12 +75,6 @@
         --bg-gradient-center: #eff0f5;
         --bg-gradient-mid: #f5f5f9;
         --bg-gradient-outer: #ffffff;
-        --toggle-off-bg: #d1d1d6;
-        --pill-on-bg: #c8c8cc;
-        --pill-text: #888;
-        --pill-text-on: #444;
-        --pill-knob-bg: #fff;
-        --pill-knob-color: #888;
         --gear-btn-bg: #e5e5ea;
         --gear-icon-color: #6e6e73;
         --btn-color: #6e6e73;
@@ -146,6 +128,58 @@ body {
     color: var(--text);
 }
 
+/* Status bar */
+
+.status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    margin: 0 20px 10px;
+    padding: 6px 4px;
+    background: var(--card-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+}
+
+.status-bar-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 0 10px;
+    white-space: nowrap;
+}
+
+.status-bar-label {
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.status-bar-value {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-dim);
+}
+
+.status-bar-value span {
+    display: flex;
+}
+
+.status-bar-value svg {
+    width: 13px;
+    height: 13px;
+    opacity: 0.6;
+}
+
 .header-right-btn {
     width: 42px;
     height: 42px;
@@ -157,118 +191,6 @@ body {
     justify-content: center;
     cursor: pointer;
     color: var(--gear-icon-color);
-}
-
-/* On/Off pill with sliding knob */
-
-.power-pill {
-    position: relative;
-    display: flex;
-    align-items: center;
-    width: 72px;
-    height: 34px;
-    margin: 8px auto 16px;
-    padding: 0;
-    border-radius: 17px;
-    background: var(--toggle-off-bg);
-    border: none;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-    transition: background 0.3s;
-    overflow: hidden;
-}
-
-.power-pill.on {
-    background: var(--pill-on-bg);
-}
-
-.power-pill:disabled {
-    opacity: 0.4;
-    cursor: default;
-}
-
-.power-pill.pending {
-    animation: pill-pulse 1s ease-in-out infinite;
-}
-
-@keyframes pill-pulse {
-    0%,
-    100% {
-        opacity: 0.4;
-    }
-    50% {
-        opacity: 0.7;
-    }
-}
-
-/* Labels are absolutely positioned in the gap beside the knob.
-   Knob is 28px + 3px inset. On: knob right, "On" in left gap.
-   Off: knob left, "Off" in right gap. */
-
-.power-pill-label {
-    position: absolute;
-    top: 0;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--pill-text);
-    user-select: none;
-    pointer-events: none;
-    transition: opacity 0.2s;
-}
-
-/* "On" — left gap when knob is right */
-.power-pill-label:first-child {
-    left: 0;
-    width: 44px;
-    opacity: 0;
-}
-
-.power-pill.on .power-pill-label:first-child {
-    opacity: 1;
-    color: var(--pill-text-on);
-}
-
-/* "Off" — right gap when knob is left */
-.power-pill-label:last-child {
-    right: 0;
-    width: 44px;
-    opacity: 1;
-}
-
-.power-pill.on .power-pill-label:last-child {
-    opacity: 0;
-}
-
-.power-pill-knob {
-    position: absolute;
-    top: 3px;
-    left: 3px;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: var(--pill-knob-bg);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--pill-knob-color);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.power-pill.on .power-pill-knob {
-    left: 41px;
-}
-
-.power-pill-knob span {
-    display: flex;
-}
-.power-pill-knob svg {
-    width: 14px;
-    height: 14px;
 }
 
 /* Hero area */
@@ -471,7 +393,17 @@ body {
 }
 
 .action-btn.pending {
-    animation: pill-pulse 1s ease-in-out infinite;
+    animation: btn-pulse 1s ease-in-out infinite;
+}
+
+@keyframes btn-pulse {
+    0%,
+    100% {
+        opacity: 0.4;
+    }
+    50% {
+        opacity: 0.7;
+    }
 }
 
 .action-btn.primary {

@@ -3,16 +3,11 @@
 #include "neato_serial.h"
 #include "data_logger.h"
 #include "system_manager.h"
+#include "firmware_manager.h"
 #include <SPIFFS.h>
 
-// Default serializer for structs with toFields()
-template<typename T>
-static std::function<String(const T&)> jsonFields() {
-    return [](const T& data) { return fieldsToJson(data.toFields()); };
-}
-
-WebServer::WebServer(AsyncWebServer& server, NeatoSerial& neato, DataLogger& logger, SystemManager& sys) :
-    server(server), neato(neato), logger(logger), sysMgr(sys) {}
+WebServer::WebServer(AsyncWebServer& server, NeatoSerial& neato, DataLogger& logger, SystemManager& sys,
+                     FirmwareManager& fw) : server(server), neato(neato), logger(logger), sysMgr(sys), fwMgr(fw) {}
 
 void WebServer::loggedRoute(const char *path, WebRequestMethodComposite httpMethod, SyncHandler handler) {
     server.on(path, httpMethod, [this, handler](AsyncWebServerRequest *request) {
@@ -40,11 +35,11 @@ void WebServer::sendGzipAsset(AsyncWebServerRequest *request, const uint8_t *dat
 }
 
 void WebServer::sendError(AsyncWebServerRequest *request, int code, const String& msg) {
-    request->send(code, "application/json", R"({"error":")" + msg + R"("})");
+    request->send(code, "application/json", fieldsToJson({{"error", msg, FIELD_STRING}}));
 }
 
 void WebServer::sendOk(AsyncWebServerRequest *request) {
-    request->send(200, "application/json", R"({"ok":true})");
+    request->send(200, "application/json", fieldsToJson({{"ok", "true", FIELD_BOOL}}));
 }
 
 void WebServer::registerActionRoute(const char *path, bool (NeatoSerial::*method)(std::function<void(bool)>)) {
@@ -89,6 +84,7 @@ void WebServer::begin() {
     registerApiRoutes();
     registerLogRoutes();
     registerSystemRoutes();
+    registerFirmwareRoutes();
 
     LOG("WEB", "Frontend and API routes registered");
 }
@@ -96,20 +92,16 @@ void WebServer::begin() {
 void WebServer::registerApiRoutes() {
     // -- Sensor query endpoints ----------------------------------------------
 
-    registerSensorRoute<VersionData>("/api/version", &NeatoSerial::getVersion, jsonFields<VersionData>());
-    registerSensorRoute<ChargerData>("/api/charger", &NeatoSerial::getCharger, jsonFields<ChargerData>());
-    registerSensorRoute<AnalogSensorData>("/api/sensors/analog", &NeatoSerial::getAnalogSensors,
-                                          jsonFields<AnalogSensorData>());
-    registerSensorRoute<DigitalSensorData>("/api/sensors/digital", &NeatoSerial::getDigitalSensors,
-                                           jsonFields<DigitalSensorData>());
-    registerSensorRoute<MotorData>("/api/motors", &NeatoSerial::getMotors, jsonFields<MotorData>());
-    registerSensorRoute<RobotState>("/api/state", &NeatoSerial::getState, jsonFields<RobotState>());
-    registerSensorRoute<ErrorData>("/api/error", &NeatoSerial::getErr, jsonFields<ErrorData>());
-    registerSensorRoute<AccelData>("/api/accel", &NeatoSerial::getAccel, jsonFields<AccelData>());
-    registerSensorRoute<ButtonData>("/api/buttons", &NeatoSerial::getButtons, jsonFields<ButtonData>());
-    registerSensorRoute<LdsScanData>(
-            "/api/lidar", &NeatoSerial::getLdsScan,
-            std::function<String(const LdsScanData&)>([](const LdsScanData& data) { return data.toJson(); }));
+    registerSensorRoute<VersionData>("/api/version", &NeatoSerial::getVersion);
+    registerSensorRoute<ChargerData>("/api/charger", &NeatoSerial::getCharger);
+    registerSensorRoute<AnalogSensorData>("/api/sensors/analog", &NeatoSerial::getAnalogSensors);
+    registerSensorRoute<DigitalSensorData>("/api/sensors/digital", &NeatoSerial::getDigitalSensors);
+    registerSensorRoute<MotorData>("/api/motors", &NeatoSerial::getMotors);
+    registerSensorRoute<RobotState>("/api/state", &NeatoSerial::getState);
+    registerSensorRoute<ErrorData>("/api/error", &NeatoSerial::getErr);
+    registerSensorRoute<AccelData>("/api/accel", &NeatoSerial::getAccel);
+    registerSensorRoute<ButtonData>("/api/buttons", &NeatoSerial::getButtons);
+    registerSensorRoute<LdsScanData>("/api/lidar", &NeatoSerial::getLdsScan);
 
     // -- Action endpoints ----------------------------------------------------
 
@@ -133,8 +125,7 @@ static String logListJson(const std::vector<LogFileInfo>& files) {
     for (size_t i = 0; i < files.size(); i++) {
         if (i > 0)
             json += ",";
-        json += R"({"name":")" + files[i].name + R"(","size":)" + String(files[i].size) + R"(,"compressed":)" +
-                (files[i].compressed ? "true" : "false") + "}";
+        json += files[i].toJson();
     }
     json += "]";
     return json;
@@ -201,13 +192,13 @@ void WebServer::registerLogRoutes() {
 void WebServer::registerSystemRoutes() {
     // GET /api/system — live system health (heap, uptime, RSSI, SPIFFS, NTP)
     loggedRoute("/api/system", HTTP_GET, [this](AsyncWebServerRequest *request) -> int {
-        request->send(200, "application/json", sysMgr.systemHealthJson());
+        request->send(200, "application/json", sysMgr.getSystemHealth().toJson());
         return 200;
     });
 
     // GET /api/timezone — current POSIX TZ string
     loggedRoute("/api/timezone", HTTP_GET, [this](AsyncWebServerRequest *request) -> int {
-        request->send(200, "application/json", R"({"tz":")" + sysMgr.getTimezone() + R"("})");
+        request->send(200, "application/json", fieldsToJson({{"tz", sysMgr.getTimezone(), FIELD_STRING}}));
         return 200;
     });
 
@@ -232,9 +223,73 @@ void WebServer::registerSystemRoutes() {
 
                         String tz = body.substring(openQuote + 1, closeQuote);
                         sysMgr.setTimezone(tz);
-                        request->send(200, "application/json", R"({"tz":")" + tz + R"("})");
+                        request->send(200, "application/json", fieldsToJson({{"tz", tz, FIELD_STRING}}));
                         return 200;
                     });
 
     LOG("WEB", "System routes registered");
+}
+
+// -- Firmware endpoints -------------------------------------------------------
+
+void WebServer::registerFirmwareRoutes() {
+    // GET /api/firmware/version — current ESP32 firmware version
+    loggedRoute("/api/firmware/version", HTTP_GET, [this](AsyncWebServerRequest *request) -> int {
+        std::vector<Field> fields = {{"version", fwMgr.getFirmwareVersion(), FIELD_STRING}};
+        request->send(200, "application/json", fieldsToJson(fields));
+        return 200;
+    });
+
+    // POST /api/firmware/update?hash=<md5> — single-request firmware upload
+    server.on(
+            "/api/firmware/update", HTTP_POST,
+            // Response handler (called after upload completes)
+            [this](AsyncWebServerRequest *request) {
+                unsigned long startMs = millis();
+                bool ok = fwMgr.getError().isEmpty();
+
+                if (ok) {
+                    ok = fwMgr.endUpdate();
+                }
+
+                if (!ok) {
+                    logger.logRequest(HTTP_POST, "/api/firmware/update", 400, millis() - startMs);
+                    sendError(request, 400, fwMgr.getError());
+                } else {
+                    logger.logRequest(HTTP_POST, "/api/firmware/update", 200, millis() - startMs);
+                    AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "OK");
+                    response->addHeader("Connection", "close");
+                    request->send(response);
+                }
+            },
+            // Upload handler (called per chunk)
+            [this](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len,
+                   bool final) {
+                // First chunk: initialize update session
+                if (!index) {
+                    String md5 = request->hasParam("hash") ? request->getParam("hash")->value() : "";
+                    if (!fwMgr.beginUpdate(md5)) {
+                        return;
+                    }
+                }
+
+                if (len) {
+                    fwMgr.writeChunk(data, len);
+
+                    // Report progress at most once per second
+                    static unsigned long lastProgressMs = 0;
+                    unsigned long now = millis();
+                    if (now - lastProgressMs >= 1000) {
+                        auto percent = static_cast<uint8_t>(
+                                request->contentLength() > 0 ? static_cast<float>(fwMgr.getProgress()) * 100.0f /
+                                                                       static_cast<float>(request->contentLength())
+                                                             : 0);
+                        LOG("FW", "Progress: %u%% (%zu/%zu bytes)", percent, fwMgr.getProgress(),
+                            request->contentLength());
+                        lastProgressMs = now;
+                    }
+                }
+            });
+
+    LOG("WEB", "Firmware routes registered");
 }

@@ -22,7 +22,10 @@ export function usePolling<T>(fetcher: () => Promise<T>, intervalMs: number): Po
                     setError(null);
                 }
             } catch (e) {
-                if (active) setError(e instanceof Error ? e.message : "fetch failed");
+                if (active) {
+                    setData(null);
+                    setError(e instanceof Error ? e.message : "fetch failed");
+                }
             }
         };
 

@@ -10,16 +10,19 @@
 #include <heatshrink_encoder.h>
 #include <heatshrink_decoder.h>
 #include "config.h"
+#include "json_fields.h"
 
 class NeatoSerial;
 class SystemManager;
 
 
 // Log file metadata for API listing
-struct LogFileInfo {
+struct LogFileInfo : public JsonSerializable {
     String name;
     size_t size = 0;
     bool compressed = false;
+
+    std::vector<Field> toFields() const override;
 };
 
 // Streaming log reader — abstracts both plain and compressed log files.
@@ -72,12 +75,12 @@ public:
     // event handlers). They only append to an in-memory buffer; actual SPIFFS
     // I/O is deferred to loop().
 
-    void logEvent(const String& type, const String& jsonPayload);
+    void logEvent(const String& type, const std::vector<Field>& fields);
     void logError(const String& source, const String& message);
     void logRequest(WebRequestMethodComposite method, const String& path, int status, unsigned long ms);
-    void logWifi(const String& event, const String& jsonPayload);
-    void logOta(const String& event, const String& jsonPayload);
-    void logNtp(const String& event, const String& jsonPayload);
+    void logWifi(const String& event, const std::vector<Field>& extra = {});
+    void logOta(const String& event, const std::vector<Field>& extra = {});
+    void logNtp(const String& event, const std::vector<Field>& extra = {});
 
     // -- Log file management (for API) --------------------------------------
 
@@ -137,9 +140,6 @@ private:
     // NeatoSerial logger hook (enhanced with status, queue depth, response size)
     void onCommand(const String& cmd, CommandStatus status, unsigned long ms, const String& raw, int queueDepth,
                    size_t respBytes);
-
-    // Helper: escape a string for JSON
-    static String jsonEscape(const String& s);
 };
 
 #endif // DATA_LOGGER_H

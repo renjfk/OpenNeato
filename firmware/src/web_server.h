@@ -47,7 +47,7 @@ private:
     // Register a GET endpoint that queries a typed Neato response and returns JSON.
     // T must have a toJson() method (JsonSerializable or custom).
     template<typename T>
-    void registerSensorRoute(const char *path, bool (NeatoSerial::*method)(std::function<void(bool, const T&)>));
+    void registerSensorRoute(const char *path, void (NeatoSerial::*method)(std::function<void(bool, const T&)>));
 
     // Register a POST endpoint that sends an action command and returns {"ok":true}
     void registerActionRoute(const char *path, bool (NeatoSerial::*method)(std::function<void(bool)>));
@@ -61,25 +61,22 @@ private:
 
 template<typename T>
 void WebServer::registerSensorRoute(const char *path,
-                                    bool (NeatoSerial::*method)(std::function<void(bool, const T&)>)) {
+                                    void (NeatoSerial::*method)(std::function<void(bool, const T&)>)) {
     server.on(path, HTTP_GET, [this, path, method](AsyncWebServerRequest *request) {
         unsigned long startMs = millis();
         auto weak = request->pause();
-        if (!(neato.*method)([this, weak, path, startMs](bool ok, const T& data) {
-                if (auto request = weak.lock()) {
-                    unsigned long elapsed = millis() - startMs;
-                    if (!ok) {
-                        logger.logRequest(HTTP_GET, path, 504, elapsed);
-                        sendError(request.get(), 504, "timeout");
-                        return;
-                    }
-                    logger.logRequest(HTTP_GET, path, 200, elapsed);
-                    request->send(200, "application/json", data.toJson());
+        (neato.*method)([this, weak, path, startMs](bool ok, const T& data) {
+            if (auto request = weak.lock()) {
+                unsigned long elapsed = millis() - startMs;
+                if (!ok) {
+                    logger.logRequest(HTTP_GET, path, 504, elapsed);
+                    sendError(request.get(), 504, "timeout");
+                    return;
                 }
-            })) {
-            logger.logRequest(HTTP_GET, path, 503, 0);
-            sendError(request, 503, "unavailable");
-        }
+                logger.logRequest(HTTP_GET, path, 200, elapsed);
+                request->send(200, "application/json", data.toJson());
+            }
+        });
     });
 }
 

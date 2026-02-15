@@ -3,6 +3,18 @@
 
 // -- Lifecycle ---------------------------------------------------------------
 
+NeatoSerial::NeatoSerial() :
+    versionCache(CACHE_TTL_VERSION, [this](AsyncCache<VersionData>::Callback cb) { fetchVersion(cb); }),
+    chargerCache(CACHE_TTL_CHARGER, [this](AsyncCache<ChargerData>::Callback cb) { fetchCharger(cb); }),
+    analogCache(CACHE_TTL_SENSORS, [this](AsyncCache<AnalogSensorData>::Callback cb) { fetchAnalogSensors(cb); }),
+    digitalCache(CACHE_TTL_SENSORS, [this](AsyncCache<DigitalSensorData>::Callback cb) { fetchDigitalSensors(cb); }),
+    motorCache(CACHE_TTL_SENSORS, [this](AsyncCache<MotorData>::Callback cb) { fetchMotors(cb); }),
+    stateCache(CACHE_TTL_STATE, [this](AsyncCache<RobotState>::Callback cb) { fetchState(cb); }),
+    errCache(CACHE_TTL_STATE, [this](AsyncCache<ErrorData>::Callback cb) { fetchErr(cb); }),
+    accelCache(CACHE_TTL_ACCEL, [this](AsyncCache<AccelData>::Callback cb) { fetchAccel(cb); }),
+    buttonCache(CACHE_TTL_BUTTONS, [this](AsyncCache<ButtonData>::Callback cb) { fetchButtons(cb); }),
+    ldsCache(CACHE_TTL_LDS, [this](AsyncCache<LdsScanData>::Callback cb) { fetchLdsScan(cb); }) {}
+
 void NeatoSerial::begin() {
     uart.begin(NEATO_BAUD_RATE, SERIAL_8N1, NEATO_RX_PIN, NEATO_TX_PIN);
     LOG("NEATO", "UART initialized (TX=%d, RX=%d, baud=%d)", NEATO_TX_PIN, NEATO_RX_PIN, NEATO_BAUD_RATE);
@@ -121,76 +133,120 @@ void NeatoSerial::completeCommand(CommandStatus status, const String& response) 
         cb(success, response);
 }
 
-// -- Sensor query convenience methods ----------------------------------------
+// -- Cached sensor query methods (public API) --------------------------------
+// These delegate to AsyncCache, which handles TTL, dedup, and coalescing.
 
-bool NeatoSerial::getVersion(std::function<void(bool, const VersionData&)> callback) {
-    return enqueue(commandToString(CMD_GET_VERSION), commandTimeout(CMD_GET_VERSION),
-                   [callback](bool ok, const String& raw) {
-                       VersionData data;
-                       if (ok)
-                           ok = parseVersionData(raw, data);
-                       if (callback)
-                           callback(ok, data);
-                   });
+void NeatoSerial::getVersion(std::function<void(bool, const VersionData&)> callback) {
+    versionCache.get(callback);
 }
 
-bool NeatoSerial::getCharger(std::function<void(bool, const ChargerData&)> callback) {
-    return enqueue(commandToString(CMD_GET_CHARGER), commandTimeout(CMD_GET_CHARGER),
-                   [callback](bool ok, const String& raw) {
-                       ChargerData data;
-                       if (ok)
-                           ok = parseChargerData(raw, data);
-                       if (callback)
-                           callback(ok, data);
-                   });
+void NeatoSerial::getCharger(std::function<void(bool, const ChargerData&)> callback) {
+    chargerCache.get(callback);
 }
 
-bool NeatoSerial::getAnalogSensors(std::function<void(bool, const AnalogSensorData&)> callback) {
-    return enqueue(commandToString(CMD_GET_ANALOG_SENSORS), commandTimeout(CMD_GET_ANALOG_SENSORS),
-                   [callback](bool ok, const String& raw) {
-                       AnalogSensorData data;
-                       if (ok)
-                           ok = parseAnalogSensorData(raw, data);
-                       if (callback)
-                           callback(ok, data);
-                   });
+void NeatoSerial::getAnalogSensors(std::function<void(bool, const AnalogSensorData&)> callback) {
+    analogCache.get(callback);
 }
 
-bool NeatoSerial::getDigitalSensors(std::function<void(bool, const DigitalSensorData&)> callback) {
-    return enqueue(commandToString(CMD_GET_DIGITAL_SENSORS), commandTimeout(CMD_GET_DIGITAL_SENSORS),
-                   [callback](bool ok, const String& raw) {
-                       DigitalSensorData data;
-                       if (ok)
-                           ok = parseDigitalSensorData(raw, data);
-                       if (callback)
-                           callback(ok, data);
-                   });
+void NeatoSerial::getDigitalSensors(std::function<void(bool, const DigitalSensorData&)> callback) {
+    digitalCache.get(callback);
 }
 
-bool NeatoSerial::getMotors(std::function<void(bool, const MotorData&)> callback) {
-    return enqueue(commandToString(CMD_GET_MOTORS), commandTimeout(CMD_GET_MOTORS),
-                   [callback](bool ok, const String& raw) {
-                       MotorData data;
-                       if (ok)
-                           ok = parseMotorData(raw, data);
-                       if (callback)
-                           callback(ok, data);
-                   });
+void NeatoSerial::getMotors(std::function<void(bool, const MotorData&)> callback) {
+    motorCache.get(callback);
 }
 
-bool NeatoSerial::getState(std::function<void(bool, const RobotState&)> callback) {
-    return enqueue(commandToString(CMD_GET_STATE), commandTimeout(CMD_GET_STATE),
-                   [callback](bool ok, const String& raw) {
-                       RobotState data;
-                       if (ok)
-                           ok = parseRobotState(raw, data);
-                       if (callback)
-                           callback(ok, data);
-                   });
+void NeatoSerial::getState(std::function<void(bool, const RobotState&)> callback) {
+    stateCache.get(callback);
 }
 
-bool NeatoSerial::getErr(std::function<void(bool, const ErrorData&)> callback) {
-    return enqueue(commandToString(CMD_GET_ERR), commandTimeout(CMD_GET_ERR), [callback](bool ok, const String& raw) {
+void NeatoSerial::getErr(std::function<void(bool, const ErrorData&)> callback) {
+    errCache.get(callback);
+}
+
+void NeatoSerial::getErrClear(std::function<void(bool, const ErrorData&)> callback) {
+    // getErrClear is never cached — it clears the error and always needs a fresh fetch
+    fetchErrClear(callback);
+}
+
+void NeatoSerial::getLdsScan(std::function<void(bool, const LdsScanData&)> callback) {
+    ldsCache.get(callback);
+}
+
+void NeatoSerial::getAccel(std::function<void(bool, const AccelData&)> callback) {
+    accelCache.get(callback);
+}
+
+void NeatoSerial::getButtons(std::function<void(bool, const ButtonData&)> callback) {
+    buttonCache.get(callback);
+}
+
+// -- Raw fetch methods (enqueue serial command, parse response) ---------------
+
+void NeatoSerial::fetchVersion(std::function<void(bool, const VersionData&)> callback) {
+    enqueue(commandToString(CMD_GET_VERSION), commandTimeout(CMD_GET_VERSION), [callback](bool ok, const String& raw) {
+        VersionData data;
+        if (ok)
+            ok = parseVersionData(raw, data);
+        if (callback)
+            callback(ok, data);
+    });
+}
+
+void NeatoSerial::fetchCharger(std::function<void(bool, const ChargerData&)> callback) {
+    enqueue(commandToString(CMD_GET_CHARGER), commandTimeout(CMD_GET_CHARGER), [callback](bool ok, const String& raw) {
+        ChargerData data;
+        if (ok)
+            ok = parseChargerData(raw, data);
+        if (callback)
+            callback(ok, data);
+    });
+}
+
+void NeatoSerial::fetchAnalogSensors(std::function<void(bool, const AnalogSensorData&)> callback) {
+    enqueue(commandToString(CMD_GET_ANALOG_SENSORS), commandTimeout(CMD_GET_ANALOG_SENSORS),
+            [callback](bool ok, const String& raw) {
+                AnalogSensorData data;
+                if (ok)
+                    ok = parseAnalogSensorData(raw, data);
+                if (callback)
+                    callback(ok, data);
+            });
+}
+
+void NeatoSerial::fetchDigitalSensors(std::function<void(bool, const DigitalSensorData&)> callback) {
+    enqueue(commandToString(CMD_GET_DIGITAL_SENSORS), commandTimeout(CMD_GET_DIGITAL_SENSORS),
+            [callback](bool ok, const String& raw) {
+                DigitalSensorData data;
+                if (ok)
+                    ok = parseDigitalSensorData(raw, data);
+                if (callback)
+                    callback(ok, data);
+            });
+}
+
+void NeatoSerial::fetchMotors(std::function<void(bool, const MotorData&)> callback) {
+    enqueue(commandToString(CMD_GET_MOTORS), commandTimeout(CMD_GET_MOTORS), [callback](bool ok, const String& raw) {
+        MotorData data;
+        if (ok)
+            ok = parseMotorData(raw, data);
+        if (callback)
+            callback(ok, data);
+    });
+}
+
+void NeatoSerial::fetchState(std::function<void(bool, const RobotState&)> callback) {
+    enqueue(commandToString(CMD_GET_STATE), commandTimeout(CMD_GET_STATE), [callback](bool ok, const String& raw) {
+        RobotState data;
+        if (ok)
+            ok = parseRobotState(raw, data);
+        if (callback)
+            callback(ok, data);
+    });
+}
+
+void NeatoSerial::fetchErr(std::function<void(bool, const ErrorData&)> callback) {
+    enqueue(commandToString(CMD_GET_ERR), commandTimeout(CMD_GET_ERR), [callback](bool ok, const String& raw) {
         ErrorData data;
         if (ok)
             ok = parseErrorData(raw, data);
@@ -199,69 +255,92 @@ bool NeatoSerial::getErr(std::function<void(bool, const ErrorData&)> callback) {
     });
 }
 
-bool NeatoSerial::getErrClear(std::function<void(bool, const ErrorData&)> callback) {
-    return enqueue(commandToString(CMD_GET_ERR_CLEAR), commandTimeout(CMD_GET_ERR_CLEAR),
-                   [callback](bool ok, const String& raw) {
-                       ErrorData data;
-                       if (ok)
-                           ok = parseErrorData(raw, data);
-                       if (callback)
-                           callback(ok, data);
-                   });
+void NeatoSerial::fetchErrClear(std::function<void(bool, const ErrorData&)> callback) {
+    enqueue(commandToString(CMD_GET_ERR_CLEAR), commandTimeout(CMD_GET_ERR_CLEAR),
+            [callback](bool ok, const String& raw) {
+                ErrorData data;
+                if (ok)
+                    ok = parseErrorData(raw, data);
+                if (callback)
+                    callback(ok, data);
+            });
 }
 
-bool NeatoSerial::getLdsScan(std::function<void(bool, const LdsScanData&)> callback) {
-    return enqueue(commandToString(CMD_GET_LDS_SCAN), commandTimeout(CMD_GET_LDS_SCAN),
-                   [callback](bool ok, const String& raw) {
-                       LdsScanData data;
-                       if (ok)
-                           ok = parseLdsScanData(raw, data);
-                       if (callback)
-                           callback(ok, data);
-                   });
+void NeatoSerial::fetchLdsScan(std::function<void(bool, const LdsScanData&)> callback) {
+    enqueue(commandToString(CMD_GET_LDS_SCAN), commandTimeout(CMD_GET_LDS_SCAN),
+            [callback](bool ok, const String& raw) {
+                LdsScanData data;
+                if (ok)
+                    ok = parseLdsScanData(raw, data);
+                if (callback)
+                    callback(ok, data);
+            });
 }
 
-bool NeatoSerial::getAccel(std::function<void(bool, const AccelData&)> callback) {
-    return enqueue(commandToString(CMD_GET_ACCEL), commandTimeout(CMD_GET_ACCEL),
-                   [callback](bool ok, const String& raw) {
-                       AccelData data;
-                       if (ok)
-                           ok = parseAccelData(raw, data);
-                       if (callback)
-                           callback(ok, data);
-                   });
+void NeatoSerial::fetchAccel(std::function<void(bool, const AccelData&)> callback) {
+    enqueue(commandToString(CMD_GET_ACCEL), commandTimeout(CMD_GET_ACCEL), [callback](bool ok, const String& raw) {
+        AccelData data;
+        if (ok)
+            ok = parseAccelData(raw, data);
+        if (callback)
+            callback(ok, data);
+    });
 }
 
-bool NeatoSerial::getButtons(std::function<void(bool, const ButtonData&)> callback) {
-    return enqueue(commandToString(CMD_GET_BUTTONS), commandTimeout(CMD_GET_BUTTONS),
-                   [callback](bool ok, const String& raw) {
-                       ButtonData data;
-                       if (ok)
-                           ok = parseButtonData(raw, data);
-                       if (callback)
-                           callback(ok, data);
-                   });
+void NeatoSerial::fetchButtons(std::function<void(bool, const ButtonData&)> callback) {
+    enqueue(commandToString(CMD_GET_BUTTONS), commandTimeout(CMD_GET_BUTTONS), [callback](bool ok, const String& raw) {
+        ButtonData data;
+        if (ok)
+            ok = parseButtonData(raw, data);
+        if (callback)
+            callback(ok, data);
+    });
+}
+
+// -- Cache invalidation ------------------------------------------------------
+
+void NeatoSerial::invalidateState() {
+    stateCache.invalidate();
+    errCache.invalidate();
+}
+
+void NeatoSerial::invalidateAll() {
+    versionCache.invalidate();
+    chargerCache.invalidate();
+    analogCache.invalidate();
+    digitalCache.invalidate();
+    motorCache.invalidate();
+    stateCache.invalidate();
+    errCache.invalidate();
+    accelCache.invalidate();
+    buttonCache.invalidate();
+    ldsCache.invalidate();
 }
 
 // -- Action command convenience methods --------------------------------------
 
 bool NeatoSerial::cleanHouse(std::function<void(bool)> callback) {
+    invalidateState();
     return enqueue(commandToString(CMD_CLEAN_HOUSE), commandTimeout(CMD_CLEAN_HOUSE), wrapAction(callback));
 }
 
 bool NeatoSerial::cleanSpot(std::function<void(bool)> callback) {
+    invalidateState();
     return enqueue(commandToString(CMD_CLEAN_SPOT), commandTimeout(CMD_CLEAN_SPOT), wrapAction(callback));
 }
 
 bool NeatoSerial::cleanStop(std::function<void(bool)> callback) {
+    invalidateState();
     return enqueue(commandToString(CMD_CLEAN_STOP), commandTimeout(CMD_CLEAN_STOP), wrapAction(callback));
 }
 
 bool NeatoSerial::testModeOn(std::function<void(bool)> callback) {
+    invalidateState();
     return enqueue(commandToString(CMD_TEST_MODE_ON), commandTimeout(CMD_TEST_MODE_ON), wrapAction(callback));
 }
 
 bool NeatoSerial::testModeOff(std::function<void(bool)> callback) {
+    invalidateState();
     return enqueue(commandToString(CMD_TEST_MODE_OFF), commandTimeout(CMD_TEST_MODE_OFF), wrapAction(callback));
 }
 

@@ -31,6 +31,8 @@ firmware through REST API. Everything runs on the device itself.
    endpoints, realistic responses. Edit state object directly for testing scenarios.
 6. **Web UI dashboard** — Preact SPA with dark/light theme, mobile-first responsive
    design, robot illustration, live status cards, action buttons. Embedded in firmware.
+7. **Async response cache** — Generic `AsyncCache<T>` template with TTL, request
+   deduplication, and explicit invalidation. Integrated into NeatoSerial typed getters.
 
 Details for completed phases are documented in the Architecture, API routes, and
 reference sections below.
@@ -38,27 +40,6 @@ reference sections below.
 **Note for agents**: When a phase is completed, verify its details are covered in the
 Architecture/API/reference sections, then remove the full phase description from below
 and add a one-line summary to the completed list above. Do this before committing.
-
-### Async response cache
-- Generic `AsyncCache<T>` class — template-based, reusable for any async data
-  source (serial commands, HTTP requests, sensor reads, etc.)
-- Caller provides a fetch function `std::function<void(Callback<T>)>` — the
-  cache is agnostic to how data is produced
-- Solves the multiple-consumer problem: when several HTTP requests need the
-  same data concurrently, only one fetch is dispatched; all waiters receive
-  the same result
-- Cache stores the last value and a timestamp; subsequent requests within the
-  TTL window return the cached value instantly without triggering a fetch
-- TTL per cache instance — caller decides freshness requirements
-- Atomic fetch: if a cache miss triggers a fetch and a second request arrives
-  before the result, the second request waits for the in-flight result instead
-  of dispatching a duplicate fetch
-- Explicit invalidation API for action-triggered staleness (e.g. after
-  `cleanHouse`, invalidate the state cache so next poll gets fresh data)
-- No heap allocation per request — cache entries are pre-allocated members
-- Primary consumer: `NeatoSerial` — each typed getter (getCharger, getState,
-  etc.) owns an `AsyncCache<T>` instance internally, so caching and dedup are
-  transparent to all callers (web_server routes, polling loops, etc.)
 
 ### Manual control
 - Drive the robot manually from the web UI (forward, back, rotate)
@@ -643,7 +624,13 @@ firmware/
     config.h               # Global defines, macros, LOG macro, pin/timing constants,
                            #   data logger settings (file sizes, NTP servers, TZ),
                            #   NVS namespace/key defines (NVS_KEY_DEBUG_LOG),
-                           #   CommandStatus enum
+                           #   CommandStatus enum, AsyncCache TTL defines
+                           #   (CACHE_TTL_STATE, CACHE_TTL_CHARGER, etc.)
+    async_cache.h          # Generic AsyncCache<T> template: TTL-based caching with
+                           #   request deduplication and explicit invalidation. Stores
+                           #   last value + timestamp, coalesces concurrent waiters
+                           #   during in-flight fetch, serves cached value within TTL.
+                           #   Header-only (template). Used by NeatoSerial.
     main.cpp               # setup()/loop() entry point, global Preferences (single
                            #   "neato" NVS namespace opened once, shared by ref),
                            #   WiFi event handlers -> dataLogger.logWifi(), OTA hook,
@@ -728,8 +715,12 @@ firmware/
                            #   SoundId enum
     neato_serial.h/cpp     # UART command queue state machine (IDLE -> SENDING ->
                            #   WAITING_RESPONSE -> INTER_DELAY -> IDLE), typed
-                           #   convenience methods (getCharger, getVersion, etc.),
-                           #   action methods (cleanHouse, playSound, etc.),
+                           #   convenience methods (getCharger, getVersion, etc.)
+                           #   backed by AsyncCache<T> per sensor type (TTL caching,
+                           #   request deduplication, concurrent waiter coalescing),
+                           #   action methods (cleanHouse, playSound, etc.) with
+                           #   automatic state cache invalidation,
+                           #   invalidateState()/invalidateAll() for explicit control,
                            #   time methods (getTime, setTime), no sendRaw() public API,
                            #   isBusy()/queueDepth() status,
                            #   LoggerCallback hook for DataLogger integration (6-param:

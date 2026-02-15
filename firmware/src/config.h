@@ -24,6 +24,17 @@
 #define NEATO_QUEUE_MAX_SIZE 16
 #define NEATO_RESPONSE_TERMINATOR 0x1A // Ctrl-Z
 
+// AsyncCache TTL values (milliseconds) — how long each response is considered fresh.
+// Callers within the TTL window get the cached value instantly; concurrent requests
+// during an in-flight fetch are coalesced (only one serial command dispatched).
+#define CACHE_TTL_STATE 2000 // GetState + GetErr — polled every 2s
+#define CACHE_TTL_CHARGER 30000 // GetCharger — battery data (30s)
+#define CACHE_TTL_SENSORS 5000 // Analog/digital sensors, motors (5s)
+#define CACHE_TTL_VERSION 300000 // GetVersion — rarely changes (5 min)
+#define CACHE_TTL_ACCEL 5000 // Accelerometer (5s)
+#define CACHE_TTL_BUTTONS 2000 // Button state (2s)
+#define CACHE_TTL_LDS 2000 // LIDAR scan — 2s (scan takes ~1.5s)
+
 // Command completion status (for enhanced logging)
 enum CommandStatus {
     CMD_SUCCESS, // Command succeeded, response received OK

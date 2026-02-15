@@ -199,6 +199,20 @@ void WebServer::registerSystemRoutes() {
         return 200;
     });
 
+    // POST /api/system/restart — deferred restart
+    loggedRoute("/api/system/restart", HTTP_POST, [this](AsyncWebServerRequest *request) -> int {
+        sendOk(request);
+        sysMgr.restart();
+        return 200;
+    });
+
+    // POST /api/system/reset — factory reset (clears NVS + WiFi, then restarts)
+    loggedRoute("/api/system/reset", HTTP_POST, [this](AsyncWebServerRequest *request) -> int {
+        sendOk(request);
+        sysMgr.factoryReset();
+        return 200;
+    });
+
     LOG("WEB", "System routes registered");
 }
 
@@ -215,7 +229,11 @@ void WebServer::registerSettingsRoutes() {
     loggedBodyRoute("/api/settings", HTTP_PUT,
                     [this](AsyncWebServerRequest *request, uint8_t *data, size_t len) -> int {
                         String body = String(reinterpret_cast<const char *>(data), len);
-                        settingsMgr.apply(body);
+                        ApplyResult result = settingsMgr.apply(body);
+                        if (result == APPLY_INVALID) {
+                            sendError(request, 400, "Invalid settings");
+                            return 400;
+                        }
                         request->send(200, "application/json", settingsMgr.get().toJson());
                         return 200;
                     });

@@ -5,6 +5,8 @@ export interface PollResult<T> {
     error: string | null;
 }
 
+// Polls continuously: waits for the previous request to complete, then waits
+// at least intervalMs before starting the next one. Never overlaps requests.
 export function usePolling<T>(fetcher: () => Promise<T>, intervalMs: number): PollResult<T> {
     const [data, setData] = useState<T | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -13,8 +15,10 @@ export function usePolling<T>(fetcher: () => Promise<T>, intervalMs: number): Po
 
     useEffect(() => {
         let active = true;
+        let timer: ReturnType<typeof setTimeout>;
 
         const poll = async () => {
+            const start = Date.now();
             try {
                 const result = await fetcherRef.current();
                 if (active) {
@@ -27,13 +31,17 @@ export function usePolling<T>(fetcher: () => Promise<T>, intervalMs: number): Po
                     setError(e instanceof Error ? e.message : "fetch failed");
                 }
             }
+            if (active) {
+                const elapsed = Date.now() - start;
+                const delay = Math.max(0, intervalMs - elapsed);
+                timer = setTimeout(poll, delay);
+            }
         };
 
         poll();
-        const id = setInterval(poll, intervalMs);
         return () => {
             active = false;
-            clearInterval(id);
+            clearTimeout(timer);
         };
     }, [intervalMs]);
 

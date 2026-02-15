@@ -25,6 +25,7 @@ WebServer webServer(server, neatoSerial, dataLogger, systemManager, firmwareMana
 // Robot time sync state (managed here, not in SystemManager)
 unsigned long lastRobotSync = 0;
 
+
 // Push NTP time to robot clock via SetTime
 static void syncRobotClock() {
     time_t t = time(nullptr);
@@ -52,22 +53,25 @@ void setup() {
     // Setup reset button
     pinMode(RESET_BUTTON_PIN, INPUT_PULLUP);
 
-    // Initialize Neato UART
+    // Initialize settings first (loads pin config from NVS before UART init)
+    LOG("BOOT", "Initializing settings...");
+    settingsManager.onTzChange([&](const String& tz) { systemManager.applyTimezone(tz); });
+    settingsManager.onTxPowerChange([&](int quarterDbm) { wifiManager.setTxPower(quarterDbm); });
+    settingsManager.onRebootRequired([&] { systemManager.restart(); });
+    settingsManager.begin();
+
+    // Initialize Neato UART with configured pins
     LOG("BOOT", "Initializing Neato serial...");
-    neatoSerial.begin();
+    neatoSerial.begin(settingsManager.get().uartTxPin, settingsManager.get().uartRxPin);
 
     // Initialize WiFi with provisioning
     LOG("BOOT", "Initializing WiFi...");
+    wifiManager.setHostname(settingsManager.get().hostname);
     wifiManager.begin();
 
     // Initialize system manager (NTP detection, time)
     LOG("BOOT", "Initializing system manager...");
     systemManager.begin();
-
-    // Initialize settings (loads from NVS, wires timezone to NTP)
-    LOG("BOOT", "Initializing settings...");
-    settingsManager.onTzChange([&](const String& tz) { systemManager.applyTimezone(tz); });
-    settingsManager.begin();
     systemManager.applyTimezone(settingsManager.get().tz);
 
     // Wire NTP sync callback: push time to robot, log the event
@@ -151,8 +155,14 @@ void setup() {
 }
 
 void loop() {
+    // Deferred reboot — gives the web server time to flush the HTTP response
+    systemManager.checkPendingReboot();
+
     // Handle WiFi configuration through serial
     wifiManager.handleSerialInput();
+
+    // WiFi auto-reconnect with exponential backoff
+    wifiManager.loop();
 
     // Check for button press (runtime reset)
     static unsigned long buttonPressStart = 0;
@@ -169,10 +179,7 @@ void loop() {
             unsigned long holdTime = millis() - buttonPressStart;
             if (holdTime >= RESET_BUTTON_HOLD_TIME) {
                 LOG("BUTTON", "FACTORY RESET!");
-                prefs.clear();
-                WiFi.disconnect(true, true);
-                delay(1000);
-                ESP.restart();
+                systemManager.factoryReset();
             }
         }
     } else {

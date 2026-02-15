@@ -133,11 +133,15 @@ const state = {
     testMode: false,
     tz: "UTC0",
     debugLog: false,
+    wifiTxPower: 34, // 8.5 dBm in 0.25 dBm units
+    uartTxPin: 3,
+    uartRxPin: 4,
+    hostname: "neato",
     ...merged,
 };
 
-// Boot time for uptime calculation
-const bootTime = Date.now();
+// Boot time for uptime calculation (mutable — reset by simulated reboot)
+let bootTime = Date.now();
 
 // --- Derived helpers ---
 
@@ -217,6 +221,7 @@ const mockLogContent = [
     '{"t":1700000625,"typ":"command","d":{"cmd":"GetAccel","status":"ok","ms":28,"q":0,"bytes":96}}',
     '{"t":1700000630,"typ":"request","d":{"method":"GET","path":"/api/accel","status":200,"ms":34}}',
     '{"t":1700000700,"typ":"event","d":{"msg":"cleaning_completed","duration":600}}',
+    '{"t":1700000710,"typ":"error","d":{"code":234,"msg":"My Brush is stuck. Please free it from debris"}}',
 ].join("\n");
 
 // --- Derive UI/robot state from current state ---
@@ -427,8 +432,29 @@ const routes = {
         });
     },
 
+    "POST /api/system/restart": (_req, res) => {
+        sendOk(res);
+        setTimeout(() => {
+            bootTime = Date.now();
+        }, 2000);
+    },
+
+    "POST /api/system/reset": (_req, res) => {
+        sendOk(res);
+        setTimeout(() => {
+            bootTime = Date.now();
+        }, 2000);
+    },
+
     "GET /api/settings": (_req, res) => {
-        jsonResponse(res, { tz: state.tz, debugLog: state.debugLog });
+        jsonResponse(res, {
+            tz: state.tz,
+            debugLog: state.debugLog,
+            wifiTxPower: state.wifiTxPower,
+            uartTxPin: state.uartTxPin,
+            uartRxPin: state.uartRxPin,
+            hostname: state.hostname,
+        });
     },
 
     "GET /api/firmware/version": (_req, res) => {
@@ -480,7 +506,27 @@ const handleRequest = async (req, res) => {
             await new Promise((r) => setTimeout(r, rand(300, 600)));
             if (data.tz !== undefined) state.tz = data.tz;
             if (data.debugLog !== undefined) state.debugLog = data.debugLog;
-            return jsonResponse(res, { tz: state.tz, debugLog: state.debugLog });
+            if (data.wifiTxPower !== undefined) state.wifiTxPower = data.wifiTxPower;
+            const pinsChanged =
+                (data.uartTxPin !== undefined && data.uartTxPin !== state.uartTxPin) ||
+                (data.uartRxPin !== undefined && data.uartRxPin !== state.uartRxPin);
+            if (data.uartTxPin !== undefined) state.uartTxPin = data.uartTxPin;
+            if (data.uartRxPin !== undefined) state.uartRxPin = data.uartRxPin;
+            const hostnameChanged = data.hostname !== undefined && data.hostname !== state.hostname;
+            if (data.hostname !== undefined) state.hostname = data.hostname;
+            if (pinsChanged || hostnameChanged) {
+                setTimeout(() => {
+                    bootTime = Date.now();
+                }, 2000);
+            }
+            return jsonResponse(res, {
+                tz: state.tz,
+                debugLog: state.debugLog,
+                wifiTxPower: state.wifiTxPower,
+                uartTxPin: state.uartTxPin,
+                uartRxPin: state.uartRxPin,
+                hostname: state.hostname,
+            });
         } catch {
             return sendError(res, "invalid JSON", 400);
         }

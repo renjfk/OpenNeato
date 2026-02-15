@@ -37,6 +37,12 @@ firmware through REST API. Everything runs on the device itself.
    banners for robot errors from GetErr polling, stackable dismissible banners for
    API/action errors. Dashboard cards show "Error" state when polling fails. Mock
    server fault injection scenarios for all error paths.
+9. **Settings & device management** — Unified settings page with single Save button
+   (auto-detects reboot-required changes). Configurable hostname, UART pins, WiFi TX
+   power, timezone, debug logging. Device restart and factory reset with type-to-confirm.
+   Deferred reboot pattern via SystemManager. Unsaved changes guards (beforeunload +
+   in-app navigation). WiFi stability: configurable TX power, auto-reconnect with
+   exponential backoff. Partition resize: 1600KB OTA slots, 768KB SPIFFS.
 
 Details for completed phases are documented in the Architecture, API routes, and
 reference sections below.
@@ -511,7 +517,7 @@ Laser_RPM,52428 Charger_MaxPWM,65536 Charger_PWM,-858993460 Charger_mAH,52428
 - **OTA strategy**: Frontend assets are bundled into the firmware binary, so a single
   firmware OTA update covers both code and UI — no version mismatch possible, no
   separate SPIFFS upload needed
-- **Size budget**: 1856 KB per OTA slot is shared between firmware and embedded assets;
+- **Size budget**: 1600 KB per OTA slot is shared between firmware and embedded assets;
   keeping the frontend small is still important (Preact helps here)
 - **SPIFFS freed**: With frontend in firmware, the full SPIFFS partition is available
   for analytics logs and diagnostics (Phase 3)
@@ -548,12 +554,18 @@ Laser_RPM,52428 Charger_MaxPWM,65536 Charger_PWM,-858993460 Charger_mAH,52428
 - Header: back button (left), "Settings" title (center), spacer (right)
 - Appearance section: 3-button theme selector (Auto, Light, Dark)
 - Theme preference persisted in localStorage, defaults to system if unset
-- Timezone section: dropdown with 16 common POSIX TZ presets (UTC offset shown),
-  saves to device via `PUT /api/timezone`, pulse animation while saving,
-  error banner on failure with server error message
+- Timezone section: dropdown with 16 common POSIX TZ presets (UTC offset shown)
 - Robot time display: dimmed small text below timezone selector showing current
   robot time (from `GET /api/system` `time` field) adjusted by selected TZ offset
-- Diagnostics section: "Logs" nav row (database icon + chevron) navigates to `#/logs`
+- Hostname section: text input (max 32 chars, alphanumeric + hyphens)
+- WiFi TX Power section: dropdown with dBm presets (8.5–19.5 dBm)
+- UART Pins section: two number inputs (TX/RX, 0–21), validation (no duplicates)
+- Diagnostics section: debug logging toggle, "Logs" nav row (database icon + chevron)
+- Unified Save button before Diagnostics: "Save" for non-reboot changes, "Save & Reboot"
+  when hostname or pins changed — shows confirm dialog before rebooting
+- Unsaved changes guards: `beforeunload` prevents tab close, in-app navigation (back
+  button, logs link) shows "Discard unsaved changes?" confirm dialog
+- Device section: Restart button, Factory Reset button (type-to-confirm "RESET")
 
 **Logs page:**
 - Navigated from settings Diagnostics section, back button returns to settings
@@ -632,7 +644,10 @@ firmware/
   src/
     config.h               # Global defines, macros, LOG macro, pin/timing constants,
                            #   data logger settings (file sizes, NTP servers, TZ),
-                           #   NVS namespace/key defines (NVS_KEY_DEBUG_LOG),
+                           #   NVS namespace/key defines (NVS_KEY_DEBUG_LOG,
+                           #   NVS_KEY_HOSTNAME, NVS_KEY_WIFI_TX_POWER,
+                           #   NVS_KEY_UART_TX_PIN, NVS_KEY_UART_RX_PIN),
+                           #   DEFAULT_HOSTNAME ("neato"), default pin/power values,
                            #   CommandStatus enum, AsyncCache TTL defines
                            #   (CACHE_TTL_STATE, CACHE_TTL_CHARGER, etc.)
     async_cache.h          # Generic AsyncCache<T> template: TTL-based caching with
@@ -650,10 +665,12 @@ firmware/
                            #   via GetTime, NTP-to-robot clock sync, periodic
                            #   re-sync (4h), factory reset (button hold clears
                            #   NVS + restart)
+                           #   wifiManager.setHostname() at boot from settings
     serial_menu.h/cpp      # Generic interactive serial menu system (state machine,
                            #   formatting helpers: printStatus, printError, etc.)
     wifi_manager.h/cpp     # WiFi config, credential storage (shared Preferences&),
                            #   network scanning, serial quick commands ([m]enu, [s]tatus)
+                           #   wifiManager.setHostname() at boot from settings
     firmware_manager.h/cpp # Firmware update business logic using ESP32 Update.h,
                            #   no web server dependency — pure update lifecycle:
                            #   beginUpdate(), writeChunk(), endUpdate(),
@@ -661,11 +678,14 @@ firmware/
                            #   isInProgress()/getProgress()/getError() queries,
                            #   LogCallback hook. Routes registered by WebServer.
     settings_manager.h/cpp # Unified settings management: owns all user-configurable
-                           #   NVS keys (tz, debug_log). Settings struct extends
+                           #   NVS keys (tz, debug_log, hostname, wifiTxPower,
+                           #   uartTxPin, uartRxPin). Settings struct extends
                            #   JsonSerializable with toFields() and fromFields().
                            #   begin() loads from NVS, apply(json) does partial
                            #   updates via fromJson() (only fields present get
-                           #   written). onTzChange() callback mechanism.
+                           #   written). ApplyResult enum (UNCHANGED, CHANGED,
+                           #   INVALID). needReboot flag for pin/hostname changes.
+                           #   onTzChange() callback mechanism.
     system_manager.h/cpp   # NTP time sync, applyTimezone() for POSIX TZ (called
                            #   via SettingsManager callback, no longer owns TZ in
                            #   NVS). SystemHealth struct (JsonSerializable) returned
@@ -674,6 +694,9 @@ firmware/
                            #   dependency. onNtpSync() callback for main.cpp to push
                            #   time to robot. setFallbackClock() for external clock
                            #   sources (e.g. robot GetTime).
+                           #   Deferred reboot: restart(), factoryReset() set timestamp,
+                           #   checkPendingReboot() in loop() executes after 500ms.
+                           #   Factory reset: NVS clear + WiFi disconnect + SPIFFS format.
     web_server.h/cpp       # Serves embedded frontend assets from PROGMEM, registers
                            #   all REST API routes (sensor GET, action POST),
                            #   firmware routes (version, OTA upload), log routes
@@ -684,6 +707,8 @@ firmware/
                            #   FirmwareManager for version/update. Template helpers:
                            #   registerSensorRoute<T>(), registerActionRoute(),
                            #   sendGzipAsset(), sendError()
+                           #   Thin route layer — no business logic. System actions
+                           #   (restart, factoryReset) call SystemManager directly.
     web_assets.h           # Auto-generated — WebAsset struct + WEB_ASSETS[] registry
                            #   of all dist/ files (gzipped PROGMEM byte arrays, paths,
                            #   MIME types). Web server iterates registry to register routes.
@@ -753,8 +778,8 @@ firmware/
         hs_search.hpp      # Pattern search (patched for GCC 8.4)
         hs_arch.hpp        # Architecture detection (Xtensa/RISC-V)
   partition.csv            # Custom partition table:
-                           #   nvs 20KB, otadata 8KB, app0 1856KB, app1 1856KB,
-                           #   spiffs 256KB (used by DataLogger for log storage),
+                           #   nvs 20KB, otadata 8KB, app0 1600KB, app1 1600KB,
+                           #   spiffs 768KB (used by DataLogger for log storage),
                            #   coredump 64KB
 frontend/
   package.json             # Preact + Vite build config
@@ -785,6 +810,8 @@ frontend/
                            #   ErrorBannerStack component for stacked dismissible errors
       confirm-dialog.tsx   # Reusable confirm modal (overlay + blur, Cancel/Delete
                            #   buttons, destructive action styling)
+                           #   Optional confirmText prop (type-to-confirm for
+                           #   destructive actions like factory reset)
       router.tsx           # Router (context provider), Route (path matcher),
                            #   useNavigate/usePath hooks for any component
     views/
@@ -798,6 +825,11 @@ frontend/
       settings.tsx         # Settings view: appearance theme selector, timezone
                            #   dropdown with POSIX TZ presets, robot time display,
                            #   debug logging toggle (fetches/updates via settings API)
+                           #   Unified settings page with single Save button
+                           #   (auto-detects reboot-required changes). Configurable
+                           #   hostname, UART pins, WiFi TX power. Device restart
+                           #   and factory reset with type-to-confirm. Unsaved
+                           #   changes guards (beforeunload + in-app navigation).
       logs.tsx             # Logs view: file list with size/date, detail view with
                            #   parsed JSON-lines entries, type badges, delete actions.
                            #   Collapsible raw response in command entries (debug log).
@@ -806,13 +838,15 @@ frontend/
       robot.svg            # Main robot illustration (30KB, vectorized 4-layer greyscale)
       icons/               # SVG icons loaded via ?raw import (alert, back, battery,
                            #   bolt, check, clock, database, gear, house, moon,
-                           #   sparkle, spot, stop, sun, tag, wifi, wifi-off)
+                           #   power, sparkle, spot, stop, sun, tag, wifi, wifi-off)
   mock/
     server.js              # Mock API server (plain Node.js http, zero deps),
                            #   SCENARIO selector for quick state switching,
                            #   stateful simulation of all REST endpoints.
                            #   Fault injection via scenario codes (fa, fs, fl,
                            #   fp, fal, etc.) with pipe-separated combining.
+                           #   Reboot simulation via mutable bootTime reset on
+                           #   restart/reset/pin-change/hostname-change requests.
   scripts/
     embed_frontend.js      # Auto-discovers all dist/ files, gzips each, generates
                            #   firmware/src/web_assets.h with WebAsset registry
@@ -845,7 +879,9 @@ frontend/
 | DELETE | `/api/logs/{filename}` | Delete a specific log file |
 | DELETE | `/api/logs` | Delete all log files |
 | GET | `/api/system` | Live system health (heap, uptime, RSSI, SPIFFS, NTP) |
-| GET | `/api/settings` | All user settings (tz, debugLog) via SettingsManager |
+| POST | `/api/system/restart` | Deferred restart via SystemManager |
+| POST | `/api/system/reset` | Factory reset (NVS clear + WiFi + SPIFFS format) via SystemManager |
+| GET | `/api/settings` | All user settings (tz, debugLog, hostname, wifiTxPower, uartTxPin, uartRxPin) |
 | PUT | `/api/settings` | Partial settings update (body: `{"tz":"...","debugLog":true}`) |
 
 
@@ -994,6 +1030,6 @@ direct `Serial` calls outside of `serial_menu.cpp` are:
 - **Board**: ESP32-C3-DevKitM-1 (RISC-V single core, 160MHz, 320KB RAM, 4MB flash)
 - **USB**: Native USB CDC (not UART bridge) — `ARDUINO_USB_MODE=1`, `ARDUINO_USB_CDC_ON_BOOT=1`
 - **Reset button**: GPIO9 (BOOT button), active LOW with internal pull-up, hold 5s to reset credentials
-- **Flash layout**: Dual OTA slots (1856KB each), 256KB SPIFFS, 20KB NVS
+- **Flash layout**: Dual OTA slots (1600KB each), 768KB SPIFFS, 20KB NVS
 - **NVS**: Single shared `"neato"` namespace (Preferences), opened once in main.cpp,
   passed by reference to WiFiManager and SystemManager. Factory reset clears all keys.

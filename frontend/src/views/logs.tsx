@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "preact/hooks";
+import { useCallback, useEffect, useMemo, useState } from "preact/hooks";
 import { api } from "../api";
 import alertSvg from "../assets/icons/alert.svg?raw";
 import backSvg from "../assets/icons/back.svg?raw";
@@ -44,15 +44,17 @@ function typeBadge(type: string): { label: string; color: string } {
         case "wifi":
             return { label: "WIFI", color: "green" };
         case "ntp":
-            return { label: "NTP", color: "green" };
+            return { label: "NTP", color: "teal" };
         case "command":
             return { label: "CMD", color: "amber" };
         case "request":
-            return { label: "HTTP", color: "amber" };
+            return { label: "HTTP", color: "cyan" };
         case "event":
-            return { label: "EVT", color: "red" };
+            return { label: "EVT", color: "pink" };
         case "ota":
-            return { label: "OTA", color: "blue" };
+            return { label: "OTA", color: "purple" };
+        case "error":
+            return { label: "ERR", color: "red" };
         default:
             return { label: type.toUpperCase().slice(0, 4), color: "dim" };
     }
@@ -112,6 +114,39 @@ export function LogsView() {
     const [logLines, setLogLines] = useState<ReturnType<typeof parseLogLine>[]>([]);
     const [loadingContent, setLoadingContent] = useState(false);
 
+    // Filter state: empty set = show all, non-empty = show only selected types
+    const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
+
+    const toggleFilter = useCallback((type: string) => {
+        setActiveFilters((prev) => {
+            const next = new Set(prev);
+            if (next.has(type)) next.delete(type);
+            else next.add(type);
+            return next;
+        });
+    }, []);
+
+    // Unique types present in the current log, in a stable display order
+    const availableTypes = useMemo(() => {
+        const order = ["boot", "wifi", "ntp", "command", "request", "event", "error", "ota"];
+        const seen = new Set(logLines.map((l) => l.type));
+        const sorted = order.filter((t) => seen.has(t));
+        for (const t of seen) {
+            if (!order.includes(t)) sorted.push(t);
+        }
+        return sorted;
+    }, [logLines]);
+
+    const filteredLines = useMemo(() => {
+        if (activeFilters.size === 0) return logLines;
+        return logLines.filter((l) => activeFilters.has(l.type));
+    }, [logLines, activeFilters]);
+
+    // Reset filters when navigating to a different file
+    useEffect(() => {
+        setActiveFilters(new Set());
+    }, [selectedFile]);
+
     // Deleting state
     const [deleting, setDeleting] = useState<string | null>(null);
     const [deletingAll, setDeletingAll] = useState(false);
@@ -150,7 +185,8 @@ export function LogsView() {
                     .split("\n")
                     .filter((l) => l.trim())
                     .map(parseLogLine)
-                    .filter((l): l is NonNullable<typeof l> => l !== null);
+                    .filter((l): l is NonNullable<typeof l> => l !== null)
+                    .reverse();
                 setLogLines(lines);
                 setLoadingContent(false);
             })
@@ -287,9 +323,34 @@ export function LogsView() {
                             </div>
                         )}
 
-                        {!loadingContent && logLines.length > 0 && (
+                        {!loadingContent && availableTypes.length > 1 && (
+                            <div class="logs-filter-bar">
+                                <button
+                                    type="button"
+                                    class={`logs-filter-chip${activeFilters.size === 0 ? " active" : ""}`}
+                                    onClick={() => setActiveFilters(new Set())}
+                                >
+                                    All
+                                </button>
+                                {availableTypes.map((t) => {
+                                    const badge = typeBadge(t);
+                                    return (
+                                        <button
+                                            type="button"
+                                            key={t}
+                                            class={`logs-filter-chip ${badge.color}${activeFilters.has(t) ? " active" : ""}`}
+                                            onClick={() => toggleFilter(t)}
+                                        >
+                                            {badge.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {!loadingContent && filteredLines.length > 0 && (
                             <div class="logs-entries">
-                                {logLines.map((line, i) => {
+                                {filteredLines.map((line, i) => {
                                     const badge = typeBadge(line.type);
                                     return (
                                         <div class="logs-entry" key={i}>
@@ -308,6 +369,10 @@ export function LogsView() {
                                     );
                                 })}
                             </div>
+                        )}
+
+                        {!loadingContent && filteredLines.length === 0 && logLines.length > 0 && (
+                            <div class="logs-empty">No matching entries</div>
                         )}
                     </>
                 )}

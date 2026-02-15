@@ -41,6 +41,10 @@ export interface SystemData {
 export interface SettingsData {
     tz: string;
     debugLog: boolean;
+    wifiTxPower: number; // 0.25 dBm units (e.g. 34 = 8.5 dBm)
+    uartTxPin: number;
+    uartRxPin: number;
+    hostname: string;
 }
 
 export interface FirmwareVersion {

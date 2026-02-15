@@ -62,6 +62,8 @@ export const api = {
     getSettings: () => get<SettingsData>("/api/settings"),
     updateSettings: (patch: Partial<SettingsData>) => put<SettingsData>("/api/settings", patch),
     playSound: (id: number) => post(`/api/sound?id=${id}`),
+    restart: () => post("/api/system/restart"),
+    factoryReset: () => post("/api/system/reset"),
     getLogs: () => get<LogFileInfo[]>("/api/logs"),
     getLogContent: (name: string) => fetchLogText(name),
     deleteLog: (name: string) => del(`/api/logs/${name}`),

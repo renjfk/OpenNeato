@@ -7,14 +7,22 @@
 #endif
 
 // WiFi Configuration
-#define HOSTNAME "Neato"
+#define DEFAULT_HOSTNAME "neato"
+#define WIFI_DEFAULT_TX_POWER                                                                                          \
+    34 // WiFi TX power in 0.25 dBm units (34 = 8.5 dBm)
+       // Reduces peak current ~50% vs default ~20 dBm.
+       // Range: 8 (2 dBm) to 84 (21 dBm). Common values:
+       //   34 = 8.5 dBm (recommended for serial port power)
+       //   52 = 13 dBm,  68 = 17 dBm,  78 = 19.5 dBm
+#define WIFI_MAX_RECONNECT_BACKOFF 30000 // Max backoff between reconnect attempts (ms)
 
 // Pin Configuration (ESP32-C3 Boot button is GPIO9)
 #define RESET_BUTTON_PIN 9
 
-// Neato UART pins (ESP32-C3 hardware UART on free GPIOs)
-#define NEATO_TX_PIN 4
-#define NEATO_RX_PIN 3
+// Neato UART pin defaults (ESP32-C3 hardware UART on free GPIOs)
+// Actual pins are stored in NVS and configurable via settings API.
+#define NEATO_DEFAULT_TX_PIN 3
+#define NEATO_DEFAULT_RX_PIN 4
 #define NEATO_BAUD_RATE 115200
 
 // Neato command queue timing (milliseconds)
@@ -47,7 +55,7 @@ enum CommandStatus {
 #define WIFI_RECONNECT_INTERVAL 5000
 #define RESET_BUTTON_HOLD_TIME 5000 // Hold for 5 seconds to reset
 
-// Data logger (Phase 3)
+// Data logger
 #define LOG_MAX_FILE_SIZE 32768 // 32 KB per file before rotation
 #define LOG_MAX_SPIFFS_PERCENT 85 // Delete the oldest logs when SPIFFS usage exceeds this %
 #define LOG_DIR "/log"
@@ -66,7 +74,11 @@ enum CommandStatus {
 #define NVS_KEY_TIMEZONE "tz"
 
 // NVS keys — Settings
+#define NVS_KEY_HOSTNAME "hostname"
 #define NVS_KEY_DEBUG_LOG "debug_log"
+#define NVS_KEY_WIFI_TX_POWER "wifi_tx_pwr"
+#define NVS_KEY_UART_TX_PIN "uart_tx_pin"
+#define NVS_KEY_UART_RX_PIN "uart_rx_pin"
 
 // NTP / time sync
 #define NTP_SERVER_1 "pool.ntp.org"

@@ -256,7 +256,7 @@ bool WiFiManager::connectToWiFi(const String& ssid, const String& password) {
     WiFi.disconnect(true);
     delay(100);
 
-    WiFi.setHostname(HOSTNAME);
+    WiFi.setHostname(hostname.c_str());
     WiFi.mode(WIFI_STA);
     WiFi.setSleep(false); // Disable modem sleep — keeps radio always on
     WiFi.begin(ssid.c_str(), password.c_str());
@@ -268,7 +268,60 @@ bool WiFiManager::connectToWiFi(const String& ssid, const String& password) {
         attempts++;
     }
 
+    if (WiFi.status() == WL_CONNECTED) {
+        // Apply TX power after connection — must be called after WiFi.begin()
+        WiFi.setTxPower(static_cast<wifi_power_t>(prefs.getInt(NVS_KEY_WIFI_TX_POWER, WIFI_DEFAULT_TX_POWER)));
+        LOG("WIFI", "TX power set to %.1f dBm", prefs.getInt(NVS_KEY_WIFI_TX_POWER, WIFI_DEFAULT_TX_POWER) * 0.25f);
+        wasConnected = true;
+        reconnectBackoff = WIFI_RECONNECT_INTERVAL;
+    }
+
     return WiFi.status() == WL_CONNECTED;
+}
+
+void WiFiManager::setTxPower(int quarterDbm) {
+    if (WiFi.status() == WL_CONNECTED) {
+        WiFi.setTxPower(static_cast<wifi_power_t>(quarterDbm));
+        LOG("WIFI", "TX power updated to %.1f dBm", quarterDbm * 0.25f);
+    }
+}
+
+void WiFiManager::loop() {
+    // Only attempt auto-reconnect if we were previously connected and are not
+    // in config mode (user is actively setting up WiFi through the serial menu)
+    if (inConfigMode || !wasConnected || WiFi.status() == WL_CONNECTED)
+        return;
+
+    unsigned long now = millis();
+    if (now - lastReconnectAttempt < reconnectBackoff)
+        return;
+
+    lastReconnectAttempt = now;
+    LOG("WIFI", "Connection lost — reconnecting (backoff %lu ms)...", reconnectBackoff);
+
+    String ssid, password;
+    if (!loadCredentials(ssid, password))
+        return;
+
+    WiFi.disconnect(true);
+    delay(100);
+    WiFi.begin(ssid.c_str(), password.c_str());
+
+    // Brief non-blocking wait (don't block loop for 30s like initial connect)
+    unsigned long start = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - start < 5000) {
+        delay(100);
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
+        WiFi.setTxPower(static_cast<wifi_power_t>(prefs.getInt(NVS_KEY_WIFI_TX_POWER, WIFI_DEFAULT_TX_POWER)));
+        reconnectBackoff = WIFI_RECONNECT_INTERVAL; // Reset backoff on success
+        LOG("WIFI", "Reconnected! IP: %s", WiFi.localIP().toString().c_str());
+    } else {
+        // Exponential backoff: 5s -> 10s -> 20s -> 30s (capped)
+        reconnectBackoff = min(reconnectBackoff * 2, static_cast<unsigned long>(WIFI_MAX_RECONNECT_BACKOFF));
+        LOG("WIFI", "Reconnect failed, next attempt in %lu ms", reconnectBackoff);
+    }
 }
 
 void WiFiManager::saveCredentials(const String& ssid, const String& password) {

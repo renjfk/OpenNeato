@@ -46,6 +46,18 @@ public:
     // Caller must supply tz string (owned by SettingsManager, not SystemManager)
     SystemHealth getSystemHealth(const String& tz) const;
 
+    // Deferred restart — schedules a reboot after 500ms so HTTP response can flush
+    void restart();
+
+    // Deferred factory reset — clears NVS + WiFi, then restarts
+    void factoryReset();
+
+    // True if a deferred reboot is pending (restart or factory reset)
+    bool isRebootPending() const { return pendingRebootAt > 0; }
+
+    // Must be called from loop() — executes deferred reboot when timer expires
+    void checkPendingReboot();
+
     // Callback fired once when NTP first syncs
     using NtpSyncCallback = std::function<void()>;
     void onNtpSync(NtpSyncCallback cb) { ntpSyncCallback = cb; }
@@ -56,6 +68,10 @@ private:
     bool fallbackSet = false;
     time_t fallbackEpoch = 0;
     unsigned long fallbackMillis = 0;
+
+    // Deferred reboot state
+    unsigned long pendingRebootAt = 0;
+    bool pendingFactoryReset = false;
 
     NtpSyncCallback ntpSyncCallback;
 };

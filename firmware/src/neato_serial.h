@@ -20,7 +20,7 @@ enum QueueState { QUEUE_IDLE, QUEUE_SENDING, QUEUE_WAITING_RESPONSE, QUEUE_INTER
 class NeatoSerial {
 public:
     NeatoSerial();
-    void begin();
+    void begin(int txPin, int rxPin);
     void loop();
 
     // -- Sensor queries (typed callbacks) ------------------------------------

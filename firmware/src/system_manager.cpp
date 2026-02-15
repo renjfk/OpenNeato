@@ -57,6 +57,34 @@ void SystemManager::applyTimezone(const String& tz) {
     LOG("SYS", "NTP timezone applied: %s", tz.c_str());
 }
 
+// -- Deferred reboot ---------------------------------------------------------
+
+void SystemManager::restart() {
+    LOG("SYS", "Restart scheduled");
+    pendingRebootAt = millis();
+}
+
+void SystemManager::factoryReset() {
+    LOG("SYS", "Factory reset scheduled");
+    pendingFactoryReset = true;
+    pendingRebootAt = millis();
+}
+
+void SystemManager::checkPendingReboot() {
+    if (pendingRebootAt == 0 || millis() - pendingRebootAt < 500)
+        return;
+
+    if (pendingFactoryReset) {
+        LOG("SYS", "Factory reset: clearing NVS, WiFi credentials, and SPIFFS...");
+        prefs.clear();
+        WiFi.disconnect(true, true);
+        SPIFFS.format();
+        delay(500);
+    }
+    LOG("SYS", "Rebooting...");
+    ESP.restart();
+}
+
 // -- System health -----------------------------------------------------------
 
 std::vector<Field> SystemHealth::toFields() const {

@@ -42,9 +42,9 @@ NeatoSerial::NeatoSerial() :
 
 #undef CACHE_HIT
 
-void NeatoSerial::begin() {
-    uart.begin(NEATO_BAUD_RATE, SERIAL_8N1, NEATO_RX_PIN, NEATO_TX_PIN);
-    LOG("NEATO", "UART initialized (TX=%d, RX=%d, baud=%d)", NEATO_TX_PIN, NEATO_RX_PIN, NEATO_BAUD_RATE);
+void NeatoSerial::begin(int txPin, int rxPin) {
+    uart.begin(NEATO_BAUD_RATE, SERIAL_8N1, rxPin, txPin);
+    LOG("NEATO", "UART initialized (TX=GPIO%d, RX=GPIO%d, baud=%d)", txPin, rxPin, NEATO_BAUD_RATE);
 }
 
 void NeatoSerial::loop() {

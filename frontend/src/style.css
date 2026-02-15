@@ -21,6 +21,10 @@
     --amber: #e5972a;
     --red: #ff453a;
     --blue: #3b9eff;
+    --purple: #bf5af2;
+    --cyan: #5ac8fa;
+    --teal: #30d5c8;
+    --pink: #ff6b9d;
     --bg-gradient-center: #38383e;
     --bg-gradient-mid: #232328;
     --bg-gradient-outer: #161618;
@@ -47,6 +51,10 @@
     --amber: #d68910;
     --red: #dc3545;
     --blue: #007aff;
+    --purple: #a550d6;
+    --cyan: #0a84c4;
+    --teal: #25a99e;
+    --pink: #e8457a;
     --bg-gradient-center: #eff0f5;
     --bg-gradient-mid: #f5f5f9;
     --bg-gradient-outer: #ffffff;
@@ -72,6 +80,10 @@
         --amber: #d68910;
         --red: #dc3545;
         --blue: #007aff;
+        --purple: #a550d6;
+        --cyan: #0a84c4;
+        --teal: #25a99e;
+        --pink: #e8457a;
         --bg-gradient-center: #eff0f5;
         --bg-gradient-mid: #f5f5f9;
         --bg-gradient-outer: #ffffff;
@@ -743,6 +755,141 @@ body {
     background: var(--text);
 }
 
+/* Settings pin configuration */
+
+.settings-pin-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.settings-pin-label {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.settings-pin-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+    -webkit-appearance: none;
+    -moz-appearance: textfield;
+    box-sizing: border-box;
+}
+
+.settings-pin-input:focus {
+    outline: 2px solid var(--accent, #5ac8fa);
+}
+
+.settings-field-error {
+    margin-top: 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--red);
+}
+
+/* Text input (hostname, etc.) */
+
+.settings-text-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+    -webkit-appearance: none;
+    box-sizing: border-box;
+}
+
+.settings-text-input:focus {
+    outline: 2px solid var(--accent, #5ac8fa);
+}
+
+/* Unified save button */
+
+.settings-save-btn {
+    width: 100%;
+    padding: 14px;
+    margin-bottom: 28px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.settings-save-btn:active {
+    opacity: 0.7;
+}
+
+.settings-save-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+.settings-save-btn.pending {
+    animation: btn-pulse 1s ease-in-out infinite;
+}
+
+/* Device action buttons */
+
+.settings-device-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.settings-device-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.settings-device-btn:active {
+    opacity: 0.7;
+}
+
+.settings-device-btn span {
+    display: flex;
+}
+
+.settings-device-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.settings-device-btn.danger {
+    border-color: rgba(255, 69, 58, 0.2);
+    background: rgba(255, 69, 58, 0.08);
+    color: var(--red);
+}
+
 /* Confirm dialog */
 
 .confirm-overlay {
@@ -776,6 +923,35 @@ body {
     line-height: 1.4;
 }
 
+.confirm-text-input-wrap {
+    margin-bottom: 16px;
+    text-align: left;
+}
+
+.confirm-text-label {
+    display: block;
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+}
+
+.confirm-text-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+    box-sizing: border-box;
+    outline: none;
+}
+
+.confirm-text-input:focus {
+    border-color: var(--red);
+}
+
 .confirm-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -797,6 +973,11 @@ body {
     opacity: 0.7;
 }
 
+.confirm-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
 .confirm-btn.cancel {
     background: var(--surface);
     color: var(--text);
@@ -806,6 +987,62 @@ body {
     background: rgba(255, 69, 58, 0.12);
     border-color: rgba(255, 69, 58, 0.2);
     color: var(--red);
+}
+
+/* Reboot overlay */
+
+.reboot-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+}
+
+.reboot-dialog {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 32px 28px;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    width: 100%;
+    max-width: 260px;
+}
+
+.reboot-spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: reboot-spin 0.8s linear infinite;
+}
+
+@keyframes reboot-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.reboot-text {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.reboot-subtext {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-align: center;
 }
 
 /* Logs page */
@@ -960,6 +1197,85 @@ body {
     height: 16px;
 }
 
+/* Log filter bar */
+
+.logs-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.logs-filter-chip {
+    padding: 4px 10px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    transition:
+        background 0.15s,
+        color 0.15s,
+        border-color 0.15s;
+}
+
+.logs-filter-chip.active {
+    background: var(--card-bg);
+    color: var(--text);
+    border-color: var(--text-dim);
+}
+
+.logs-filter-chip.blue.active {
+    background: rgba(59, 158, 255, 0.12);
+    color: var(--blue);
+    border-color: var(--blue);
+}
+
+.logs-filter-chip.green.active {
+    background: rgba(52, 199, 89, 0.12);
+    color: var(--green);
+    border-color: var(--green);
+}
+
+.logs-filter-chip.teal.active {
+    background: rgba(48, 213, 200, 0.12);
+    color: var(--teal);
+    border-color: var(--teal);
+}
+
+.logs-filter-chip.amber.active {
+    background: rgba(229, 151, 42, 0.12);
+    color: var(--amber);
+    border-color: var(--amber);
+}
+
+.logs-filter-chip.cyan.active {
+    background: rgba(90, 200, 250, 0.12);
+    color: var(--cyan);
+    border-color: var(--cyan);
+}
+
+.logs-filter-chip.red.active {
+    background: rgba(255, 69, 58, 0.12);
+    color: var(--red);
+    border-color: var(--red);
+}
+
+.logs-filter-chip.purple.active {
+    background: rgba(191, 90, 242, 0.12);
+    color: var(--purple);
+    border-color: var(--purple);
+}
+
+.logs-filter-chip.pink.active {
+    background: rgba(255, 107, 157, 0.12);
+    color: var(--pink);
+    border-color: var(--pink);
+}
+
 /* Log detail entries */
 
 .logs-entries {
@@ -1010,6 +1326,26 @@ body {
 .logs-entry-badge.red {
     background: rgba(255, 69, 58, 0.12);
     color: var(--red);
+}
+
+.logs-entry-badge.purple {
+    background: rgba(191, 90, 242, 0.12);
+    color: var(--purple);
+}
+
+.logs-entry-badge.cyan {
+    background: rgba(90, 200, 250, 0.12);
+    color: var(--cyan);
+}
+
+.logs-entry-badge.teal {
+    background: rgba(48, 213, 200, 0.12);
+    color: var(--teal);
+}
+
+.logs-entry-badge.pink {
+    background: rgba(255, 107, 157, 0.12);
+    color: var(--pink);
 }
 
 .logs-entry-badge.dim {

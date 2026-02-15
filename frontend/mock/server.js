@@ -29,17 +29,30 @@ const randf = (min, max, decimals = 2) => parseFloat((Math.random() * (max - min
 
 // --- Scenario selector ---
 // Change this value to switch between test states. Save and Vite hot-reloads.
-//   "ok"  — Robot idle, online, battery 85%
-//   "off" — Device unreachable (connection lost)
-//   "cls" — House cleaning in progress
-//   "spt" — Spot cleaning in progress
-//   "chg" — On dock, charging, battery 62%
-//   "ch2" — On dock, charging, battery 25%
-//   "ful" — Fully charged, on dock, battery 100%
-//   "mid" — Battery at 45%, not charging
-//   "low" — Battery at 12%, not charging
-//   "ded" — Battery empty (0%)
-//   "err" — Robot has error (brush stuck)
+// Combine multiple scenarios with "|":
+//   "ok"          — Robot idle, online, battery 85%
+//   "err|fa"      — Robot error (brush stuck) + action faults
+//   "low|fl|fs"   — Low battery + log faults + settings fault
+//
+// Robot state:
+//   ok   — Idle, battery 85%          off — Device unreachable
+//   cls  — House cleaning             spt — Spot cleaning
+//   chg  — Charging, 62%              ch2 — Charging, 25%
+//   ful  — Full, on dock              mid — Battery 45%
+//   low  — Battery 12%                ded — Battery 0%
+//   err  — Brush stuck error
+//
+// Fault injection (combine with any state above):
+//   fa   — Action faults (clean house/spot/stop return errors)
+//   fs   — Settings fault (NVS write error)
+//   flr  — Log read fault (list + content fail)
+//   fld  — Log delete fault (delete single + delete all fail)
+//   fl   — All log faults (read + delete)
+//   fps  — Polling fault: GET /api/state
+//   fpc  — Polling fault: GET /api/charger
+//   fpe  — Polling fault: GET /api/error
+//   fp   — All polling faults (state + charger + error)
+//   fal  — All faults combined
 const SCENARIO = "ok";
 
 // --- Robot state ---
@@ -60,6 +73,49 @@ const SCENARIOS = {
         errorCode: 234,
         errorMessage: "My Brush is stuck. Please free it from debris",
     },
+    fa: { faults: { actions: true } },
+    fs: { faults: { settings: true } },
+    flr: { faults: { logsRead: true } },
+    fld: { faults: { logsDelete: true } },
+    fl: { faults: { logsRead: true, logsDelete: true } },
+    fps: { faults: { pollState: true } },
+    fpc: { faults: { pollCharger: true } },
+    fpe: { faults: { pollError: true } },
+    fp: { faults: { pollState: true, pollCharger: true, pollError: true } },
+    fal: {
+        faults: {
+            actions: true,
+            settings: true,
+            logsRead: true,
+            logsDelete: true,
+            pollState: true,
+            pollCharger: true,
+            pollError: true,
+        },
+    },
+};
+
+// Merge scenarios split by "|"
+const merged = {};
+const mergedFaults = {};
+for (const key of SCENARIO.split("|")) {
+    const s = SCENARIOS[key] || {};
+    const { faults: sf, ...rest } = s;
+    Object.assign(merged, rest);
+    if (sf) Object.assign(mergedFaults, sf);
+}
+merged.faults = mergedFaults;
+
+// Fault flags — toggled by scenarios, checked by route handlers
+const faults = {
+    actions: false,
+    settings: false,
+    logsRead: false,
+    logsDelete: false,
+    pollState: false,
+    pollCharger: false,
+    pollError: false,
+    ...(merged.faults || {}),
 };
 
 const state = {
@@ -77,7 +133,7 @@ const state = {
     testMode: false,
     tz: "UTC0",
     debugLog: false,
-    ...SCENARIOS[SCENARIO],
+    ...merged,
 };
 
 // Boot time for uptime calculation
@@ -193,6 +249,7 @@ const routes = {
     },
 
     "GET /api/charger": (_req, res) => {
+        if (faults.pollCharger) return sendError(res, "UART timeout reading charger", 500);
         const fuel = Math.round(state.fuelPercent);
         jsonResponse(res, {
             fuelPercent: fuel,
@@ -267,6 +324,7 @@ const routes = {
     },
 
     "GET /api/state": (_req, res) => {
+        if (faults.pollState) return sendError(res, "UART timeout reading state", 500);
         deriveStates();
         jsonResponse(res, {
             uiState: state.uiState,
@@ -275,6 +333,7 @@ const routes = {
     },
 
     "GET /api/error": (_req, res) => {
+        if (faults.pollError) return sendError(res, "UART timeout reading error", 500);
         jsonResponse(res, {
             hasError: state.hasError,
             errorCode: state.errorCode,
@@ -309,6 +368,7 @@ const routes = {
 
     // Action routes
     "POST /api/clean/house": (_req, res) => {
+        if (faults.actions) return sendError(res, "UART timeout: robot not responding", 500);
         state.cleaning = true;
         state.spotCleaning = false;
         deriveStates();
@@ -316,6 +376,7 @@ const routes = {
     },
 
     "POST /api/clean/spot": (_req, res) => {
+        if (faults.actions) return sendError(res, "UART timeout: robot not responding", 500);
         state.spotCleaning = true;
         state.cleaning = false;
         deriveStates();
@@ -323,6 +384,7 @@ const routes = {
     },
 
     "POST /api/clean/stop": (_req, res) => {
+        if (faults.actions) return sendError(res, "Command queue full", 503);
         state.cleaning = false;
         state.spotCleaning = false;
         deriveStates();
@@ -336,10 +398,12 @@ const routes = {
 
     // Log routes
     "GET /api/logs": (_req, res) => {
+        if (faults.logsRead) return sendError(res, "SPIFFS read failed", 500);
         jsonResponse(res, mockLogs);
     },
 
     "DELETE /api/logs": (_req, res) => {
+        if (faults.logsDelete) return sendError(res, "SPIFFS busy, try again later", 503);
         sendOk(res);
     },
 
@@ -386,6 +450,7 @@ const handleRequest = async (req, res) => {
     if (logFileMatch) {
         const filename = logFileMatch[1];
         if (req.method === "GET") {
+            if (faults.logsRead) return sendError(res, "SPIFFS read failed", 500);
             res.writeHead(200, {
                 "Content-Type": "application/x-ndjson",
                 "Content-Disposition": `attachment; filename="${filename.replace(/\.hs$/, "")}"`,
@@ -393,6 +458,7 @@ const handleRequest = async (req, res) => {
             return res.end(mockLogContent);
         }
         if (req.method === "DELETE") {
+            if (faults.logsDelete) return sendError(res, "SPIFFS busy, try again later", 503);
             return sendOk(res);
         }
         return sendError(res, "method not allowed", 405);
@@ -400,6 +466,10 @@ const handleRequest = async (req, res) => {
 
     // PUT /api/settings — partial update, simulate NVS write delay
     if (req.method === "PUT" && path === "/api/settings") {
+        if (faults.settings) {
+            await new Promise((r) => setTimeout(r, rand(200, 400)));
+            return sendError(res, "NVS write failed: flash error", 500);
+        }
         const body = await readBody(req);
         try {
             const data = JSON.parse(body);

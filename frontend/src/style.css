@@ -329,6 +329,11 @@ body {
     margin-top: 1px;
 }
 
+.error-banner-content {
+    flex: 1;
+    min-width: 0;
+}
+
 .error-banner-title {
     font-weight: 600;
     color: var(--red);
@@ -338,6 +343,42 @@ body {
 
 .error-banner-msg {
     color: var(--text);
+}
+
+.error-banner-dismiss {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 69, 58, 0.1);
+    color: var(--red);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    opacity: 0.7;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.error-banner-dismiss:active {
+    opacity: 1;
+}
+
+.error-banner-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 30vh;
+    overflow-y: auto;
+    margin: 0 20px 10px;
+}
+
+.error-banner-stack .error-banner {
+    margin: 0;
 }
 
 /* Bottom action bar */
@@ -1053,6 +1094,10 @@ body {
     }
 
     .error-banner {
+        margin: 0 28px 12px;
+    }
+
+    .error-banner-stack {
         margin: 0 28px 12px;
     }
 

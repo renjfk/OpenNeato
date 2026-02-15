@@ -33,6 +33,10 @@ firmware through REST API. Everything runs on the device itself.
    design, robot illustration, live status cards, action buttons. Embedded in firmware.
 7. **Async response cache** — Generic `AsyncCache<T>` template with TTL, request
    deduplication, and explicit invalidation. Integrated into NeatoSerial typed getters.
+8. **Error handling UX** — Two-tier error banner system: fixed (non-dismissible)
+   banners for robot errors from GetErr polling, stackable dismissible banners for
+   API/action errors. Dashboard cards show "Error" state when polling fails. Mock
+   server fault injection scenarios for all error paths.
 
 Details for completed phases are documented in the Architecture, API routes, and
 reference sections below.
@@ -515,9 +519,13 @@ Laser_RPM,52428 Charger_MaxPWM,65536 Charger_PWM,-858993460 Charger_mAH,52428
   endpoints with stateful responses. To test scenarios (low battery, errors, charging),
   edit the `SCENARIO` constant at the top of the file and save (Vite auto-reloads).
   Available scenarios (3-letter codes): `ok` (normal idle), `off` (offline),
-  `shd` (shutdown), `cls` (house cleaning), `spt` (spot cleaning), `chg` (charging 62%),
+  `cls` (house cleaning), `spt` (spot cleaning), `chg` (charging 62%),
   `ch2` (charging 25%), `ful` (full on dock), `mid` (battery 45%), `low` (battery 12%),
-  `ded` (battery 0%), `err` (brush stuck). State is static (no dynamic simulation).
+  `ded` (battery 0%), `err` (brush stuck). Fault injection scenarios: `fa` (actions),
+  `fs` (settings), `flr` (log read), `fld` (log delete), `fl` (all logs),
+  `fps` (poll state), `fpc` (poll charger), `fpe` (poll error), `fp` (all polls),
+  `fal` (all faults). Combine with `|`: `"err|fa|fp"`. State is static (no dynamic
+  simulation). Always reset SCENARIO to `"ok"` before committing.
 
 ### Web UI Design
 
@@ -764,7 +772,10 @@ frontend/
     components/
       icon.tsx             # SVG renderer component using dangerouslySetInnerHTML
       battery-icon.tsx     # Dynamic battery with clipPath + color thresholds
-      error-banner.tsx     # Reusable error banner (title + message, alert icon)
+      error-banner.tsx     # Reusable error banner (title + message, alert icon,
+                           #   optional onDismiss prop for × close button),
+                           #   useErrorStack hook (stable refs via useMemo),
+                           #   ErrorBannerStack component for stacked dismissible errors
       confirm-dialog.tsx   # Reusable confirm modal (overlay + blur, Cancel/Delete
                            #   buttons, destructive action styling)
       router.tsx           # Router (context provider), Route (path matcher),
@@ -772,6 +783,9 @@ frontend/
     views/
       dashboard.tsx        # Dashboard view: status bar, hero area, info cards,
                            #   action buttons, pending state, helpers
+                           #   Two-tier error banners: fixed for robot errors,
+                           #   dismissible stack for action errors. Cards show
+                           #   "Error" state when polling fails.
       settings.tsx         # Settings view: appearance theme selector, timezone
                            #   dropdown with POSIX TZ presets, robot time display,
                            #   debug logging toggle (fetches/updates via settings API)
@@ -786,6 +800,8 @@ frontend/
     server.js              # Mock API server (plain Node.js http, zero deps),
                            #   SCENARIO selector for quick state switching,
                            #   stateful simulation of all REST endpoints.
+                           #   Fault injection via scenario codes (fa, fs, fl,
+                           #   fp, fal, etc.) with pipe-separated combining.
   scripts/
     embed_frontend.js      # Auto-discovers all dist/ files, gzips each, generates
                            #   firmware/src/web_assets.h with WebAsset registry

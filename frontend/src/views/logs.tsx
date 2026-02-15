@@ -4,7 +4,7 @@ import alertSvg from "../assets/icons/alert.svg?raw";
 import backSvg from "../assets/icons/back.svg?raw";
 import databaseSvg from "../assets/icons/database.svg?raw";
 import { ConfirmDialog } from "../components/confirm-dialog";
-import { ErrorBanner } from "../components/error-banner";
+import { ErrorBannerStack, useErrorStack } from "../components/error-banner";
 import { Icon } from "../components/icon";
 import { useNavigate, usePath } from "../components/router";
 import type { LogFileInfo } from "../types";
@@ -93,7 +93,7 @@ export function LogsView() {
 
     const [files, setFiles] = useState<LogFileInfo[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [errors, errorStack] = useErrorStack();
 
     // Detail view state
     const [logLines, setLogLines] = useState<ReturnType<typeof parseLogLine>[]>([]);
@@ -108,17 +108,16 @@ export function LogsView() {
 
     const fetchFiles = useCallback(() => {
         setLoading(true);
-        setError(null);
         api.getLogs()
             .then((data) => {
                 setFiles(data);
                 setLoading(false);
             })
             .catch((e: unknown) => {
-                setError(e instanceof Error ? e.message : "Failed to load logs");
+                errorStack.push(e instanceof Error ? e.message : "Failed to load logs");
                 setLoading(false);
             });
-    }, []);
+    }, [errorStack]);
 
     useEffect(() => {
         fetchFiles();
@@ -132,7 +131,6 @@ export function LogsView() {
         }
         setLoadingContent(true);
         setLogLines([]);
-        setError(null);
         api.getLogContent(selectedFile)
             .then((text) => {
                 const lines = text
@@ -144,7 +142,7 @@ export function LogsView() {
                 setLoadingContent(false);
             })
             .catch((e: unknown) => {
-                setError(e instanceof Error ? e.message : "Failed to load log");
+                errorStack.push(e instanceof Error ? e.message : "Failed to load log");
                 setLoadingContent(false);
             });
     }, [selectedFile]);
@@ -155,20 +153,18 @@ export function LogsView() {
 
         if (confirmTarget === "__all__") {
             setDeletingAll(true);
-            setError(null);
             api.deleteAllLogs()
                 .then(() => {
                     setFiles([]);
                     navigate("/logs");
                 })
                 .catch((e: unknown) => {
-                    setError(e instanceof Error ? e.message : "Failed to delete logs");
+                    errorStack.push(e instanceof Error ? e.message : "Failed to delete logs");
                 })
                 .finally(() => setDeletingAll(false));
         } else {
             const name = confirmTarget;
             setDeleting(name);
-            setError(null);
             api.deleteLog(name)
                 .then(() => {
                     setFiles((prev) => prev.filter((f) => f.name !== name));
@@ -177,20 +173,20 @@ export function LogsView() {
                     }
                 })
                 .catch((e: unknown) => {
-                    setError(e instanceof Error ? e.message : "Failed to delete log");
+                    errorStack.push(e instanceof Error ? e.message : "Failed to delete log");
                 })
                 .finally(() => setDeleting(null));
         }
-    }, [confirmTarget, selectedFile, navigate]);
+    }, [confirmTarget, selectedFile, navigate, errorStack]);
 
     const handleBack = useCallback(() => {
         if (isDetail) {
             navigate("/logs");
-            setError(null);
+            errorStack.clear();
         } else {
             navigate("/settings");
         }
-    }, [isDetail, navigate]);
+    }, [isDetail, navigate, errorStack]);
 
     const totalSize = files.reduce((sum, f) => sum + f.size, 0);
 
@@ -204,7 +200,7 @@ export function LogsView() {
                 <div class="header-right-spacer" />
             </div>
 
-            {error && <ErrorBanner title="Error" message={error} />}
+            <ErrorBannerStack errors={errors} />
 
             <div class="logs-page">
                 {!isDetail && (
@@ -229,7 +225,7 @@ export function LogsView() {
                         {/* File list */}
                         {loading && <div class="logs-empty">Loading...</div>}
 
-                        {!loading && files.length === 0 && !error && (
+                        {!loading && files.length === 0 && errors.length === 0 && (
                             <div class="logs-empty">
                                 <Icon svg={databaseSvg} />
                                 No log files
@@ -248,7 +244,7 @@ export function LogsView() {
                                             <div class="logs-file-name">{f.name}</div>
                                             <div class="logs-file-meta">
                                                 {filenameToDate(f.name)} &middot; {formatBytes(f.size)}
-                                                {f.compressed && " &middot; compressed"}
+                                                {f.compressed && <> &middot; compressed</>}
                                             </div>
                                         </button>
                                         <button
@@ -271,7 +267,7 @@ export function LogsView() {
                     <>
                         {loadingContent && <div class="logs-empty">Loading...</div>}
 
-                        {!loadingContent && logLines.length === 0 && !error && (
+                        {!loadingContent && logLines.length === 0 && errors.length === 0 && (
                             <div class="logs-empty">
                                 <Icon svg={databaseSvg} />
                                 Empty log

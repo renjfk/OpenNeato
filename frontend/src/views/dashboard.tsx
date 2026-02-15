@@ -16,7 +16,7 @@ import wifiSvg from "../assets/icons/wifi.svg?raw";
 import wifiOffSvg from "../assets/icons/wifi-off.svg?raw";
 import robotSvg from "../assets/robot.svg?raw";
 import { BatteryIcon } from "../components/battery-icon";
-import { ErrorBanner } from "../components/error-banner";
+import { ErrorBanner, ErrorBannerStack, useErrorStack } from "../components/error-banner";
 import { Icon } from "../components/icon";
 import { useNavigate } from "../components/router";
 import type { PollResult } from "../hooks/use-polling";
@@ -45,6 +45,7 @@ const MODE_ICONS: Record<string, string> = {
     house: houseSvg,
     spot: spotSvg,
     bolt: boltSvg,
+    alert: alertSvg,
 };
 
 function modeInfo(
@@ -103,28 +104,40 @@ export function DashboardView({ system, firmware, error, state, charger }: Dashb
     const hasData = state.data || charger.data;
     const offline = connErr && !hasData;
 
-    const si = state.data ? statusInfo(state.data.uiState) : { label: "...", color: "amber", icon: "check" };
+    const si = state.data
+        ? statusInfo(state.data.uiState)
+        : { label: state.error ? "Error" : "...", color: state.error ? "red" : "amber", icon: "alert" };
 
     // Pending state — disabled until backend confirms state change
     const [pending, setPending] = useState(false);
     const lastUiState = useRef<string | null>(null);
+    const [actionErrors, actionErrorStack] = useErrorStack();
 
     if (state.data && state.data.uiState !== lastUiState.current) {
         lastUiState.current = state.data.uiState;
         if (pending) setPending(false);
     }
 
-    const handleAction = useCallback((action: () => Promise<unknown>) => {
-        setPending(true);
-        action();
-    }, []);
+    const handleAction = useCallback(
+        (action: () => Promise<unknown>) => {
+            setPending(true);
+            action().catch((e: unknown) => {
+                setPending(false);
+                actionErrorStack.push(e instanceof Error ? e.message : "Action failed");
+            });
+        },
+        [actionErrorStack],
+    );
     const isCleaning = state.data?.uiState?.includes("CLEANING") ?? false;
     const isSpot = state.data?.uiState?.includes("SPOT") ?? false;
     const charging = charger.data?.chargingActive ?? false;
     const docked = charger.data?.extPwrPresent ?? false;
     const pct = charger.data?.fuelPercent ?? 0;
-    const bc = charger.data ? battColor(pct) : "amber";
-    const mi = modeInfo(charging, docked, isSpot, isCleaning);
+    const bc = charger.data ? battColor(pct) : charger.error ? "red" : "amber";
+    const modeErr = (!state.data && state.error) || (!charger.data && charger.error);
+    const mi = modeErr
+        ? { label: "Error", color: "red", icon: "alert" }
+        : modeInfo(charging, docked, isSpot, isCleaning);
 
     return (
         <>
@@ -177,8 +190,12 @@ export function DashboardView({ system, firmware, error, state, charger }: Dashb
                 </div>
             )}
 
-            {/* Error banner */}
+            {/* Robot error — fixed, clears automatically when robot resolves it */}
             {error.data?.hasError && <ErrorBanner message={error.data.errorMessage} />}
+            {!error.data && error.error && <ErrorBanner title="Warning" message={error.error} />}
+
+            {/* Action errors — dismissible, stackable */}
+            <ErrorBannerStack errors={actionErrors} />
 
             {/* Hero area — robot right, cards left */}
             {offline ? (
@@ -206,10 +223,12 @@ export function DashboardView({ system, firmware, error, state, charger }: Dashb
                         <div class="info-card">
                             <div class="info-card-left">
                                 <div class="info-card-label">Battery</div>
-                                <div class={`info-card-value ${bc}`}>{charger.data ? `${pct}%` : "..."}</div>
+                                <div class={`info-card-value ${bc}`}>
+                                    {charger.data ? `${pct}%` : charger.error ? "Error" : "..."}
+                                </div>
                             </div>
-                            <div class="info-card-icon">
-                                <BatteryIcon pct={pct} />
+                            <div class={`info-card-icon ${charger.error && !charger.data ? "red" : ""}`}>
+                                {charger.error && !charger.data ? <Icon svg={alertSvg} /> : <BatteryIcon pct={pct} />}
                             </div>
                         </div>
 

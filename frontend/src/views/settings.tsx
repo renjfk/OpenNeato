@@ -5,7 +5,7 @@ import clockSvg from "../assets/icons/clock.svg?raw";
 import databaseSvg from "../assets/icons/database.svg?raw";
 import moonSvg from "../assets/icons/moon.svg?raw";
 import sunSvg from "../assets/icons/sun.svg?raw";
-import { ErrorBanner } from "../components/error-banner";
+import { ErrorBannerStack, useErrorStack } from "../components/error-banner";
 import { Icon } from "../components/icon";
 import { useNavigate } from "../components/router";
 import type { SettingsData, SystemData } from "../types";
@@ -73,7 +73,7 @@ export function SettingsView({ theme, onThemeChange, system }: SettingsViewProps
     const [tz, setTz] = useState<string>(system?.tz ?? "UTC0");
     const [debugLog, setDebugLog] = useState(false);
     const [saving, setSaving] = useState(false);
-    const [tzError, setTzError] = useState<string | null>(null);
+    const [errors, errorStack] = useErrorStack();
 
     // Sync when system data arrives
     useEffect(() => {
@@ -89,12 +89,11 @@ export function SettingsView({ theme, onThemeChange, system }: SettingsViewProps
         (newTz: string) => {
             setTz(newTz);
             setSaving(true);
-            setTzError(null);
             api.updateSettings({ tz: newTz })
                 .then((res) => setTz(res.tz))
                 .catch((e: unknown) => {
                     if (system?.tz) setTz(system.tz);
-                    setTzError(e instanceof Error ? e.message : "Failed to update timezone");
+                    errorStack.push(e instanceof Error ? e.message : "Failed to update timezone");
                 })
                 .finally(() => setSaving(false));
         },
@@ -125,7 +124,7 @@ export function SettingsView({ theme, onThemeChange, system }: SettingsViewProps
                 <div class="header-right-spacer" />
             </div>
 
-            {tzError && <ErrorBanner title="Error" message={tzError} />}
+            <ErrorBannerStack errors={errors} />
 
             <div class="settings-page">
                 <div class="settings-section">

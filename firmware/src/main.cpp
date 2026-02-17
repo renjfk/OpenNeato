@@ -10,6 +10,7 @@
 #include "web_server.h"
 #include "neato_serial.h"
 #include "data_logger.h"
+#include "scheduler.h"
 
 // Global objects
 Preferences prefs;
@@ -20,6 +21,7 @@ FirmwareManager firmwareManager;
 SystemManager systemManager(prefs);
 SettingsManager settingsManager(prefs);
 DataLogger dataLogger(neatoSerial, systemManager);
+Scheduler scheduler(settingsManager, systemManager, neatoSerial);
 WebServer webServer(server, neatoSerial, dataLogger, systemManager, firmwareManager, settingsManager);
 
 // Robot time sync state (managed here, not in SystemManager)
@@ -96,6 +98,13 @@ void setup() {
     // Wire firmware update events to data logger
     firmwareManager.setLogger(
             [](const String& event, const std::vector<Field>& extra) { dataLogger.logOta(event, extra); });
+
+    // Wire scheduler events to data logger
+    scheduler.setLogger([](const String& event, const std::vector<Field>& extra) {
+        std::vector<Field> fields = {{"event", event, FIELD_STRING}};
+        fields.insert(fields.end(), extra.begin(), extra.end());
+        dataLogger.logEvent("sched", fields);
+    });
 
     // Initialize WiFi with provisioning
     LOG("BOOT", "Initializing WiFi...");
@@ -241,4 +250,7 @@ void loop() {
         syncRobotClock();
         lastRobotSync = millis();
     }
+
+    // ESP32-managed cleaning schedule
+    scheduler.loop();
 }

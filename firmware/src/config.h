@@ -49,7 +49,8 @@ enum CommandStatus {
     CMD_SUCCESS, // Command succeeded, response received OK
     CMD_TIMEOUT, // No complete response within timeout (may have partial data)
     CMD_PARSE_FAILED, // Got response but parse failed (not used yet)
-    CMD_SERIAL_ERROR // UART error or other serial issue (e.g. response desync)
+    CMD_SERIAL_ERROR, // UART error or other serial issue (e.g. response desync)
+    CMD_UNSUPPORTED // Robot responded with "Unknown Cmd" — command not available
 };
 
 // Timing intervals (milliseconds)
@@ -80,6 +81,14 @@ enum CommandStatus {
 #define NVS_KEY_WIFI_TX_POWER "wifi_tx_pwr"
 #define NVS_KEY_UART_TX_PIN "uart_tx_pin"
 #define NVS_KEY_UART_RX_PIN "uart_rx_pin"
+
+// NVS keys — Schedule (ESP32-managed, not robot serial)
+#define NVS_KEY_SCHED_ENABLED "sched_on"
+// Per-day keys use suffix: "s0h","s0m","s0on" .. "s6h","s6m","s6on" (Mon=0..Sun=6)
+// Built programmatically in SettingsManager — no individual defines needed.
+#define SCHEDULE_DAYS 7
+#define SCHEDULE_CHECK_INTERVAL_MS 30000 // Check schedule against NTP time every 30s
+#define SCHEDULE_WINDOW_MINS 5 // Fire if current time is 0..N minutes after scheduled slot
 
 // Heap watchdog — restart if free heap stays below threshold for this duration.
 // Prevents the device from becoming unresponsive when memory is exhausted

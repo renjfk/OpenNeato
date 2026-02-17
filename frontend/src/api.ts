@@ -68,4 +68,11 @@ export const api = {
     getLogContent: (name: string) => fetchLogText(name),
     deleteLog: (name: string) => del(`/api/logs/${name}`),
     deleteAllLogs: () => del("/api/logs"),
+    setScheduleDay: (day: number, hour: number, minute: number, on: boolean) =>
+        put<SettingsData>("/api/settings", {
+            [`sched${day}Hour`]: hour,
+            [`sched${day}Min`]: minute,
+            [`sched${day}On`]: on,
+        }),
+    setScheduleEnabled: (on: boolean) => put<SettingsData>("/api/settings", { scheduleEnabled: on }),
 };

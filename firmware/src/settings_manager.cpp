@@ -1,14 +1,22 @@
 #include "settings_manager.h"
 
+// Day-name labels for JSON responses (Mon=0 .. Sun=6)
+static const char *DAY_NAMES[SCHEDULE_DAYS] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
+
+// Build NVS key for a per-day schedule field: "s0h", "s0m", "s0on", etc.
+static String schedKey(int day, const char *suffix) {
+    return "s" + String(day) + suffix;
+}
+
 SettingsManager::SettingsManager(Preferences& prefs) : prefs(prefs) {}
 
 // -- Lifecycle ---------------------------------------------------------------
 
 void SettingsManager::begin() {
     load();
-    LOG("SETTINGS", "Loaded: hostname=%s tz=%s debugLog=%s txPower=%d (%.1f dBm) uart=TX%d/RX%d",
+    LOG("SETTINGS", "Loaded: hostname=%s tz=%s debugLog=%s txPower=%d (%.1f dBm) uart=TX%d/RX%d sched=%s",
         current.hostname.c_str(), current.tz.c_str(), current.debugLog ? "true" : "false", current.wifiTxPower,
-        current.wifiTxPower * 0.25f, current.uartTxPin, current.uartRxPin);
+        current.wifiTxPower * 0.25f, current.uartTxPin, current.uartRxPin, current.scheduleEnabled ? "on" : "off");
 }
 
 // -- Persistence -------------------------------------------------------------
@@ -20,6 +28,12 @@ void SettingsManager::load() {
     current.wifiTxPower = prefs.getInt(NVS_KEY_WIFI_TX_POWER, WIFI_DEFAULT_TX_POWER);
     current.uartTxPin = prefs.getInt(NVS_KEY_UART_TX_PIN, NEATO_DEFAULT_TX_PIN);
     current.uartRxPin = prefs.getInt(NVS_KEY_UART_RX_PIN, NEATO_DEFAULT_RX_PIN);
+    current.scheduleEnabled = prefs.getBool(NVS_KEY_SCHED_ENABLED, false);
+    for (int d = 0; d < SCHEDULE_DAYS; d++) {
+        current.sched[d].hour = prefs.getInt(schedKey(d, "h").c_str(), 0);
+        current.sched[d].minute = prefs.getInt(schedKey(d, "m").c_str(), 0);
+        current.sched[d].on = prefs.getBool(schedKey(d, "on").c_str(), false);
+    }
 }
 
 void SettingsManager::save() {
@@ -29,6 +43,12 @@ void SettingsManager::save() {
     prefs.putInt(NVS_KEY_WIFI_TX_POWER, current.wifiTxPower);
     prefs.putInt(NVS_KEY_UART_TX_PIN, current.uartTxPin);
     prefs.putInt(NVS_KEY_UART_RX_PIN, current.uartRxPin);
+    prefs.putBool(NVS_KEY_SCHED_ENABLED, current.scheduleEnabled);
+    for (int d = 0; d < SCHEDULE_DAYS; d++) {
+        prefs.putInt(schedKey(d, "h").c_str(), current.sched[d].hour);
+        prefs.putInt(schedKey(d, "m").c_str(), current.sched[d].minute);
+        prefs.putBool(schedKey(d, "on").c_str(), current.sched[d].on);
+    }
 }
 
 // -- Partial update ----------------------------------------------------------
@@ -109,6 +129,27 @@ ApplyResult SettingsManager::apply(const String& json) {
         LOG("SETTINGS", "UART RX pin -> GPIO%d (reboot required)", current.uartRxPin);
     }
 
+    if (incoming.scheduleEnabled != current.scheduleEnabled) {
+        current.scheduleEnabled = incoming.scheduleEnabled;
+        changed = true;
+        LOG("SETTINGS", "Schedule -> %s", current.scheduleEnabled ? "on" : "off");
+    }
+
+    for (int d = 0; d < SCHEDULE_DAYS; d++) {
+        SchedDay& cur = current.sched[d];
+        const SchedDay& inc = incoming.sched[d];
+        if (inc.hour != cur.hour || inc.minute != cur.minute || inc.on != cur.on) {
+            // Validate hour/minute ranges
+            if (inc.hour < 0 || inc.hour > 23 || inc.minute < 0 || inc.minute > 59)
+                return APPLY_INVALID;
+            cur.hour = inc.hour;
+            cur.minute = inc.minute;
+            cur.on = inc.on;
+            changed = true;
+            LOG("SETTINGS", "Sched %s -> %02d:%02d %s", DAY_NAMES[d], cur.hour, cur.minute, cur.on ? "on" : "off");
+        }
+    }
+
     if (changed)
         save();
 
@@ -122,14 +163,22 @@ ApplyResult SettingsManager::apply(const String& json) {
 // -- JSON serialization / deserialization ------------------------------------
 
 std::vector<Field> Settings::toFields() const {
-    return {
+    std::vector<Field> f = {
             {"hostname", hostname, FIELD_STRING},
             {"tz", tz, FIELD_STRING},
             {"debugLog", debugLog ? "true" : "false", FIELD_BOOL},
             {"wifiTxPower", String(wifiTxPower), FIELD_INT},
             {"uartTxPin", String(uartTxPin), FIELD_INT},
             {"uartRxPin", String(uartRxPin), FIELD_INT},
+            {"scheduleEnabled", scheduleEnabled ? "true" : "false", FIELD_BOOL},
     };
+    for (int d = 0; d < SCHEDULE_DAYS; d++) {
+        String prefix = "sched" + String(d);
+        f.push_back({prefix + "Hour", String(sched[d].hour), FIELD_INT});
+        f.push_back({prefix + "Min", String(sched[d].minute), FIELD_INT});
+        f.push_back({prefix + "On", sched[d].on ? "true" : "false", FIELD_BOOL});
+    }
+    return f;
 }
 
 bool Settings::fromFields(const std::vector<Field>& fields) {
@@ -159,6 +208,25 @@ bool Settings::fromFields(const std::vector<Field>& fields) {
     if ((f = findField(fields, "uartRxPin")) && f->type == FIELD_INT) {
         uartRxPin = f->value.toInt();
         applied = true;
+    }
+    if ((f = findField(fields, "scheduleEnabled")) && f->type == FIELD_BOOL) {
+        scheduleEnabled = (f->value == "true");
+        applied = true;
+    }
+    for (int d = 0; d < SCHEDULE_DAYS; d++) {
+        String prefix = "sched" + String(d);
+        if ((f = findField(fields, (prefix + "Hour").c_str())) && f->type == FIELD_INT) {
+            sched[d].hour = f->value.toInt();
+            applied = true;
+        }
+        if ((f = findField(fields, (prefix + "Min").c_str())) && f->type == FIELD_INT) {
+            sched[d].minute = f->value.toInt();
+            applied = true;
+        }
+        if ((f = findField(fields, (prefix + "On").c_str())) && f->type == FIELD_BOOL) {
+            sched[d].on = (f->value == "true");
+            applied = true;
+        }
     }
 
     return applied;

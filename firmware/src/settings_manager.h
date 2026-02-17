@@ -7,6 +7,13 @@
 #include "config.h"
 #include "json_fields.h"
 
+// Per-day schedule slot (Mon=0 .. Sun=6)
+struct SchedDay {
+    int hour = 0; // 0-23
+    int minute = 0; // 0-59
+    bool on = false; // true = house clean at this time
+};
+
 // All user-configurable settings — flat struct, serializable to/from JSON
 struct Settings : public JsonSerializable {
     String hostname = DEFAULT_HOSTNAME;
@@ -15,6 +22,10 @@ struct Settings : public JsonSerializable {
     int wifiTxPower = WIFI_DEFAULT_TX_POWER; // 0.25 dBm units (34 = 8.5 dBm)
     int uartTxPin = NEATO_DEFAULT_TX_PIN; // ESP GPIO -> Robot RX
     int uartRxPin = NEATO_DEFAULT_RX_PIN; // ESP GPIO <- Robot TX
+
+    // Schedule (ESP32-managed, not robot serial)
+    bool scheduleEnabled = false;
+    SchedDay sched[SCHEDULE_DAYS]; // Sun=0 .. Sat=6
 
     std::vector<Field> toFields() const override;
     bool fromFields(const std::vector<Field>& fields) override;

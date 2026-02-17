@@ -1,8 +1,8 @@
-import type { ComponentChildren } from "preact";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../api";
 import alertSvg from "../assets/icons/alert.svg?raw";
 import backSvg from "../assets/icons/back.svg?raw";
+import calendarSvg from "../assets/icons/calendar.svg?raw";
 import clockSvg from "../assets/icons/clock.svg?raw";
 import databaseSvg from "../assets/icons/database.svg?raw";
 import moonSvg from "../assets/icons/moon.svg?raw";
@@ -16,106 +16,14 @@ import { ConfirmDialog } from "../components/confirm-dialog";
 import { ErrorBannerStack, useErrorStack } from "../components/error-banner";
 import { Icon } from "../components/icon";
 import { useNavigate } from "../components/router";
-import type { SettingsData, SystemData } from "../types";
+import type { SystemData } from "../types";
+import { TIMEZONE_PRESETS, TX_POWER_PRESETS } from "./settings/constants";
+import { findPresetLabel, formatRobotTime } from "./settings/helpers";
+import { SettingsCategory } from "./settings/settings-category";
+import { useReboot } from "./settings/use-reboot";
+import { useSettingsForm } from "./settings/use-settings-form";
 
 type Theme = "system" | "dark" | "light";
-
-// Common timezone presets — label shown in UI, value is POSIX TZ string
-// UTC offset shown is the standard (non-DST) offset
-const TIMEZONE_PRESETS: { label: string; tz: string }[] = [
-    { label: "UTC (UTC+0)", tz: "UTC0" },
-    { label: "US Hawaii (UTC-10)", tz: "HST10" },
-    { label: "US Alaska (UTC-9)", tz: "AKST9AKDT,M3.2.0,M11.1.0" },
-    { label: "US Pacific (UTC-8)", tz: "PST8PDT,M3.2.0,M11.1.0" },
-    { label: "US Mountain (UTC-7)", tz: "MST7MDT,M3.2.0,M11.1.0" },
-    { label: "US Central (UTC-6)", tz: "CST6CDT,M3.2.0,M11.1.0" },
-    { label: "US Eastern (UTC-5)", tz: "EST5EDT,M3.2.0,M11.1.0" },
-    { label: "UK / Ireland (UTC+0)", tz: "GMT0BST,M3.5.0/1,M10.5.0" },
-    { label: "Central Europe (UTC+1)", tz: "CET-1CEST,M3.5.0,M10.5.0/3" },
-    { label: "Eastern Europe (UTC+2)", tz: "EET-2EEST,M3.5.0/3,M10.5.0/4" },
-    { label: "Turkey (UTC+3)", tz: "<+03>-3" },
-    { label: "India (UTC+5:30)", tz: "IST-5:30" },
-    { label: "China / Singapore (UTC+8)", tz: "CST-8" },
-    { label: "Japan / Korea (UTC+9)", tz: "JST-9" },
-    { label: "Australia Eastern (UTC+10)", tz: "AEST-10AEDT,M10.1.0,M4.1.0/3" },
-    { label: "New Zealand (UTC+12)", tz: "NZST-12NZDT,M9.5.0,M4.1.0/3" },
-];
-
-// WiFi TX power presets — value is in 0.25 dBm units (ESP32 wifi_power_t)
-const TX_POWER_PRESETS: { label: string; value: number }[] = [
-    { label: "8.5 dBm (low power)", value: 34 },
-    { label: "11 dBm", value: 44 },
-    { label: "13 dBm", value: 52 },
-    { label: "15 dBm (recommended)", value: 60 },
-    { label: "17 dBm", value: 68 },
-    { label: "19.5 dBm (max range)", value: 78 },
-];
-
-const DEFAULT_SERVER: SettingsData = {
-    tz: "UTC0",
-    debugLog: false,
-    wifiTxPower: 60,
-    uartTxPin: 3,
-    uartRxPin: 4,
-    hostname: "neato",
-};
-
-function findPresetLabel(tz: string): string | null {
-    const match = TIMEZONE_PRESETS.find((p) => p.tz === tz);
-    return match ? match.label : null;
-}
-
-function formatRobotTime(epochSec: number, tz: string): string {
-    try {
-        const date = new Date(epochSec * 1000);
-        // POSIX format: STDoffset[DST[offset][,rule]] — offset is hours WEST of UTC
-        const offsetMatch = tz.match(/[A-Z]+(-?\d+)(?::(\d+))?/);
-        if (offsetMatch) {
-            const hours = parseInt(offsetMatch[1], 10);
-            const mins = offsetMatch[2] ? parseInt(offsetMatch[2], 10) : 0;
-            const offsetMs = -(hours * 60 + (hours < 0 ? -mins : mins)) * 60 * 1000;
-            const local = new Date(date.getTime() + offsetMs);
-            const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-            const day = days[local.getUTCDay()];
-            const h = local.getUTCHours().toString().padStart(2, "0");
-            const m = local.getUTCMinutes().toString().padStart(2, "0");
-            const s = local.getUTCSeconds().toString().padStart(2, "0");
-            return `${day} ${h}:${m}:${s}`;
-        }
-    } catch {
-        // fall through
-    }
-    const d = new Date(epochSec * 1000);
-    return d.toUTCString().replace(" GMT", " UTC");
-}
-
-function SettingsCategory({
-    title,
-    icon,
-    defaultOpen = false,
-    children,
-}: {
-    title: string;
-    icon: string;
-    defaultOpen?: boolean;
-    children: ComponentChildren;
-}) {
-    const [open, setOpen] = useState(defaultOpen);
-    return (
-        <div class={`settings-category${open ? " open" : ""}`}>
-            <button type="button" class="settings-category-header" onClick={() => setOpen(!open)}>
-                <div class="settings-category-title">
-                    <Icon svg={icon} />
-                    {title}
-                </div>
-                <span class="settings-category-chevron">&rsaquo;</span>
-            </button>
-            <div class="settings-category-body">
-                <div class="settings-category-inner">{children}</div>
-            </div>
-        </div>
-    );
-}
 
 interface SettingsViewProps {
     theme: Theme;
@@ -125,85 +33,46 @@ interface SettingsViewProps {
 
 export function SettingsView({ theme, onThemeChange, system }: SettingsViewProps) {
     const navigate = useNavigate();
+    const [errors, errorStack] = useErrorStack();
+    const { rebooting, startRebootFlow } = useReboot(system?.uptime ?? 0);
 
-    // Local form state
-    const [tz, setTz] = useState<string>(system?.tz ?? "UTC0");
-    const [debugLog, setDebugLog] = useState(false);
-    const [wifiTxPower, setWifiTxPower] = useState(60);
-    const [uartTxPin, setUartTxPin] = useState(3);
-    const [uartRxPin, setUartRxPin] = useState(4);
-    const [hostname, setHostname] = useState("neato");
+    const {
+        tz,
+        setTz,
+        debugLog,
+        setDebugLog,
+        wifiTxPower,
+        setWifiTxPower,
+        uartTxPin,
+        setUartTxPin,
+        uartRxPin,
+        setUartRxPin,
+        hostname,
+        setHostname,
+        isDirty,
+        pinError,
+        hostnameError,
+        validationError,
+        saving,
+        showSaveConfirm,
+        setShowSaveConfirm,
+        saveLabel,
+        handleSave,
+        onSaveClick,
+    } = useSettingsForm(errorStack, startRebootFlow);
 
-    // Server-confirmed state — used to compute dirty/needsReboot
-    const server = useRef<SettingsData>({ ...DEFAULT_SERVER });
-    const [settingsLoaded, setSettingsLoaded] = useState(false);
-
-    // Save flow
-    const [saving, setSaving] = useState(false);
-    const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+    // --- Dialogs ---
     const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
     const [showRestartConfirm, setShowRestartConfirm] = useState(false);
     const [showResetConfirm, setShowResetConfirm] = useState(false);
     const [restarting, setRestarting] = useState(false);
-    const [rebooting, setRebooting] = useState(false);
-    const [errors, errorStack] = useErrorStack();
     const pendingNav = useRef<string | null>(null);
-
-    // Fetch settings on mount (do NOT sync from system polling to avoid races)
-    useEffect(() => {
-        api.getSettings().then((s: SettingsData) => {
-            server.current = { ...s };
-            setTz(s.tz);
-            setDebugLog(s.debugLog);
-            setWifiTxPower(s.wifiTxPower);
-            setUartTxPin(s.uartTxPin);
-            setUartRxPin(s.uartRxPin);
-            setHostname(s.hostname);
-            setSettingsLoaded(true);
-        });
-    }, []);
-
-    // --- Dirty / validation / reboot detection ---
-
-    const isDirty =
-        settingsLoaded &&
-        (tz !== server.current.tz ||
-            debugLog !== server.current.debugLog ||
-            wifiTxPower !== server.current.wifiTxPower ||
-            uartTxPin !== server.current.uartTxPin ||
-            uartRxPin !== server.current.uartRxPin ||
-            hostname !== server.current.hostname);
-
-    const needsReboot =
-        uartTxPin !== server.current.uartTxPin ||
-        uartRxPin !== server.current.uartRxPin ||
-        hostname !== server.current.hostname;
-
-    const pinError =
-        uartTxPin === uartRxPin
-            ? "TX and RX cannot be the same pin"
-            : uartTxPin < 0 || uartTxPin > 21 || uartRxPin < 0 || uartRxPin > 21
-              ? "Pin must be 0-21"
-              : null;
-
-    const hostnameError =
-        hostname.length === 0
-            ? "Hostname cannot be empty"
-            : hostname.length > 32
-              ? "Max 32 characters"
-              : !/^[a-zA-Z0-9-]+$/.test(hostname)
-                ? "Only letters, numbers, and hyphens"
-                : null;
-
-    const validationError = pinError || hostnameError;
 
     // --- Unsaved changes guards ---
 
-    // Ref tracks latest isDirty for beforeunload handler
     const dirtyRef = useRef(false);
     dirtyRef.current = isDirty;
 
-    // Warn on tab close / refresh when dirty
     useEffect(() => {
         const handler = (e: BeforeUnloadEvent) => {
             if (dirtyRef.current) e.preventDefault();
@@ -212,7 +81,6 @@ export function SettingsView({ theme, onThemeChange, system }: SettingsViewProps
         return () => window.removeEventListener("beforeunload", handler);
     }, []);
 
-    // Guarded navigation — shows discard dialog when dirty
     const guardedNavigate = useCallback(
         (to: string) => {
             if (isDirty) {
@@ -233,88 +101,6 @@ export function SettingsView({ theme, onThemeChange, system }: SettingsViewProps
         }
     }, [navigate]);
 
-    // --- Reboot flow ---
-
-    const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const uptimeBeforeReboot = useRef(0);
-
-    const pollUntilRebooted = useCallback(() => {
-        const poll = () => {
-            fetch("/api/system")
-                .then((res) => (res.ok ? res.json() : Promise.reject()))
-                .then((data: SystemData) => {
-                    if (data.uptime < uptimeBeforeReboot.current) {
-                        window.location.reload();
-                    } else {
-                        pollTimer.current = setTimeout(poll, 2000);
-                    }
-                })
-                .catch(() => {
-                    pollTimer.current = setTimeout(poll, 2000);
-                });
-        };
-        pollTimer.current = setTimeout(poll, 2000);
-    }, []);
-
-    useEffect(() => {
-        return () => {
-            if (pollTimer.current) clearTimeout(pollTimer.current);
-        };
-    }, []);
-
-    const startRebootFlow = useCallback(() => {
-        uptimeBeforeReboot.current = system?.uptime ?? 0;
-        setShowSaveConfirm(false);
-        setShowRestartConfirm(false);
-        setShowResetConfirm(false);
-        setRebooting(true);
-        pollUntilRebooted();
-    }, [system?.uptime, pollUntilRebooted]);
-
-    // --- Unified save ---
-
-    const buildPatch = useCallback((): Partial<SettingsData> => {
-        const patch: Partial<SettingsData> = {};
-        if (tz !== server.current.tz) patch.tz = tz;
-        if (debugLog !== server.current.debugLog) patch.debugLog = debugLog;
-        if (wifiTxPower !== server.current.wifiTxPower) patch.wifiTxPower = wifiTxPower;
-        if (uartTxPin !== server.current.uartTxPin) patch.uartTxPin = uartTxPin;
-        if (uartRxPin !== server.current.uartRxPin) patch.uartRxPin = uartRxPin;
-        if (hostname !== server.current.hostname) patch.hostname = hostname;
-        return patch;
-    }, [tz, debugLog, wifiTxPower, uartTxPin, uartRxPin, hostname]);
-
-    const handleSave = useCallback(() => {
-        const willReboot = needsReboot;
-        setSaving(true);
-        api.updateSettings(buildPatch())
-            .then((res) => {
-                server.current = { ...res };
-                if (willReboot) {
-                    startRebootFlow();
-                } else {
-                    setShowSaveConfirm(false);
-                }
-            })
-            .catch((e: unknown) => {
-                if (e instanceof TypeError && willReboot) {
-                    startRebootFlow();
-                } else {
-                    errorStack.push(e instanceof Error ? e.message : "Failed to save settings");
-                    setShowSaveConfirm(false);
-                }
-            })
-            .finally(() => setSaving(false));
-    }, [buildPatch, needsReboot, startRebootFlow]);
-
-    const onSaveClick = useCallback(() => {
-        if (needsReboot) {
-            setShowSaveConfirm(true);
-        } else {
-            handleSave();
-        }
-    }, [needsReboot, handleSave]);
-
     // --- Restart / Factory Reset ---
 
     const handleRestart = useCallback(() => {
@@ -330,7 +116,7 @@ export function SettingsView({ theme, onThemeChange, system }: SettingsViewProps
                 }
             })
             .finally(() => setRestarting(false));
-    }, [startRebootFlow]);
+    }, [startRebootFlow, errorStack]);
 
     const handleFactoryReset = useCallback(() => {
         setRestarting(true);
@@ -345,14 +131,12 @@ export function SettingsView({ theme, onThemeChange, system }: SettingsViewProps
                 }
             })
             .finally(() => setRestarting(false));
-    }, [startRebootFlow]);
+    }, [startRebootFlow, errorStack]);
 
     // --- Derived UI values ---
 
     const presetLabel = findPresetLabel(tz);
     const isCustom = !presetLabel;
-
-    const saveLabel = saving ? "Saving..." : needsReboot ? "Save & Reboot" : "Save";
 
     return (
         <>
@@ -513,6 +297,15 @@ export function SettingsView({ theme, onThemeChange, system }: SettingsViewProps
                         </div>
                         {pinError && <div class="settings-field-error">{pinError}</div>}
                     </div>
+                    <div class="settings-section">
+                        <button type="button" class="settings-nav-row" onClick={() => guardedNavigate("/schedule")}>
+                            <div class="settings-nav-row-left">
+                                <Icon svg={calendarSvg} />
+                                Cleaning Schedule
+                            </div>
+                            <span class="settings-nav-chevron">&rsaquo;</span>
+                        </button>
+                    </div>
                 </SettingsCategory>
 
                 <SettingsCategory title="Diagnostics" icon={stethoscopeSvg}>
@@ -531,6 +324,8 @@ export function SettingsView({ theme, onThemeChange, system }: SettingsViewProps
                                 aria-label="Toggle debug logging"
                             />
                         </div>
+                    </div>
+                    <div class="settings-section">
                         <button type="button" class="settings-nav-row" onClick={() => guardedNavigate("/logs")}>
                             <div class="settings-nav-row-left">
                                 <Icon svg={databaseSvg} />

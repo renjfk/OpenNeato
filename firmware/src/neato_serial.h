@@ -38,7 +38,6 @@ public:
     void getLdsScan(std::function<void(bool, const LdsScanData&)> callback);
     void getAccel(std::function<void(bool, const AccelData&)> callback);
     void getButtons(std::function<void(bool, const ButtonData&)> callback);
-
     // -- Action commands (fire-and-forget by default) ------------------------
 
     bool cleanHouse(std::function<void(bool)> callback = nullptr);
@@ -49,7 +48,6 @@ public:
     bool playSound(SoundId soundId, std::function<void(bool)> callback = nullptr);
     bool setLdsRotation(bool on, std::function<void(bool)> callback = nullptr);
     bool setTime(int dayOfWeek, int hour, int min, int sec, std::function<void(bool)> callback = nullptr);
-
     // -- Time query --------------------------------------------------------------
 
     bool getTime(std::function<void(bool, const TimeData&)> callback);

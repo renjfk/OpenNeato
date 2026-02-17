@@ -79,6 +79,13 @@ void NeatoSerial::loop() {
                         return;
                     }
 
+                    // Detect "Unknown Cmd" — robot doesn't support this command
+                    if (responseBuffer.indexOf("Unknown Cmd") >= 0) {
+                        LOG("NEATO", "Unsupported: %s", currentCommand.c_str());
+                        completeCommand(CMD_UNSUPPORTED, responseBuffer);
+                        return;
+                    }
+
                     completeCommand(CMD_SUCCESS, responseBuffer);
                     return;
                 }

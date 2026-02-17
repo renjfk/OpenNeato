@@ -149,6 +149,29 @@ const state = {
     uartTxPin: 3,
     uartRxPin: 4,
     hostname: "neato",
+    // Schedule (Mon=0..Sun=6)
+    scheduleEnabled: true,
+    sched0Hour: 9,
+    sched0Min: 0,
+    sched0On: true, // Mon
+    sched1Hour: 9,
+    sched1Min: 0,
+    sched1On: true, // Tue
+    sched2Hour: 9,
+    sched2Min: 0,
+    sched2On: true, // Wed
+    sched3Hour: 9,
+    sched3Min: 0,
+    sched3On: true, // Thu
+    sched4Hour: 9,
+    sched4Min: 0,
+    sched4On: true, // Fri
+    sched5Hour: 0,
+    sched5Min: 0,
+    sched5On: false, // Sat
+    sched6Hour: 0,
+    sched6Min: 0,
+    sched6On: false, // Sun
     ...merged,
 };
 
@@ -474,14 +497,15 @@ const routes = {
     },
 
     "GET /api/settings": (_req, res) => {
-        jsonResponse(res, {
-            tz: state.tz,
-            debugLog: state.debugLog,
-            wifiTxPower: state.wifiTxPower,
-            uartTxPin: state.uartTxPin,
-            uartRxPin: state.uartRxPin,
-            hostname: state.hostname,
-        });
+        const s = {};
+        const keys = ["tz", "debugLog", "wifiTxPower", "uartTxPin", "uartRxPin", "hostname", "scheduleEnabled"];
+        for (const k of keys) s[k] = state[k];
+        for (let d = 0; d < 7; d++) {
+            s[`sched${d}Hour`] = state[`sched${d}Hour`];
+            s[`sched${d}Min`] = state[`sched${d}Min`];
+            s[`sched${d}On`] = state[`sched${d}On`];
+        }
+        jsonResponse(res, s);
     },
 
     "GET /api/firmware/version": (_req, res) => {
@@ -541,19 +565,27 @@ const handleRequest = async (req, res) => {
             if (data.uartRxPin !== undefined) state.uartRxPin = data.uartRxPin;
             const hostnameChanged = data.hostname !== undefined && data.hostname !== state.hostname;
             if (data.hostname !== undefined) state.hostname = data.hostname;
+            if (data.scheduleEnabled !== undefined) state.scheduleEnabled = data.scheduleEnabled;
+            for (let d = 0; d < 7; d++) {
+                if (data[`sched${d}Hour`] !== undefined) state[`sched${d}Hour`] = data[`sched${d}Hour`];
+                if (data[`sched${d}Min`] !== undefined) state[`sched${d}Min`] = data[`sched${d}Min`];
+                if (data[`sched${d}On`] !== undefined) state[`sched${d}On`] = data[`sched${d}On`];
+            }
             if (pinsChanged || hostnameChanged) {
                 setTimeout(() => {
                     bootTime = Date.now();
                 }, 2000);
             }
-            return jsonResponse(res, {
-                tz: state.tz,
-                debugLog: state.debugLog,
-                wifiTxPower: state.wifiTxPower,
-                uartTxPin: state.uartTxPin,
-                uartRxPin: state.uartRxPin,
-                hostname: state.hostname,
-            });
+            // Return full settings (reuse GET handler logic)
+            const s = {};
+            const keys = ["tz", "debugLog", "wifiTxPower", "uartTxPin", "uartRxPin", "hostname", "scheduleEnabled"];
+            for (const k of keys) s[k] = state[k];
+            for (let d = 0; d < 7; d++) {
+                s[`sched${d}Hour`] = state[`sched${d}Hour`];
+                s[`sched${d}Min`] = state[`sched${d}Min`];
+                s[`sched${d}On`] = state[`sched${d}On`];
+            }
+            return jsonResponse(res, s);
         } catch {
             return sendError(res, "invalid JSON", 400);
         }

@@ -53,6 +53,14 @@ firmware through REST API. Everything runs on the device itself.
    → PAUSED), second call stops (PAUSED → IDLE). Resume reuses house/spot endpoints to
    continue. GetErr parser fixed for code 200 (UI_ALERT_INVALID = no error). Mock server
    updated with pause state transitions.
+11. **ESP32-managed schedule** — 7-day cleaning schedule managed entirely on ESP32 (robot
+   serial GetSchedule/SetSchedule NOT used — D5 4.6.0 doesn't support them). NVS storage
+   with flat keys (`scheduleEnabled`, `sched{0-6}{Hour,Min,On}`, Mon=0..Sun=6). Scheduler
+   class checks time via `SystemManager::now()` every 30s, fires within a 5-minute window
+   (`SCHEDULE_WINDOW_MINS`), guards against duplicate triggers and robot-busy states.
+   Schedule events logged to DataLogger (trigger/skipped/failed). Frontend schedule page
+   (`#/schedule`) navigated from Settings > Robot. `CMD_UNSUPPORTED` status added to
+   serial state machine. Settings view refactored into submodules (`settings/` directory).
 
 Details for completed phases are documented in the Architecture, API routes, and
 reference sections below.
@@ -599,9 +607,9 @@ Laser_RPM,52428 Charger_MaxPWM,65536 Charger_PWM,-858993460 Charger_mAH,52428
 - Consumer-facing UI, not a debug tool — show human-readable status, not raw sensor dumps
 - Mobile-first responsive design with breakpoints at 400px, 600px, 900px
 - Dark theme as default, user-selectable theme (auto/light/dark) via settings page
-- Hash-based routing (`#/` dashboard, `#/settings` settings, `#/logs` logs) — persists
-  across refresh, supports browser back/forward via `Router`/`Route` components and
-  `useRoute` hook
+- Hash-based routing (`#/` dashboard, `#/settings` settings, `#/logs` logs,
+  `#/schedule` schedule) — persists across refresh, supports browser back/forward
+  via `Router`/`Route` components and `useRoute` hook
 
 **Layout structure:**
 - Header: "OpenNeato" branding left, gear icon (settings) right
@@ -716,7 +724,10 @@ firmware/
                            #   CommandStatus enum, AsyncCache TTL defines
                            #   (CACHE_TTL_STATE, CACHE_TTL_CHARGER, etc.),
                            #   heap watchdog defines (HEAP_WATCHDOG_THRESHOLD,
-                           #   HEAP_WATCHDOG_DURATION_MS)
+                           #   HEAP_WATCHDOG_DURATION_MS),
+                           #   schedule defines (NVS_KEY_SCHED_ENABLED,
+                           #   SCHEDULE_DAYS, SCHEDULE_CHECK_INTERVAL_MS,
+                           #   SCHEDULE_WINDOW_MINS)
     async_cache.h          # Generic AsyncCache<T> template: TTL-based caching with
                            #   request deduplication and explicit invalidation. Stores
                            #   last value + timestamp, coalesces concurrent waiters
@@ -728,10 +739,10 @@ firmware/
                            #   "neato" NVS namespace opened once, shared by ref),
                            #   WiFi event handlers -> dataLogger.logWifi() (registered
                            #   BEFORE wifiManager.begin() to capture boot events),
-                           #   WiFiManager/FirmwareManager logger callbacks wired to
-                           #   DataLogger. SettingsManager wiring (tz change callback ->
-                           #   SystemManager::applyTimezone), robot time fallback
-                           #   via GetTime, NTP-to-robot clock sync, periodic
+                           #   WiFiManager/FirmwareManager/Scheduler logger callbacks
+                           #   wired to DataLogger. SettingsManager wiring (tz change
+                           #   callback -> SystemManager::applyTimezone), robot time
+                           #   fallback via GetTime, NTP-to-robot clock sync, periodic
                            #   re-sync (4h), factory reset (button hold clears
                            #   NVS + restart). Deferred web server start: if WiFi
                            #   is slow at boot (DHCP timeout), web server starts
@@ -762,6 +773,20 @@ firmware/
                            #   written). ApplyResult enum (UNCHANGED, CHANGED,
                            #   INVALID). needReboot flag for pin/hostname changes.
                            #   onTzChange() callback mechanism.
+                           #   SchedDay struct + scheduleEnabled/sched[7] for
+                           #   ESP32-managed 7-day schedule (flat NVS keys:
+                           #   s0h/s0m/s0on..s6h/s6m/s6on, Mon=0..Sun=6).
+                           #   Flat JSON keys: sched{0-6}{Hour,Min,On}.
+    scheduler.h/cpp        # ESP32-managed cleaning scheduler. Checks system time
+                           #   against 7-day schedule in SettingsManager, issues
+                           #   Clean House via NeatoSerial when scheduled time is
+                           #   reached. Window-based triggering (SCHEDULE_WINDOW_MINS),
+                           #   duplicate fire guard (firedDay/firedSlot), robot idle
+                           #   check via getState cache. Graceful busy handling:
+                           #   marks slot as fired if robot already cleaning.
+                           #   LogCallback for DataLogger integration (trigger,
+                           #   skipped, trigger_failed, state_error events).
+                           #   Uses SystemManager::now() for time (NTP + fallback).
     system_manager.h/cpp   # NTP time sync, applyTimezone() for POSIX TZ (called
                            #   via SettingsManager callback, no longer owns TZ in
                            #   NVS). SystemHealth struct (JsonSerializable) returned
@@ -834,6 +859,7 @@ firmware/
                            #   MotorData, RobotState, ErrorData, AccelData, ButtonData,
                            #   LdsScanData), CSV parsers, toFields() implementations,
                            #   SoundId enum
+                           #   CMD_UNSUPPORTED status added to serial state machine.
     neato_serial.h/cpp     # UART command queue state machine (IDLE -> SENDING ->
                            #   WAITING_RESPONSE -> INTER_DELAY -> IDLE), typed
                            #   convenience methods (getCharger, getVersion, etc.)
@@ -880,7 +906,8 @@ frontend/
   src/
     main.tsx               # Preact render entry point
     app.tsx                # Root shell: theme management, polling, Router with
-                           #   Route declarations for dashboard, settings, logs views
+                           #   Route declarations for dashboard, settings, logs,
+                           #   schedule views
     types.ts               # TypeScript interfaces (ChargerData, AnalogSensorData,
                            #   LogFileInfo, SettingsData, etc.)
     api.ts                 # Typed fetch wrappers for all API endpoints (get/post/put/del
@@ -890,6 +917,7 @@ frontend/
     hooks/
       use-polling.ts       # Generic polling hook with configurable interval
       use-route.ts         # Hash-based routing hook (reads/writes location.hash)
+      use-fetch.ts         # Generic one-shot fetch hook (loading/data/error state)
     components/
       icon.tsx             # SVG renderer component using dangerouslySetInnerHTML
       battery-icon.tsx     # Dynamic battery with clipPath + color thresholds
@@ -926,6 +954,16 @@ frontend/
                            #   hostname, UART pins, WiFi TX power. Device restart
                            #   and factory reset with type-to-confirm. Unsaved
                            #   changes guards (beforeunload + in-app navigation).
+      settings/            # Settings view submodules (extracted from settings.tsx)
+        constants.ts       # TIMEZONE_PRESETS, TX_POWER_PRESETS arrays
+        helpers.ts         # findPresetLabel(), formatRobotTime() utilities
+        settings-category.tsx  # Collapsible category component
+        use-reboot.ts      # Reboot polling hook (polls /api/system until uptime drops)
+        use-settings-form.ts   # Settings form state, dirty detection, save logic
+      schedule.tsx         # Schedule view: 7-day Mon-Sun cleaning schedule,
+                           #   per-day toggle + time picker (hour/minute selects),
+                           #   master enable/disable toggle, uses flat settings keys.
+                           #   Navigated from Settings > Robot > Cleaning Schedule.
       logs.tsx             # Logs view: file list with size/date, detail view with
                            #   parsed JSON-lines entries, type badges, delete actions.
                            #   Collapsible raw response in command entries (debug log).
@@ -935,7 +973,7 @@ frontend/
       icons/               # SVG icons loaded via ?raw import (alert, back, battery,
                            #   bolt, check, clock, database, gear, house, idle, moon,
                            #   palette, pause, play, power, robot, sparkle, spot,
-                           #   stethoscope, stop, sun, tag, wifi, wifi-off)
+                           #   stethoscope, stop, sun, tag, wifi, wifi-off, calendar)
   mock/
     server.js              # Mock API server (plain Node.js http, zero deps),
                            #   SCENARIO selector for quick state switching,
@@ -946,6 +984,8 @@ frontend/
                            #   fp, fal, etc.) with pipe-separated combining.
                            #   Reboot simulation via mutable bootTime reset on
                            #   restart/reset/pin-change/hostname-change requests.
+                           #   Schedule: flat keys (sched{0-6}{Hour,Min,On}) in
+                           #   state, GET/PUT handlers with loops.
   scripts/
     embed_frontend.js      # Auto-discovers all dist/ files, gzips each, generates
                            #   firmware/src/web_assets.h with WebAsset registry
@@ -980,7 +1020,7 @@ frontend/
 | GET | `/api/system` | Live system health (heap, uptime, RSSI, SPIFFS, NTP) |
 | POST | `/api/system/restart` | Deferred restart via SystemManager |
 | POST | `/api/system/reset` | Factory reset (NVS clear + WiFi + SPIFFS format) via SystemManager |
-| GET | `/api/settings` | All user settings (tz, debugLog, hostname, wifiTxPower, uartTxPin, uartRxPin) |
+| GET | `/api/settings` | All user settings (tz, debugLog, hostname, wifiTxPower, uartTxPin, uartRxPin, scheduleEnabled, sched{0-6}{Hour,Min,On}) |
 | PUT | `/api/settings` | Partial settings update (body: `{"tz":"...","debugLog":true}`) |
 
 

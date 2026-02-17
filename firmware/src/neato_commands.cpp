@@ -27,8 +27,6 @@ const char *commandToString(NeatoCommand cmd) {
             return "GetAccel";
         case CMD_GET_BUTTONS:
             return "GetButtons";
-        case CMD_GET_SCHEDULE:
-            return "GetSchedule";
         case CMD_GET_TIME:
             return "GetTime";
         case CMD_GET_CAL_INFO:
@@ -653,6 +651,8 @@ bool parseLdsScanData(const String& raw, LdsScanData& out) {
     }
     return foundData;
 }
+
+// -- Time parser -------------------------------------------------------------
 
 bool parseTimeData(const String& raw, TimeData& out) {
     // Format: "Sunday 13:57:09" (DayOfWeek HH:MM:SS)

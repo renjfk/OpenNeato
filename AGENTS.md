@@ -227,11 +227,61 @@ Robot GND -> ESP GND. The robot provides 3.3V to power the ESP.
 - `SetSystemMode [Shutdown|Hibernate|Standby]` — Power control (mutually exclusive)
 
 **Hidden commands (undocumented, found via reverse engineering):**
-- `GetRobotPos Raw/Smooth` — Odometry/localized position
-- `GetDatabase All/Factory/Robot/Runtime/Statistics/System/CleanStats`
-- `GetActiveServices` — Running services
-- `SetUIError setalert/clearalert/clearall/list` — UI error state machine
-- `NewBattery` — Tell robot new battery installed
+- `GetRobotPos [Raw|Smooth]` — Robot position (Raw = odometry, Smooth = smoothed/localized)
+- `GetDatabase [All|Factory|Robot|Runtime|Statistics|System|CleanStats]` — Show database tables
+- `GetActiveServices` — Display all running services
+- `SetUIError [setalert|clearalert|clearall|list]` — UI error state machine control
+  - `setalert` — Sets specified UI alert or error
+  - `clearalert` — Clears specified UI alert or error
+  - `clearall` — Clears all UI alerts and errors
+  - `list` — Lists all UI alerts and errors
+- `NewBattery` — Tell robot new battery installed (may fix charging issues with new battery)
+- `GetState` — Gets UI Finite State Machine state (standard command on newer firmware)
+- `Log [Text <text>|Flush]` — Write text to log or flush log entries
+- `CopyDumps` — Copy all core dumps to EMMC and pack them
+- `GetLoggingType` — Display log type (QA, NavPen, or Production)
+- `GetRobotPassword` — Returns robot's saved random password
+- `RunUSMFGTest` — Run Ultrasonic MFG Test (function unknown)
+- `GetI2CBlowerInfo` — Get I2C Blower Registers (TestMode only)
+- `USBLogCopy` — Copy all logs to USB drive
+- `CalibrateSensor` — Auto-calibrate sensors and store to SCB (requires security key)
+- `CalibrateAccelerometer` — Calibrate accelerometer X/Y positions (requires security key)
+- `GetStats` — Show system statistics (unimplemented: "Not supported yet...")
+- `SetApp Alert` — Set alert/error to be sent to app
+- `UpdateSW [GetStatus|Verify|Terminate]` — Software update control
+  - `GetStatus` — Returns status of SW update
+  - `Verify` — Returns status of SW update
+  - `Terminate` — Force shutdown of SoftwareManager
+- `TestPWM` — PWM testing (function unknown)
+- `GetWifiStatus [mfgtest|registry|sloginfo|wpacfg|...]` — WiFi diagnostics
+  - `mfgtest` — MFG test to check if WiFi chip present
+  - `registry` — Show WiFi registries
+  - `sloginfo [Pattern] [Pattern2] [Exclude] [clear]` — WiFi log info with pattern matching
+  - `wpacfg` — Show /emmc/wpa_supplicant.cfg file
+- `Clean` — Extended flags beyond standard House/Spot/Stop:
+  - `Persistent` — Start persistent cleaning (as from Smart App)
+  - `Width <cm>` — Spot width 100-400cm (-1 = default)
+  - `Height <cm>` — Spot height 100-400cm (-1 = default)
+  - `AutoCycle` — Auto cycle mode (cleared by shutdown or Clean Stop, not with Spot)
+  - `MinCharge <percent>` — Min charge to trigger recharge (-1 = default 50%)
+  - `NavTest` — Navigation test mode
+  - `CleaningEnable` — Enable brush and vacuum during cleaning
+  - `CleaningDisable` — Disable brush and vacuum during cleaning
+  - `IEC1mTest` — Run IEC cleaning test
+  - `MaxModeEnable` — Enable max cleaning mode
+  - `MaxModeDisable` — Disable max cleaning mode
+- `ClearFiles [BB] [All] [Life]` — Clear log files
+  - `BB` — Clear managed logs in BlackBox directory
+  - `All` — Additionally clear unmanaged files (crash logs, etc.)
+  - `Life` — Function unknown
+
+**Notes on hidden commands:**
+- Most hidden commands found in firmware 3.2.0-4.5.3 via reverse engineering
+- Some require security keys (CalibrateSensor, CalibrateAccelerometer)
+- Some are unimplemented (GetStats)
+- Function of some commands unknown (RunUSMFGTest, TestPWM)
+- D3-D7 support varies by firmware version
+- **No WiFi control commands** — robot WiFi is managed internally, no serial access
 
 ### Response Formats
 

@@ -3,7 +3,7 @@
 
 // Firmware version — passed via build flag (-DFIRMWARE_VERSION=...), fallback for local builds
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "0.0.0-dev"
+#define FIRMWARE_VERSION "0.0.0"
 #endif
 
 // WiFi Configuration

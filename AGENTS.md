@@ -612,20 +612,24 @@ Laser_RPM,52428 Charger_MaxPWM,65536 Charger_PWM,-858993460 Charger_mAH,52428
 **Settings page:**
 - Full page swap (gear icon → settings, back arrow → dashboard)
 - Header: back button (left), "Settings" title (center), spacer (right)
-- Appearance section: 3-button theme selector (Auto, Light, Dark)
+- Collapsible categories: each section is a `SettingsCategory` component with icon,
+  title, and chevron. Expand/collapse animated via CSS `grid-template-rows` (0fr→1fr).
+  Categories: Appearance (palette icon, default open), Network (wifi icon),
+  Robot (robot vacuum icon), Diagnostics (stethoscope icon).
+- Appearance category: 3-button theme selector (Auto, Light, Dark)
 - Theme preference persisted in localStorage, defaults to system if unset
-- Timezone section: dropdown with 16 common POSIX TZ presets (UTC offset shown)
-- Robot time display: dimmed small text below timezone selector showing current
-  robot time (from `GET /api/system` `time` field) adjusted by selected TZ offset
-- Hostname section: text input (max 32 chars, alphanumeric + hyphens)
-- WiFi TX Power section: dropdown with dBm presets (8.5–19.5 dBm)
-- UART Pins section: two number inputs (TX/RX, 0–21), validation (no duplicates)
-- Diagnostics section: debug logging toggle, "Logs" nav row (database icon + chevron)
-- Unified Save button before Diagnostics: "Save" for non-reboot changes, "Save & Reboot"
-  when hostname or pins changed — shows confirm dialog before rebooting
+- Network category: hostname text input (max 32 chars, alphanumeric + hyphens),
+  WiFi TX Power dropdown with dBm presets (8.5–19.5 dBm)
+- Robot category: timezone dropdown with 16 common POSIX TZ presets (UTC offset shown),
+  robot time display (dimmed small text from `GET /api/system` `time` field adjusted
+  by selected TZ offset), UART Pins (two number inputs TX/RX 0–21, no duplicates)
+- Diagnostics category: debug logging toggle, "Logs" nav row (database icon + chevron)
+- Unified Save button between categories and Device section: "Save" for non-reboot
+  changes, "Save & Reboot" when hostname or pins changed — shows confirm dialog
 - Unsaved changes guards: `beforeunload` prevents tab close, in-app navigation (back
   button, logs link) shows "Discard unsaved changes?" confirm dialog
-- Device section: Restart button, Factory Reset button (type-to-confirm "RESET")
+- Device section (not collapsible): Restart button, Factory Reset button
+  (type-to-confirm "RESET")
 
 **Logs page:**
 - Navigated from settings Diagnostics section, back button returns to settings
@@ -698,7 +702,7 @@ structure. This avoids redundant codebase exploration and keeps agents productiv
 platformio.ini             # PIO config (src_dir = firmware/src)
 scripts/
   env_config.py            # Pre-build script: injects FIRMWARE_VERSION build flag,
-                           #   auto-generates 0.0.0-dev+<git-hash> when not set,
+                           #   auto-generates 0.0.0+<git-hash> when not set,
                            #   sets UPLOAD_PORT from NEATO_HOST env var for OTA uploads,
                            #   BUILD_FRONTEND=1 triggers `npm run build` before compile
 firmware/
@@ -910,7 +914,11 @@ frontend/
                            #   Pause/resume/stop: Idle shows Pause (disabled), Running
                            #   shows Pause (enabled), Paused shows play icon + "Resume"
                            #   on relevant button (House or Spot) and Stop enabled.
-      settings.tsx         # Settings view: appearance theme selector, timezone
+      settings.tsx         # Settings view: collapsible categories (Appearance,
+                           #   Network, Robot, Diagnostics) with icons and animated
+                           #   expand/collapse via CSS grid-template-rows. Each
+                           #   category is a SettingsCategory component with icon,
+                           #   title, and chevron. Appearance theme selector, timezone
                            #   dropdown with POSIX TZ presets, robot time display,
                            #   debug logging toggle (fetches/updates via settings API)
                            #   Unified settings page with single Save button
@@ -926,7 +934,8 @@ frontend/
       robot.svg            # Main robot illustration (30KB, vectorized 4-layer greyscale)
       icons/               # SVG icons loaded via ?raw import (alert, back, battery,
                            #   bolt, check, clock, database, gear, house, idle, moon,
-                           #   pause, play, power, sparkle, spot, stop, sun, tag, wifi, wifi-off)
+                           #   palette, pause, play, power, robot, sparkle, spot,
+                           #   stethoscope, stop, sun, tag, wifi, wifi-off)
   mock/
     server.js              # Mock API server (plain Node.js http, zero deps),
                            #   SCENARIO selector for quick state switching,
@@ -980,7 +989,7 @@ frontend/
 ### Firmware
 
 ```bash
-pio run -e Debug                        # Build (auto version: 0.0.0-dev+<git-hash>)
+pio run -e Debug                        # Build (auto version: 0.0.0+<git-hash>)
 FIRMWARE_VERSION=1.0.0 pio run -e Debug # Build with specific version
 BUILD_FRONTEND=1 pio run -e Debug       # Build frontend + firmware in one step
 pio run -e Debug -t upload              # Build and upload via USB serial
@@ -994,7 +1003,7 @@ clang-format -i firmware/src/*.cpp firmware/src/*.h  # Format code
 ```
 
 **Version handling**: When `FIRMWARE_VERSION` is not set, the build script auto-generates
-a version string from the git commit hash: `0.0.0-dev+<short-hash>`. This provides
+a version string from the git commit hash: `0.0.0+<short-hash>`. This provides
 traceability for development builds without manual version management.
 
 **Monitor baud rate**: 115200
@@ -1027,6 +1036,48 @@ lint rules.
   - Static alloc, window=10, lookahead=5, 32-bit mode, patched `hs_search.hpp`
     for GCC 8.4 compatibility (removed `constexpr` from defaulted copy assignment)
 - Built-in: `Preferences @ 2.0.0`, `WiFi @ 2.0.0`, `SPIFFS @ 2.0.0`, `Update @ 2.0.0`
+
+## Zero-Dependency Policy
+
+This project enforces a strict zero-dependency policy for both firmware and frontend.
+The ESP32-C3 has 320KB RAM and 1600KB per OTA slot — every kilobyte of unused framework
+or library code is waste that directly reduces capacity for actual features.
+
+**Rationale**: External libraries and frameworks ship generalized code designed for broad
+use cases. On a constrained embedded target, this generality becomes bloat — unused
+features still consume flash, RAM, and compile time. Writing purpose-built code that does
+exactly what we need and nothing more produces smaller binaries, lower memory usage, and
+fewer surprises at runtime.
+
+**Firmware rules:**
+- No external libraries beyond what is already listed in Dependencies above
+- No JSON libraries (ArduinoJson, cJSON, etc.) — use the project's own `json_fields.h/cpp`
+  lightweight field-based serializer, which compiles to a fraction of the size
+- No HTTP client libraries — browser-side fetch handles all outbound HTTP
+- No MQTT, WebSocket, or pub/sub libraries — REST over ESPAsyncWebServer is sufficient
+- Vendor and patch individual source files when a small, focused library is genuinely
+  needed (as done with heatshrink) rather than pulling in a full dependency
+- Use ESP-IDF / Arduino built-in APIs directly (Preferences, WiFi, SPIFFS, Update)
+
+**Frontend rules:**
+- No npm runtime dependencies beyond Preact (the only framework dependency)
+- No state management libraries (Redux, Zustand, etc.) — use Preact hooks and props
+- No CSS frameworks or utility libraries (Tailwind, styled-components, etc.) — use
+  a single `style.css` with CSS variables
+- No routing libraries — use the project's own hash-based `Router`/`Route` components
+- No HTTP/fetch wrapper libraries (axios, ky, etc.) — use the project's own `api.ts`
+- Dev dependencies (Vite, Biome, TypeScript) are acceptable since they do not ship
+  in the final binary
+
+**When to make exceptions**: Only when all of the following are true:
+1. The functionality is complex enough that a correct implementation is non-trivial
+   (cryptography, compression algorithms, protocol stacks)
+2. No ESP-IDF / Arduino built-in API covers the need
+3. The library can be vendored and trimmed to only the required source files
+4. The size impact has been measured and is acceptable within the OTA slot budget
+
+**Never propose** adding a dependency without first explaining why the existing built-in
+APIs and project utilities are insufficient.
 
 ## Code Style
 

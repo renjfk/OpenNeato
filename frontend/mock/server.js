@@ -10,9 +10,9 @@ const { execSync } = require("node:child_process");
 const getVersion = () => {
     try {
         const hash = execSync("git rev-parse --short=7 HEAD", { encoding: "utf8" }).trim();
-        return `0.0.0-dev+${hash}`;
+        return `0.0.0+${hash}`;
     } catch {
-        return "0.0.0-dev";
+        return "0.0.0";
     }
 };
 

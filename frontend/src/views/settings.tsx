@@ -1,3 +1,4 @@
+import type { ComponentChildren } from "preact";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../api";
 import alertSvg from "../assets/icons/alert.svg?raw";
@@ -5,7 +6,10 @@ import backSvg from "../assets/icons/back.svg?raw";
 import clockSvg from "../assets/icons/clock.svg?raw";
 import databaseSvg from "../assets/icons/database.svg?raw";
 import moonSvg from "../assets/icons/moon.svg?raw";
+import paletteSvg from "../assets/icons/palette.svg?raw";
 import powerSvg from "../assets/icons/power.svg?raw";
+import robotSvg from "../assets/icons/robot.svg?raw";
+import stethoscopeSvg from "../assets/icons/stethoscope.svg?raw";
 import sunSvg from "../assets/icons/sun.svg?raw";
 import wifiSvg from "../assets/icons/wifi.svg?raw";
 import { ConfirmDialog } from "../components/confirm-dialog";
@@ -83,6 +87,34 @@ function formatRobotTime(epochSec: number, tz: string): string {
     }
     const d = new Date(epochSec * 1000);
     return d.toUTCString().replace(" GMT", " UTC");
+}
+
+function SettingsCategory({
+    title,
+    icon,
+    defaultOpen = false,
+    children,
+}: {
+    title: string;
+    icon: string;
+    defaultOpen?: boolean;
+    children: ComponentChildren;
+}) {
+    const [open, setOpen] = useState(defaultOpen);
+    return (
+        <div class={`settings-category${open ? " open" : ""}`}>
+            <button type="button" class="settings-category-header" onClick={() => setOpen(!open)}>
+                <div class="settings-category-title">
+                    <Icon svg={icon} />
+                    {title}
+                </div>
+                <span class="settings-category-chevron">&rsaquo;</span>
+            </button>
+            <div class="settings-category-body">
+                <div class="settings-category-inner">{children}</div>
+            </div>
+        </div>
+    );
 }
 
 interface SettingsViewProps {
@@ -335,169 +367,179 @@ export function SettingsView({ theme, onThemeChange, system }: SettingsViewProps
             <ErrorBannerStack errors={errors} />
 
             <div class="settings-page">
-                <div class="settings-section">
-                    <div class="settings-section-title">Appearance</div>
-                    <div class="settings-theme-row">
-                        <button
-                            type="button"
-                            class={`settings-theme-btn${theme === "system" ? " active" : ""}`}
-                            onClick={() => onThemeChange("system")}
-                        >
-                            <div class="settings-theme-icon">
-                                <Icon svg={sunSvg} />
-                                <Icon svg={moonSvg} />
-                            </div>
-                            Auto
-                        </button>
-                        <button
-                            type="button"
-                            class={`settings-theme-btn${theme === "light" ? " active" : ""}`}
-                            onClick={() => onThemeChange("light")}
-                        >
-                            <div class="settings-theme-icon">
-                                <Icon svg={sunSvg} />
-                            </div>
-                            Light
-                        </button>
-                        <button
-                            type="button"
-                            class={`settings-theme-btn${theme === "dark" ? " active" : ""}`}
-                            onClick={() => onThemeChange("dark")}
-                        >
-                            <div class="settings-theme-icon">
-                                <Icon svg={moonSvg} />
-                            </div>
-                            Dark
-                        </button>
-                    </div>
-                </div>
-
-                <div class="settings-section">
-                    <div class="settings-section-title">Timezone</div>
-                    <div class="settings-tz-select-wrap">
-                        <select
-                            class="settings-tz-select"
-                            value={isCustom ? "__custom__" : tz}
-                            onChange={(e) => {
-                                const val = (e.target as HTMLSelectElement).value;
-                                if (val !== "__custom__") setTz(val);
-                            }}
-                            disabled={saving}
-                        >
-                            {TIMEZONE_PRESETS.map((p) => (
-                                <option key={p.tz} value={p.tz}>
-                                    {p.label}
-                                </option>
-                            ))}
-                            {isCustom && (
-                                <option value="__custom__" disabled>
-                                    Custom: {tz}
-                                </option>
-                            )}
-                        </select>
-                    </div>
-                    {system?.time && (
-                        <div class="settings-robot-time">
-                            <Icon svg={clockSvg} />
-                            Robot time: {formatRobotTime(system.time, tz)}
+                <SettingsCategory title="Appearance" icon={paletteSvg} defaultOpen>
+                    <div class="settings-section">
+                        <div class="settings-section-title">Appearance</div>
+                        <div class="settings-theme-row">
+                            <button
+                                type="button"
+                                class={`settings-theme-btn${theme === "system" ? " active" : ""}`}
+                                onClick={() => onThemeChange("system")}
+                            >
+                                <div class="settings-theme-icon">
+                                    <Icon svg={sunSvg} />
+                                    <Icon svg={moonSvg} />
+                                </div>
+                                Auto
+                            </button>
+                            <button
+                                type="button"
+                                class={`settings-theme-btn${theme === "light" ? " active" : ""}`}
+                                onClick={() => onThemeChange("light")}
+                            >
+                                <div class="settings-theme-icon">
+                                    <Icon svg={sunSvg} />
+                                </div>
+                                Light
+                            </button>
+                            <button
+                                type="button"
+                                class={`settings-theme-btn${theme === "dark" ? " active" : ""}`}
+                                onClick={() => onThemeChange("dark")}
+                            >
+                                <div class="settings-theme-icon">
+                                    <Icon svg={moonSvg} />
+                                </div>
+                                Dark
+                            </button>
                         </div>
-                    )}
-                </div>
+                    </div>
+                </SettingsCategory>
 
-                <div class="settings-section">
-                    <div class="settings-section-title">Hostname</div>
-                    <input
-                        type="text"
-                        class="settings-text-input"
-                        value={hostname}
-                        maxLength={32}
-                        onInput={(e) => setHostname((e.target as HTMLInputElement).value)}
-                        disabled={saving}
-                        placeholder="neato"
-                    />
-                    {hostnameError ? (
-                        <div class="settings-field-error">{hostnameError}</div>
-                    ) : (
-                        <div class="settings-robot-time">mDNS hostname for the device on your network</div>
-                    )}
-                </div>
-
-                <div class="settings-section">
-                    <div class="settings-section-title">WiFi TX Power</div>
-                    <div class="settings-tz-select-wrap">
-                        <select
-                            class="settings-tz-select"
-                            value={wifiTxPower}
-                            onChange={(e) => setWifiTxPower(parseInt((e.target as HTMLSelectElement).value, 10))}
+                <SettingsCategory title="Network" icon={wifiSvg}>
+                    <div class="settings-section">
+                        <div class="settings-section-title">Hostname</div>
+                        <input
+                            type="text"
+                            class="settings-text-input"
+                            value={hostname}
+                            maxLength={32}
+                            onInput={(e) => setHostname((e.target as HTMLInputElement).value)}
                             disabled={saving}
-                        >
-                            {TX_POWER_PRESETS.map((p) => (
-                                <option key={p.value} value={p.value}>
-                                    {p.label}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                    <div class="settings-robot-time">
-                        <Icon svg={wifiSvg} />
-                        Lower power reduces range but improves stability on serial port power
-                    </div>
-                </div>
-
-                <div class="settings-section">
-                    <div class="settings-section-title">UART Pins</div>
-                    <div class="settings-pin-row">
-                        <label class="settings-pin-label">
-                            TX (ESP → Robot)
-                            <input
-                                type="number"
-                                class="settings-pin-input"
-                                min={0}
-                                max={21}
-                                value={uartTxPin}
-                                onChange={(e) => setUartTxPin(parseInt((e.target as HTMLInputElement).value, 10) || 0)}
-                                disabled={saving}
-                            />
-                        </label>
-                        <label class="settings-pin-label">
-                            RX (Robot → ESP)
-                            <input
-                                type="number"
-                                class="settings-pin-input"
-                                min={0}
-                                max={21}
-                                value={uartRxPin}
-                                onChange={(e) => setUartRxPin(parseInt((e.target as HTMLInputElement).value, 10) || 0)}
-                                disabled={saving}
-                            />
-                        </label>
-                    </div>
-                    {pinError && <div class="settings-field-error">{pinError}</div>}
-                </div>
-
-                <div class="settings-section">
-                    <div class="settings-section-title">Diagnostics</div>
-                    <div class="settings-toggle-row">
-                        <div class="settings-toggle-label">
-                            <span class="settings-toggle-title">Debug logging</span>
-                            <span class="settings-toggle-desc">Include serial responses in logs</span>
-                        </div>
-                        <button
-                            type="button"
-                            class={`settings-toggle${debugLog ? " on" : ""}`}
-                            onClick={() => setDebugLog(!debugLog)}
-                            disabled={saving}
-                            aria-label="Toggle debug logging"
+                            placeholder="neato"
                         />
+                        {hostnameError ? (
+                            <div class="settings-field-error">{hostnameError}</div>
+                        ) : (
+                            <div class="settings-robot-time">mDNS hostname for the device on your network</div>
+                        )}
                     </div>
-                    <button type="button" class="settings-nav-row" onClick={() => guardedNavigate("/logs")}>
-                        <div class="settings-nav-row-left">
-                            <Icon svg={databaseSvg} />
-                            Logs
+                    <div class="settings-section">
+                        <div class="settings-section-title">WiFi TX Power</div>
+                        <div class="settings-tz-select-wrap">
+                            <select
+                                class="settings-tz-select"
+                                value={wifiTxPower}
+                                onChange={(e) => setWifiTxPower(parseInt((e.target as HTMLSelectElement).value, 10))}
+                                disabled={saving}
+                            >
+                                {TX_POWER_PRESETS.map((p) => (
+                                    <option key={p.value} value={p.value}>
+                                        {p.label}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
-                        <span class="settings-nav-chevron">&rsaquo;</span>
-                    </button>
-                </div>
+                        <div class="settings-robot-time">
+                            <Icon svg={wifiSvg} />
+                            Lower power reduces range but improves stability on serial port power
+                        </div>
+                    </div>
+                </SettingsCategory>
+
+                <SettingsCategory title="Robot" icon={robotSvg}>
+                    <div class="settings-section">
+                        <div class="settings-section-title">Timezone</div>
+                        <div class="settings-tz-select-wrap">
+                            <select
+                                class="settings-tz-select"
+                                value={isCustom ? "__custom__" : tz}
+                                onChange={(e) => {
+                                    const val = (e.target as HTMLSelectElement).value;
+                                    if (val !== "__custom__") setTz(val);
+                                }}
+                                disabled={saving}
+                            >
+                                {TIMEZONE_PRESETS.map((p) => (
+                                    <option key={p.tz} value={p.tz}>
+                                        {p.label}
+                                    </option>
+                                ))}
+                                {isCustom && (
+                                    <option value="__custom__" disabled>
+                                        Custom: {tz}
+                                    </option>
+                                )}
+                            </select>
+                        </div>
+                        {system?.time && (
+                            <div class="settings-robot-time">
+                                <Icon svg={clockSvg} />
+                                Robot time: {formatRobotTime(system.time, tz)}
+                            </div>
+                        )}
+                    </div>
+                    <div class="settings-section">
+                        <div class="settings-section-title">UART Pins</div>
+                        <div class="settings-pin-row">
+                            <label class="settings-pin-label">
+                                TX (ESP → Robot)
+                                <input
+                                    type="number"
+                                    class="settings-pin-input"
+                                    min={0}
+                                    max={21}
+                                    value={uartTxPin}
+                                    onChange={(e) =>
+                                        setUartTxPin(parseInt((e.target as HTMLInputElement).value, 10) || 0)
+                                    }
+                                    disabled={saving}
+                                />
+                            </label>
+                            <label class="settings-pin-label">
+                                RX (Robot → ESP)
+                                <input
+                                    type="number"
+                                    class="settings-pin-input"
+                                    min={0}
+                                    max={21}
+                                    value={uartRxPin}
+                                    onChange={(e) =>
+                                        setUartRxPin(parseInt((e.target as HTMLInputElement).value, 10) || 0)
+                                    }
+                                    disabled={saving}
+                                />
+                            </label>
+                        </div>
+                        {pinError && <div class="settings-field-error">{pinError}</div>}
+                    </div>
+                </SettingsCategory>
+
+                <SettingsCategory title="Diagnostics" icon={stethoscopeSvg}>
+                    <div class="settings-section">
+                        <div class="settings-section-title">Diagnostics</div>
+                        <div class="settings-toggle-row">
+                            <div class="settings-toggle-label">
+                                <span class="settings-toggle-title">Debug logging</span>
+                                <span class="settings-toggle-desc">Include serial responses in logs</span>
+                            </div>
+                            <button
+                                type="button"
+                                class={`settings-toggle${debugLog ? " on" : ""}`}
+                                onClick={() => setDebugLog(!debugLog)}
+                                disabled={saving}
+                                aria-label="Toggle debug logging"
+                            />
+                        </div>
+                        <button type="button" class="settings-nav-row" onClick={() => guardedNavigate("/logs")}>
+                            <div class="settings-nav-row-left">
+                                <Icon svg={databaseSvg} />
+                                Logs
+                            </div>
+                            <span class="settings-nav-chevron">&rsaquo;</span>
+                        </button>
+                    </div>
+                </SettingsCategory>
 
                 <button
                     type="button"

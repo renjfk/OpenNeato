@@ -14,9 +14,25 @@ void WiFiManager::begin() {
             LOG("WIFI", "Connected successfully!");
             LOG("WIFI", "IP: %s", WiFi.localIP().toString().c_str());
             LOG("WIFI", "MAC: %s", WiFi.macAddress().c_str());
+
+            // Log successful boot connection with diagnostics
+            if (loggerCallback) {
+                loggerCallback("boot_connect", {{"ssid", ssid, FIELD_STRING},
+                                                {"ip", WiFi.localIP().toString(), FIELD_STRING},
+                                                {"rssi", String(WiFi.RSSI()), FIELD_INT},
+                                                {"channel", String(WiFi.channel()), FIELD_INT},
+                                                {"bssid", WiFi.BSSIDstr(), FIELD_STRING},
+                                                {"txPower", String(WiFi.getTxPower()), FIELD_INT}});
+            }
             return;
         }
         LOG("WIFI", "Failed to connect with saved credentials");
+
+        // Log boot connection failure
+        if (loggerCallback) {
+            loggerCallback("boot_connect_fail",
+                           {{"ssid", ssid, FIELD_STRING}, {"status", String(WiFi.status()), FIELD_INT}});
+        }
     } else {
         LOG("WIFI", "No saved credentials found");
     }
@@ -259,31 +275,45 @@ bool WiFiManager::connectToWiFi(const String& ssid, const String& password) {
     WiFi.setHostname(hostname.c_str());
     WiFi.mode(WIFI_STA);
     WiFi.setSleep(false); // Disable modem sleep — keeps radio always on
+
+    applyTxPower(); // Set before WiFi.begin — improves association reliability
     WiFi.begin(ssid.c_str(), password.c_str());
 
     // Wait up to 30 seconds (60 attempts x 500ms)
+    unsigned long connectStart = millis();
     int attempts = 0;
     while (WiFi.status() != WL_CONNECTED && attempts < 60) {
         delay(500);
         attempts++;
     }
 
+    unsigned long connectMs = millis() - connectStart;
+
     if (WiFi.status() == WL_CONNECTED) {
-        // Apply TX power after connection — must be called after WiFi.begin()
-        WiFi.setTxPower(static_cast<wifi_power_t>(prefs.getInt(NVS_KEY_WIFI_TX_POWER, WIFI_DEFAULT_TX_POWER)));
-        LOG("WIFI", "TX power set to %.1f dBm", prefs.getInt(NVS_KEY_WIFI_TX_POWER, WIFI_DEFAULT_TX_POWER) * 0.25f);
+        LOG("WIFI", "Connected in %lu ms (%d attempts)", connectMs, attempts);
         wasConnected = true;
         reconnectBackoff = WIFI_RECONNECT_INTERVAL;
+        reconnectAttemptCount = 0;
+    } else {
+        LOG("WIFI", "Connect failed after %lu ms (%d attempts), status=%d", connectMs, attempts, WiFi.status());
+        // Enable auto-reconnect even if boot connect timed out (e.g. slow DHCP).
+        // WiFi may still be associating in the background — let loop() handle
+        // reconnection so the deferred web server start can pick it up.
+        wasConnected = true;
     }
 
     return WiFi.status() == WL_CONNECTED;
 }
 
+void WiFiManager::applyTxPower() {
+    int val = prefs.getInt(NVS_KEY_WIFI_TX_POWER, WIFI_DEFAULT_TX_POWER);
+    WiFi.setTxPower(static_cast<wifi_power_t>(val));
+    LOG("WIFI", "TX power set to %.1f dBm", val * 0.25f);
+}
+
 void WiFiManager::setTxPower(int quarterDbm) {
-    if (WiFi.status() == WL_CONNECTED) {
-        WiFi.setTxPower(static_cast<wifi_power_t>(quarterDbm));
-        LOG("WIFI", "TX power updated to %.1f dBm", quarterDbm * 0.25f);
-    }
+    WiFi.setTxPower(static_cast<wifi_power_t>(quarterDbm));
+    LOG("WIFI", "TX power updated to %.1f dBm", quarterDbm * 0.25f);
 }
 
 void WiFiManager::loop() {
@@ -297,7 +327,9 @@ void WiFiManager::loop() {
         return;
 
     lastReconnectAttempt = now;
-    LOG("WIFI", "Connection lost — reconnecting (backoff %lu ms)...", reconnectBackoff);
+    reconnectAttemptCount++;
+    LOG("WIFI", "Connection lost — reconnecting (attempt %lu, backoff %lu ms)...", reconnectAttemptCount,
+        reconnectBackoff);
 
     String ssid, password;
     if (!loadCredentials(ssid, password))
@@ -313,14 +345,36 @@ void WiFiManager::loop() {
         delay(100);
     }
 
+    unsigned long reconnectMs = millis() - start;
+
     if (WiFi.status() == WL_CONNECTED) {
-        WiFi.setTxPower(static_cast<wifi_power_t>(prefs.getInt(NVS_KEY_WIFI_TX_POWER, WIFI_DEFAULT_TX_POWER)));
+        applyTxPower();
+        LOG("WIFI", "Reconnected! IP: %s, RSSI: %d, attempt: %lu", WiFi.localIP().toString().c_str(), WiFi.RSSI(),
+            reconnectAttemptCount);
+
+        if (loggerCallback) {
+            loggerCallback("reconnect_ok", {{"ssid", ssid, FIELD_STRING},
+                                            {"ip", WiFi.localIP().toString(), FIELD_STRING},
+                                            {"rssi", String(WiFi.RSSI()), FIELD_INT},
+                                            {"channel", String(WiFi.channel()), FIELD_INT},
+                                            {"bssid", WiFi.BSSIDstr(), FIELD_STRING},
+                                            {"attempt", String(reconnectAttemptCount), FIELD_INT},
+                                            {"ms", String(reconnectMs), FIELD_INT}});
+        }
         reconnectBackoff = WIFI_RECONNECT_INTERVAL; // Reset backoff on success
-        LOG("WIFI", "Reconnected! IP: %s", WiFi.localIP().toString().c_str());
+        reconnectAttemptCount = 0;
     } else {
         // Exponential backoff: 5s -> 10s -> 20s -> 30s (capped)
         reconnectBackoff = min(reconnectBackoff * 2, static_cast<unsigned long>(WIFI_MAX_RECONNECT_BACKOFF));
-        LOG("WIFI", "Reconnect failed, next attempt in %lu ms", reconnectBackoff);
+        LOG("WIFI", "Reconnect failed (status=%d), next attempt in %lu ms", WiFi.status(), reconnectBackoff);
+
+        if (loggerCallback) {
+            loggerCallback("reconnect_fail", {{"ssid", ssid, FIELD_STRING},
+                                              {"status", String(WiFi.status()), FIELD_INT},
+                                              {"attempt", String(reconnectAttemptCount), FIELD_INT},
+                                              {"backoff", String(reconnectBackoff), FIELD_INT},
+                                              {"ms", String(reconnectMs), FIELD_INT}});
+        }
     }
 }
 

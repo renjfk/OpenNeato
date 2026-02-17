@@ -164,7 +164,11 @@ void DataLogger::loop() {
 // -- Write buffer (non-blocking log writes) ----------------------------------
 
 void DataLogger::bufferLine(const String& jsonLine) {
-    if (!spiffsReady)
+    // Accept entries even before SPIFFS is ready — they accumulate in memory
+    // and get flushed once begin() mounts SPIFFS. This allows early-boot
+    // events (WiFi connect, NTP) to be captured before dataLogger.begin().
+    // Cap the buffer to prevent unbounded heap growth if SPIFFS init is delayed.
+    if (writeBuffer.size() >= LOG_FLUSH_MAX_LINES * 4)
         return;
     writeBuffer.push_back(jsonLine);
 }

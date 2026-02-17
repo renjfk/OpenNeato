@@ -9,11 +9,12 @@
 // WiFi Configuration
 #define DEFAULT_HOSTNAME "neato"
 #define WIFI_DEFAULT_TX_POWER                                                                                          \
-    34 // WiFi TX power in 0.25 dBm units (34 = 8.5 dBm)
-       // Reduces peak current ~50% vs default ~20 dBm.
+    60 // WiFi TX power in 0.25 dBm units (60 = 15 dBm, ~32 mW)
+       // Lower values caused boot connection failures (4-way handshake
+       // timeouts) at marginal signal levels (-70 dBm range).
        // Range: 8 (2 dBm) to 84 (21 dBm). Common values:
-       //   34 = 8.5 dBm (recommended for serial port power)
-       //   52 = 13 dBm,  68 = 17 dBm,  78 = 19.5 dBm
+       //   34 = 8.5 dBm,  52 = 13 dBm,  60 = 15 dBm (recommended)
+       //   68 = 17 dBm,  78 = 19.5 dBm
 #define WIFI_MAX_RECONNECT_BACKOFF 30000 // Max backoff between reconnect attempts (ms)
 
 // Pin Configuration (ESP32-C3 Boot button is GPIO9)

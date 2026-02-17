@@ -39,18 +39,18 @@ const TIMEZONE_PRESETS: { label: string; tz: string }[] = [
 
 // WiFi TX power presets — value is in 0.25 dBm units (ESP32 wifi_power_t)
 const TX_POWER_PRESETS: { label: string; value: number }[] = [
-    { label: "8.5 dBm (low power, recommended)", value: 34 },
+    { label: "8.5 dBm (low power)", value: 34 },
     { label: "11 dBm", value: 44 },
     { label: "13 dBm", value: 52 },
-    { label: "15 dBm", value: 60 },
+    { label: "15 dBm (recommended)", value: 60 },
     { label: "17 dBm", value: 68 },
-    { label: "19.5 dBm (default, max range)", value: 78 },
+    { label: "19.5 dBm (max range)", value: 78 },
 ];
 
 const DEFAULT_SERVER: SettingsData = {
     tz: "UTC0",
     debugLog: false,
-    wifiTxPower: 34,
+    wifiTxPower: 60,
     uartTxPin: 3,
     uartRxPin: 4,
     hostname: "neato",
@@ -97,7 +97,7 @@ export function SettingsView({ theme, onThemeChange, system }: SettingsViewProps
     // Local form state
     const [tz, setTz] = useState<string>(system?.tz ?? "UTC0");
     const [debugLog, setDebugLog] = useState(false);
-    const [wifiTxPower, setWifiTxPower] = useState(34);
+    const [wifiTxPower, setWifiTxPower] = useState(60);
     const [uartTxPin, setUartTxPin] = useState(3);
     const [uartRxPin, setUartRxPin] = useState(4);
     const [hostname, setHostname] = useState("neato");

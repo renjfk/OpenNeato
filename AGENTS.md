@@ -43,6 +43,9 @@ firmware through REST API. Everything runs on the device itself.
    Deferred reboot pattern via SystemManager. Unsaved changes guards (beforeunload +
    in-app navigation). WiFi stability: configurable TX power, auto-reconnect with
    exponential backoff. Partition resize: 1600KB OTA slots, 768KB SPIFFS.
+   WiFi reliability: TX power applied before WiFi.begin() for reliable boot
+   association, deferred web server start when DHCP is slow, WiFi event logging
+   with RSSI/channel/BSSID diagnostics, default TX power raised to 15 dBm.
 
 Details for completed phases are documented in the Architecture, API routes, and
 reference sections below.
@@ -659,17 +662,26 @@ firmware/
                            #   Header-only (template). Used by NeatoSerial.
     main.cpp               # setup()/loop() entry point, global Preferences (single
                            #   "neato" NVS namespace opened once, shared by ref),
-                           #   WiFi event handlers -> dataLogger.logWifi(), OTA hook,
-                           #   SettingsManager wiring (tz change callback ->
+                           #   WiFi event handlers -> dataLogger.logWifi() (registered
+                           #   BEFORE wifiManager.begin() to capture boot events),
+                           #   WiFiManager/FirmwareManager logger callbacks wired to
+                           #   DataLogger. SettingsManager wiring (tz change callback ->
                            #   SystemManager::applyTimezone), robot time fallback
                            #   via GetTime, NTP-to-robot clock sync, periodic
                            #   re-sync (4h), factory reset (button hold clears
-                           #   NVS + restart)
+                           #   NVS + restart). Deferred web server start: if WiFi
+                           #   is slow at boot (DHCP timeout), web server starts
+                           #   later in loop() once WiFi connects.
                            #   wifiManager.setHostname() at boot from settings
     serial_menu.h/cpp      # Generic interactive serial menu system (state machine,
                            #   formatting helpers: printStatus, printError, etc.)
     wifi_manager.h/cpp     # WiFi config, credential storage (shared Preferences&),
-                           #   network scanning, serial quick commands ([m]enu, [s]tatus)
+                           #   network scanning, serial quick commands ([m]enu, [s]tatus),
+                           #   auto-reconnect with exponential backoff and attempt
+                           #   counting, LogCallback for WiFi event logging (boot
+                           #   connect/fail, reconnect ok/fail with RSSI/channel/
+                           #   BSSID/attempt/backoff/duration), applyTxPower()
+                           #   from NVS before WiFi.begin() for reliable association.
                            #   wifiManager.setHostname() at boot from settings
     firmware_manager.h/cpp # Firmware update business logic using ESP32 Update.h,
                            #   no web server dependency — pure update lifecycle:
@@ -725,7 +737,9 @@ firmware/
                            #   PlainLogReader (thin File wrapper) or CompressedLogReader
                            #   (streaming heatshrink decoder) — web_server uses reader->read()
                            #   with beginChunkedResponse, no decompression knowledge leaks out.
-                           #   Non-blocking design: log writes buffered in memory,
+                           #   Non-blocking design: log writes buffered in memory
+                           #   (accepts entries before SPIFFS is ready for early-boot
+                           #   events, capped at LOG_FLUSH_MAX_LINES*4 to bound heap),
                            #   flushed to SPIFFS in loop(); log rotation uses fast
                            #   rename + incremental heatshrink compression across
                            #   loop() iterations; bulk delete deferred one file per tick.

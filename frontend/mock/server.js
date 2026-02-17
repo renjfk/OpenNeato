@@ -133,7 +133,7 @@ const state = {
     testMode: false,
     tz: "UTC0",
     debugLog: false,
-    wifiTxPower: 34, // 8.5 dBm in 0.25 dBm units
+    wifiTxPower: 60, // 15 dBm in 0.25 dBm units
     uartTxPin: 3,
     uartRxPin: 4,
     hostname: "neato",

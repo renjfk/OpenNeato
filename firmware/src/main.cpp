@@ -25,6 +25,9 @@ WebServer webServer(server, neatoSerial, dataLogger, systemManager, firmwareMana
 // Robot time sync state (managed here, not in SystemManager)
 unsigned long lastRobotSync = 0;
 
+// Tracks whether web server has been started (may be deferred if WiFi was slow at boot)
+bool webServerStarted = false;
+
 
 // Push NTP time to robot clock via SetTime
 static void syncRobotClock() {
@@ -64,6 +67,36 @@ void setup() {
     LOG("BOOT", "Initializing Neato serial...");
     neatoSerial.begin(settingsManager.get().uartTxPin, settingsManager.get().uartRxPin);
 
+    // Wire WiFi events to data logger BEFORE WiFi connects so boot events are captured.
+    // DataLogger buffers entries in memory — they get flushed once SPIFFS mounts in begin().
+    WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
+        switch (event) {
+            case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+                dataLogger.logWifi(
+                        "connected",
+                        {{"channel", String(info.wifi_sta_connected.channel), FIELD_INT},
+                         {"ssid", String(reinterpret_cast<const char *>(info.wifi_sta_connected.ssid)), FIELD_STRING}});
+                break;
+            case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+                dataLogger.logWifi("disconnected", {{"reason", String(info.wifi_sta_disconnected.reason), FIELD_INT}});
+                break;
+            case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+                dataLogger.logWifi("got_ip", {{"ip", WiFi.localIP().toString(), FIELD_STRING},
+                                              {"rssi", String(WiFi.RSSI()), FIELD_INT}});
+                break;
+            default:
+                break;
+        }
+    });
+
+    // Wire WiFiManager logger callback (reconnect attempts/results)
+    wifiManager.setLogger(
+            [](const String& event, const std::vector<Field>& extra) { dataLogger.logWifi(event, extra); });
+
+    // Wire firmware update events to data logger
+    firmwareManager.setLogger(
+            [](const String& event, const std::vector<Field>& extra) { dataLogger.logOta(event, extra); });
+
     // Initialize WiFi with provisioning
     LOG("BOOT", "Initializing WiFi...");
     wifiManager.setHostname(settingsManager.get().hostname);
@@ -82,22 +115,25 @@ void setup() {
         lastRobotSync = millis();
     });
 
-    // Initialize web server and OTA only if WiFi is connected
+    // Initialize web server and OTA if WiFi is already connected.
+    // If WiFi is slow (e.g. DHCP timeout after OTA), the web server will be
+    // started later in loop() once WiFi comes up — see deferred start below.
     if (wifiManager.isConnected()) {
         LOG("BOOT", "Initializing web server...");
         webServer.begin();
         LOG("BOOT", "Starting HTTP server...");
         server.begin();
+        webServerStarted = true;
 
         // Mark firmware as valid — cancels auto-rollback on next reboot
         esp_ota_mark_app_valid_cancel_rollback();
         LOG("BOOT", "Firmware marked valid");
     } else {
-        LOG("BOOT", "Skipping web server (no WiFi connection)");
-        LOG("BOOT", "Configure WiFi through serial menu");
+        LOG("BOOT", "WiFi not ready — web server will start when connected");
     }
 
     // Initialize data logger (SPIFFS, serial command hook)
+    // Note: WiFi/OTA events buffered in memory above get flushed once SPIFFS mounts here.
     LOG("BOOT", "Initializing data logger...");
     dataLogger.setDebugCheck([&]() { return settingsManager.get().debugLog; });
     dataLogger.begin();
@@ -118,27 +154,6 @@ void setup() {
         time_t epoch = mktime(&tm);
         systemManager.setFallbackClock(epoch);
         LOG("MAIN", "Robot time: %02d:%02d:%02d -> epoch %ld", t.hour, t.minute, t.second, static_cast<long>(epoch));
-    });
-
-    // Wire firmware update events to data logger
-    firmwareManager.setLogger(
-            [](const String& event, const std::vector<Field>& extra) { dataLogger.logOta(event, extra); });
-
-    // Wire WiFi events to data logger
-    WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
-        switch (event) {
-            case ARDUINO_EVENT_WIFI_STA_CONNECTED:
-                dataLogger.logWifi("connected");
-                break;
-            case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-                dataLogger.logWifi("disconnected", {{"reason", String(info.wifi_sta_disconnected.reason), FIELD_INT}});
-                break;
-            case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-                dataLogger.logWifi("got_ip", {{"ip", WiFi.localIP().toString(), FIELD_STRING}});
-                break;
-            default:
-                break;
-        }
     });
 
     LOG("BOOT", "========================================");
@@ -163,6 +178,19 @@ void loop() {
 
     // WiFi auto-reconnect with exponential backoff
     wifiManager.loop();
+
+    // Deferred web server start — if WiFi was slow at boot (e.g. DHCP timeout
+    // after OTA), start the web server once WiFi eventually connects.
+    if (!webServerStarted && wifiManager.isConnected()) {
+        LOG("MAIN", "WiFi connected late — starting web server now");
+        dataLogger.logWifi("deferred_start");
+        webServer.begin();
+        server.begin();
+        webServerStarted = true;
+
+        esp_ota_mark_app_valid_cancel_rollback();
+        LOG("MAIN", "Firmware marked valid (deferred)");
+    }
 
     // Check for button press (runtime reset)
     static unsigned long buttonPressStart = 0;

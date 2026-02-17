@@ -3,7 +3,18 @@
 // Runs as a Vite plugin — hooks into Vite's dev server middleware
 // To test different scenarios, edit the `state` object directly and reload
 
+const { execSync } = require("node:child_process");
+
 // --- Helpers ---
+
+const getVersion = () => {
+    try {
+        const hash = execSync("git rev-parse --short=7 HEAD", { encoding: "utf8" }).trim();
+        return `0.0.0-dev+${hash}`;
+    } catch {
+        return "0.0.0-dev";
+    }
+};
 
 const jsonResponse = (res, data, status = 200) => {
     const body = JSON.stringify(data);
@@ -474,7 +485,7 @@ const routes = {
     },
 
     "GET /api/firmware/version": (_req, res) => {
-        jsonResponse(res, { version: "0.0.0-dev" });
+        jsonResponse(res, { version: getVersion() });
     },
 };
 

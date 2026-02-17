@@ -104,6 +104,7 @@ export function SettingsView({ theme, onThemeChange, system }: SettingsViewProps
 
     // Server-confirmed state — used to compute dirty/needsReboot
     const server = useRef<SettingsData>({ ...DEFAULT_SERVER });
+    const [settingsLoaded, setSettingsLoaded] = useState(false);
 
     // Save flow
     const [saving, setSaving] = useState(false);
@@ -116,12 +117,7 @@ export function SettingsView({ theme, onThemeChange, system }: SettingsViewProps
     const [errors, errorStack] = useErrorStack();
     const pendingNav = useRef<string | null>(null);
 
-    // Sync tz from system polling (initial load before settings fetch)
-    useEffect(() => {
-        if (system?.tz) setTz(system.tz);
-    }, [system?.tz]);
-
-    // Fetch settings on mount
+    // Fetch settings on mount (do NOT sync from system polling to avoid races)
     useEffect(() => {
         api.getSettings().then((s: SettingsData) => {
             server.current = { ...s };
@@ -131,18 +127,20 @@ export function SettingsView({ theme, onThemeChange, system }: SettingsViewProps
             setUartTxPin(s.uartTxPin);
             setUartRxPin(s.uartRxPin);
             setHostname(s.hostname);
+            setSettingsLoaded(true);
         });
     }, []);
 
     // --- Dirty / validation / reboot detection ---
 
     const isDirty =
-        tz !== server.current.tz ||
-        debugLog !== server.current.debugLog ||
-        wifiTxPower !== server.current.wifiTxPower ||
-        uartTxPin !== server.current.uartTxPin ||
-        uartRxPin !== server.current.uartRxPin ||
-        hostname !== server.current.hostname;
+        settingsLoaded &&
+        (tz !== server.current.tz ||
+            debugLog !== server.current.debugLog ||
+            wifiTxPower !== server.current.wifiTxPower ||
+            uartTxPin !== server.current.uartTxPin ||
+            uartRxPin !== server.current.uartRxPin ||
+            hostname !== server.current.hostname);
 
     const needsReboot =
         uartTxPin !== server.current.uartTxPin ||

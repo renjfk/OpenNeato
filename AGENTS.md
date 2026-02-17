@@ -698,6 +698,7 @@ structure. This avoids redundant codebase exploration and keeps agents productiv
 platformio.ini             # PIO config (src_dir = firmware/src)
 scripts/
   env_config.py            # Pre-build script: injects FIRMWARE_VERSION build flag,
+                           #   auto-generates 0.0.0-dev+<git-hash> when not set,
                            #   sets UPLOAD_PORT from NEATO_HOST env var for OTA uploads,
                            #   BUILD_FRONTEND=1 triggers `npm run build` before compile
 firmware/
@@ -966,7 +967,7 @@ frontend/
 ### Firmware
 
 ```bash
-pio run -e Debug                        # Build (serial upload, dev version)
+pio run -e Debug                        # Build (auto version: 0.0.0-dev+<git-hash>)
 FIRMWARE_VERSION=1.0.0 pio run -e Debug # Build with specific version
 BUILD_FRONTEND=1 pio run -e Debug       # Build frontend + firmware in one step
 pio run -e Debug -t upload              # Build and upload via USB serial
@@ -978,6 +979,10 @@ pio run -e Debug --target clean         # Clean build artifacts
 pio check -e Debug                      # Static analysis (clang-tidy)
 clang-format -i firmware/src/*.cpp firmware/src/*.h  # Format code
 ```
+
+**Version handling**: When `FIRMWARE_VERSION` is not set, the build script auto-generates
+a version string from the git commit hash: `0.0.0-dev+<short-hash>`. This provides
+traceability for development builds without manual version management.
 
 **Monitor baud rate**: 115200
 

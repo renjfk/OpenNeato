@@ -101,6 +101,13 @@ private:
     void sendCurrentCommand();
     void completeCommand(CommandStatus status, const String& response);
 
+    // Validate that the response starts with the expected command echo.
+    // Returns true if the echo matches (or cannot be checked), false if desynced.
+    bool validateResponseEcho(const String& response) const;
+
+    // Drain all pending bytes from the UART receive buffer.
+    void flushUartRx();
+
     // -- Async caches (one per sensor type) ----------------------------------
     // Each cache owns a fetch function that enqueues the serial command.
 

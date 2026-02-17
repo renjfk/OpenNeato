@@ -73,6 +73,9 @@ private:
     unsigned long pendingRebootAt = 0;
     bool pendingFactoryReset = false;
 
+    // Heap watchdog state
+    unsigned long heapLowSince = 0; // millis() when heap first dropped below threshold (0 = healthy)
+
     NtpSyncCallback ntpSyncCallback;
 };
 

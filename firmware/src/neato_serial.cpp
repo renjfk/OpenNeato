@@ -66,6 +66,19 @@ void NeatoSerial::loop() {
                 if (c == NEATO_RESPONSE_TERMINATOR) {
                     unsigned long elapsed = millis() - commandSentAt;
                     LOG("NEATO", "RX: %u bytes in %lu ms", responseBuffer.length(), elapsed);
+
+                    // Validate: response must echo the sent command on the first line.
+                    // If it doesn't, the UART stream is desynced (we got a response
+                    // meant for a different command). Flush and fail this request so
+                    // the next command starts clean.
+                    if (!validateResponseEcho(responseBuffer)) {
+                        LOG("NEATO", "DESYNC: sent '%s' but response echoed a different command, flushing",
+                            currentCommand.c_str());
+                        flushUartRx();
+                        completeCommand(CMD_SERIAL_ERROR, responseBuffer);
+                        return;
+                    }
+
                     completeCommand(CMD_SUCCESS, responseBuffer);
                     return;
                 }
@@ -75,7 +88,9 @@ void NeatoSerial::loop() {
             if (millis() - commandSentAt >= currentTimeout) {
                 LOG("NEATO", "Timeout: %s (%lu ms, partial: %u bytes)", currentCommand.c_str(), currentTimeout,
                     responseBuffer.length());
-                // Log partial response on timeout (useful for debugging serial issues)
+                // Log partial response on timeout (useful for debugging serial issues).
+                // Flush UART to prevent stale bytes from leaking into the next command.
+                flushUartRx();
                 completeCommand(CMD_TIMEOUT, responseBuffer);
             }
             break;
@@ -127,11 +142,55 @@ void NeatoSerial::dequeueNext() {
     state = QUEUE_SENDING;
 }
 
+void NeatoSerial::flushUartRx() {
+    int flushed = 0;
+    while (uart.available()) {
+        uart.read();
+        flushed++;
+    }
+    if (flushed > 0) {
+        LOG("NEATO", "Flushed %d stale bytes from UART RX", flushed);
+    }
+}
+
 void NeatoSerial::sendCurrentCommand() {
+    // Drain any stale bytes from a previous response that may have arrived late
+    flushUartRx();
+
     LOG("NEATO", "TX: %s", currentCommand.c_str());
     uart.print(currentCommand + "\n");
     commandSentAt = millis();
     state = QUEUE_WAITING_RESPONSE;
+}
+
+bool NeatoSerial::validateResponseEcho(const String& response) const {
+    // The Neato echoes the command name on the first line of the response,
+    // e.g. "GetCharger\r\nLabel,Value\r\n...". Extract the first word of the
+    // sent command (before any space/flag) and check the response starts with it.
+    // For example, command "Clean House" should echo "Clean", "GetErr Clear" -> "GetErr".
+    String expectedEcho = currentCommand;
+    int spacePos = expectedEcho.indexOf(' ');
+    if (spacePos > 0)
+        expectedEcho = expectedEcho.substring(0, spacePos);
+
+    // Find the first line in the response (up to \r or \n)
+    String firstLine = response;
+    int crPos = firstLine.indexOf('\r');
+    int lfPos = firstLine.indexOf('\n');
+    int lineEnd = -1;
+    if (crPos >= 0 && lfPos >= 0)
+        lineEnd = (crPos < lfPos) ? crPos : lfPos;
+    else if (crPos >= 0)
+        lineEnd = crPos;
+    else if (lfPos >= 0)
+        lineEnd = lfPos;
+    if (lineEnd >= 0)
+        firstLine = firstLine.substring(0, lineEnd);
+
+    // The echo line is the command name (first word). Compare case-insensitively.
+    firstLine.trim();
+    expectedEcho.trim();
+    return firstLine.equalsIgnoreCase(expectedEcho);
 }
 
 void NeatoSerial::completeCommand(CommandStatus status, const String& response) {

@@ -710,7 +710,9 @@ firmware/
                            #   NVS_KEY_UART_TX_PIN, NVS_KEY_UART_RX_PIN),
                            #   DEFAULT_HOSTNAME ("neato"), default pin/power values,
                            #   CommandStatus enum, AsyncCache TTL defines
-                           #   (CACHE_TTL_STATE, CACHE_TTL_CHARGER, etc.)
+                           #   (CACHE_TTL_STATE, CACHE_TTL_CHARGER, etc.),
+                           #   heap watchdog defines (HEAP_WATCHDOG_THRESHOLD,
+                           #   HEAP_WATCHDOG_DURATION_MS)
     async_cache.h          # Generic AsyncCache<T> template: TTL-based caching with
                            #   request deduplication and explicit invalidation. Stores
                            #   last value + timestamp, coalesces concurrent waiters
@@ -767,6 +769,11 @@ firmware/
                            #   Deferred reboot: restart(), factoryReset() set timestamp,
                            #   checkPendingReboot() in loop() executes after 500ms.
                            #   Factory reset: NVS clear + WiFi disconnect + SPIFFS format.
+                           #   Heap watchdog: monitors free heap in loop(), restarts
+                           #   if below HEAP_WATCHDOG_THRESHOLD (16KB) for
+                           #   HEAP_WATCHDOG_DURATION_MS (10s). Prevents unresponsive
+                           #   state from memory exhaustion (e.g. socket leak after
+                           #   UART desync cascade).
     web_server.h/cpp       # Serves embedded frontend assets from PROGMEM, registers
                            #   all REST API routes (sensor GET, action POST),
                            #   firmware routes (version, OTA upload), log routes
@@ -837,6 +844,12 @@ firmware/
                            #   cmd, status, ms, raw, queueDepth, respBytes, cacheAgeMs).
                            #   CACHE_HIT(CMD) macro creates per-cache hit lambdas that
                            #   fire loggerCallback with cacheAgeMs on cache hits.
+                           #   UART desync protection: flushUartRx() drains stale bytes
+                           #   before each command send and after timeouts.
+                           #   validateResponseEcho() checks the first line of each
+                           #   response matches the sent command — on mismatch, flushes
+                           #   UART and fails with CMD_SERIAL_ERROR to prevent cascading
+                           #   wrong-response errors.
   lib/
     heatshrink/            # Vendored heatshrink compression library (0.4.1)
       heatshrink_config.h  # Custom config: static alloc, w=10, la=5, 32-bit

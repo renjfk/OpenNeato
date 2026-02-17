@@ -49,7 +49,7 @@ enum CommandStatus {
     CMD_SUCCESS, // Command succeeded, response received OK
     CMD_TIMEOUT, // No complete response within timeout (may have partial data)
     CMD_PARSE_FAILED, // Got response but parse failed (not used yet)
-    CMD_SERIAL_ERROR // UART error or other serial issue (not used yet)
+    CMD_SERIAL_ERROR // UART error or other serial issue (e.g. response desync)
 };
 
 // Timing intervals (milliseconds)
@@ -80,6 +80,12 @@ enum CommandStatus {
 #define NVS_KEY_WIFI_TX_POWER "wifi_tx_pwr"
 #define NVS_KEY_UART_TX_PIN "uart_tx_pin"
 #define NVS_KEY_UART_RX_PIN "uart_rx_pin"
+
+// Heap watchdog — restart if free heap stays below threshold for this duration.
+// Prevents the device from becoming unresponsive when memory is exhausted
+// (e.g. by runaway async connections after a UART desync cascade).
+#define HEAP_WATCHDOG_THRESHOLD 16384 // 16 KB — below this is critical
+#define HEAP_WATCHDOG_DURATION_MS 10000 // Must stay low for 10s to trigger
 
 // NTP / time sync
 #define NTP_SERVER_1 "pool.ntp.org"

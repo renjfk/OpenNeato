@@ -24,6 +24,28 @@ void SystemManager::loop() {
             }
         }
     }
+
+    // Heap watchdog — restart if free heap stays critically low for too long.
+    // This catches scenarios where the web server exhausts sockets/memory and
+    // becomes unresponsive (e.g. after a UART desync cascade). A brief dip is
+    // tolerated; only sustained low heap triggers the restart.
+    size_t freeHeap = ESP.getFreeHeap();
+    if (freeHeap < HEAP_WATCHDOG_THRESHOLD) {
+        if (heapLowSince == 0) {
+            heapLowSince = millis();
+            LOG("SYS", "Heap watchdog: low heap detected (%u bytes)", freeHeap);
+        } else if (millis() - heapLowSince >= HEAP_WATCHDOG_DURATION_MS) {
+            LOG("SYS", "Heap watchdog: heap critically low for %lums (%u bytes), restarting", HEAP_WATCHDOG_DURATION_MS,
+                freeHeap);
+            ESP.restart();
+        }
+    } else {
+        // Heap recovered — reset the timer
+        if (heapLowSince > 0) {
+            LOG("SYS", "Heap watchdog: heap recovered (%u bytes)", freeHeap);
+            heapLowSince = 0;
+        }
+    }
 }
 
 // -- Time --------------------------------------------------------------------

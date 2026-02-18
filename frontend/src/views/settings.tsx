@@ -106,9 +106,13 @@ export function SettingsView({ theme, onThemeChange, system }: SettingsViewProps
     const handleRestart = useCallback(() => {
         setRestarting(true);
         api.restart()
-            .then(() => startRebootFlow())
+            .then(() => {
+                setShowRestartConfirm(false);
+                startRebootFlow();
+            })
             .catch((e: unknown) => {
                 if (e instanceof TypeError) {
+                    setShowRestartConfirm(false);
                     startRebootFlow();
                 } else {
                     errorStack.push(e instanceof Error ? e.message : "Failed to restart");
@@ -121,9 +125,13 @@ export function SettingsView({ theme, onThemeChange, system }: SettingsViewProps
     const handleFactoryReset = useCallback(() => {
         setRestarting(true);
         api.factoryReset()
-            .then(() => startRebootFlow())
+            .then(() => {
+                setShowResetConfirm(false);
+                startRebootFlow();
+            })
             .catch((e: unknown) => {
                 if (e instanceof TypeError) {
+                    setShowResetConfirm(false);
                     startRebootFlow();
                 } else {
                     errorStack.push(e instanceof Error ? e.message : "Failed to factory reset");

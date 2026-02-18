@@ -91,14 +91,14 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         api.updateSettings(buildPatch())
             .then((res) => {
                 server.current = { ...res };
+                setShowSaveConfirm(false);
                 if (willReboot) {
                     startRebootFlow();
-                } else {
-                    setShowSaveConfirm(false);
                 }
             })
             .catch((e: unknown) => {
                 if (e instanceof TypeError && willReboot) {
+                    setShowSaveConfirm(false);
                     startRebootFlow();
                 } else {
                     errorStack.push(e instanceof Error ? e.message : "Failed to save settings");

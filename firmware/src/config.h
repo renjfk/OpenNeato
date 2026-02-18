@@ -59,11 +59,12 @@ enum CommandStatus {
 
 // Data logger
 #define LOG_MAX_FILE_SIZE 32768 // 32 KB per file before rotation
-#define LOG_MAX_SPIFFS_PERCENT 85 // Delete the oldest logs when SPIFFS usage exceeds this %
+#define LOG_MAX_SPIFFS_PERCENT 90 // Delete the oldest logs when SPIFFS usage exceeds this %
+#define LOG_MAX_FILES 50 // Maximum number of archived log files to keep
 #define LOG_DIR "/log"
 #define LOG_CURRENT_FILE "/log/current.jsonl"
-#define LOG_FLUSH_INTERVAL_MS 1000 // Flush write buffer to SPIFFS at most once per second
-#define LOG_FLUSH_MAX_LINES 32 // Also flush when buffer reaches this many lines
+#define LOG_FLUSH_INTERVAL_MS 10000 // Flush write buffer to SPIFFS every 10 seconds (reduces SPIFFS wear)
+#define LOG_FLUSH_MAX_LINES 64 // Also flush when buffer reaches this many lines
 
 // NVS (Non-Volatile Storage) — single shared namespace for all settings
 #define NVS_NAMESPACE "neato"

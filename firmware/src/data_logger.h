@@ -45,6 +45,22 @@ struct PlainLogReader : public LogReader {
     size_t read(uint8_t *buffer, size_t maxLen) override { return file.read(buffer, maxLen); }
 };
 
+// Buffered log reader — serves SPIFFS file content followed by unflushed
+// in-memory buffer lines. Used for current.jsonl so the API always returns
+// complete data even between flush intervals.
+struct BufferedLogReader : public LogReader {
+    File file;
+    String tail; // Concatenated unflushed lines (with newlines)
+    size_t tailOff = 0;
+
+    BufferedLogReader(File f, String buffered) : file(std::move(f)), tail(std::move(buffered)) {}
+    ~BufferedLogReader() override {
+        if (file)
+            file.close();
+    }
+    size_t read(uint8_t *buffer, size_t maxLen) override;
+};
+
 // Compressed log reader — streaming heatshrink decompression
 struct CompressedLogReader : public LogReader {
     File file;
@@ -89,8 +105,8 @@ public:
 
     // -- Log file management (for API) --------------------------------------
 
-    std::vector<LogFileInfo> listLogs() const;
-    std::shared_ptr<LogReader> readLog(const String& filename) const;
+    std::vector<LogFileInfo> listLogs();
+    std::shared_ptr<LogReader> readLog(const String& filename);
     bool deleteLog(const String& filename);
     void deleteAllLogs();
 
@@ -110,6 +126,8 @@ private:
 
     void bufferLine(const String& jsonLine);
     void flushBuffer();
+    size_t bufferBytes() const; // Estimate total size of unflushed buffer lines
+    String snapshotBuffer() const; // Concatenate buffer lines into a single string
 
     // -- Deferred rotation ---------------------------------------------------
     // After flush detects file too large, it renames current.jsonl to a temp
@@ -130,18 +148,14 @@ private:
     void startCompression();
     bool compressStep(); // Returns true when compression is complete
 
-    void enforceSpaceLimit();
+    void enforceLimits();
 
     // -- Deferred bulk delete ------------------------------------------------
     bool bulkDeletePending = false;
     std::vector<String> bulkDeletePaths;
 
     // Boot tasks
-    void archiveLeftoverLog();
     void logBootEvent();
-
-    // Blocking compression (used only in begin() during boot)
-    bool compressFile(const String& srcPath, const String& dstPath);
 
     // NeatoSerial logger hook (enhanced with status, queue depth, response size, cache info)
     // cacheAgeMs: 0 = fresh serial fetch, >0 = served from cache (age in ms)

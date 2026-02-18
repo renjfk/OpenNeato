@@ -24,7 +24,11 @@ firmware through REST API. Everything runs on the device itself.
 2. **API layer and sensor integration** — UART serial bridge, command queue, REST
    endpoints for all sensors and actions, client-side polling
 3. **On-device analytics and diagnostics** — SPIFFS JSON-lines logging, heatshrink
-   compression, non-blocking I/O, command/request/event logging, NTP time sync
+   compression on rotation, non-blocking I/O, command/request/event logging, NTP time
+   sync. BufferedLogReader merges file + unflushed buffer for current.jsonl reads.
+   10s flush interval, 64-line buffer, 90% space limit, 50-file cap. No boot archive
+   (current.jsonl survives reboots, rotates at 32KB when NTP synced). Frontend sorts
+   logs newest-first.
 4. **Firmware management** — Custom FirmwareManager (Update.h), MD5 validation,
    safe boot checkpoint, dual OTA partition auto-rollback
 5. **Mock API server** — Stateful Node.js dev server (Vite plugin), all REST
@@ -716,7 +720,9 @@ scripts/
 firmware/
   src/
     config.h               # Global defines, macros, LOG macro, pin/timing constants,
-                           #   data logger settings (file sizes, NTP servers, TZ),
+                           #   data logger settings (file sizes, NTP servers, TZ,
+                           #   LOG_FLUSH_INTERVAL_MS=10000, LOG_FLUSH_MAX_LINES=64,
+                           #   LOG_SPACE_LIMIT_PERCENT=90, LOG_MAX_FILES=50),
                            #   NVS namespace/key defines (NVS_KEY_DEBUG_LOG,
                            #   NVS_KEY_HOSTNAME, NVS_KEY_WIFI_TX_POWER,
                            #   NVS_KEY_UART_TX_PIN, NVS_KEY_UART_RX_PIN),
@@ -830,15 +836,23 @@ firmware/
                            #   logWifi(), logOta(), logNtp() accept Field vectors,
                            #   serialized via fieldsToJsonInner() from json_fields.
                            #   LogReader abstraction: readLog() returns shared_ptr<LogReader>,
-                           #   PlainLogReader (thin File wrapper) or CompressedLogReader
-                           #   (streaming heatshrink decoder) — web_server uses reader->read()
-                           #   with beginChunkedResponse, no decompression knowledge leaks out.
+                           #   PlainLogReader (thin File wrapper), CompressedLogReader
+                           #   (streaming heatshrink decoder), or BufferedLogReader
+                           #   (merges file + unflushed buffer for current.jsonl) —
+                           #   web_server uses reader->read() with beginChunkedResponse,
+                           #   no decompression knowledge leaks out.
                            #   Non-blocking design: log writes buffered in memory
                            #   (accepts entries before SPIFFS is ready for early-boot
                            #   events, capped at LOG_FLUSH_MAX_LINES*4 to bound heap),
                            #   flushed to SPIFFS in loop(); log rotation uses fast
                            #   rename + incremental heatshrink compression across
                            #   loop() iterations; bulk delete deferred one file per tick.
+                           #   No boot archive: current.jsonl survives reboots, rotates
+                           #   at 32KB when NTP synced (epoch filename). enforceLimits()
+                           #   runs every loop() tick: deletes oldest if space >90% or
+                           #   file count >LOG_MAX_FILES (50).
+                           #   listLogs() always includes current.jsonl with accurate
+                           #   size (file + buffer), no SPIFFS I/O for current file.
                            #   DebugCheck callback: when set and returns true, raw
                            #   serial responses are included in command log entries
                            #   via the "resp" field. Wired to SettingsManager.debugLog
@@ -969,7 +983,7 @@ frontend/
       logs.tsx             # Logs view: file list with size/date, detail view with
                            #   parsed JSON-lines entries, type badges, delete actions.
                            #   Collapsible raw response in command entries (debug log).
-                           #   Boot archive filenames shown as "Boot archive" date.
+                           #   Frontend sorts logs newest-first.
     assets/
       robot.svg            # Main robot illustration (30KB, vectorized 4-layer greyscale)
       icons/               # SVG icons loaded via ?raw import (alert, back, battery,

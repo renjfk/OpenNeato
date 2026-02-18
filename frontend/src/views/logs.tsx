@@ -20,8 +20,6 @@ function formatBytes(bytes: number): string {
 
 function filenameToDate(name: string): string {
     if (name === "current.jsonl") return "Active";
-    // Boot leftovers: "boot_12345.jsonl.hs" — millis at boot, no real date
-    if (name.startsWith("boot_")) return "Boot archive";
     // Normal rotation: "1700000000.jsonl.hs" — epoch prefix
     const match = name.match(/^(\d+)\./);
     if (match) {
@@ -158,6 +156,12 @@ export function LogsView() {
         setLoading(true);
         api.getLogs()
             .then((data) => {
+                // current.jsonl first, then archives newest-first (epoch filenames sort lexicographically)
+                data.sort((a, b) => {
+                    if (a.name === "current.jsonl") return -1;
+                    if (b.name === "current.jsonl") return 1;
+                    return b.name.localeCompare(a.name);
+                });
                 setFiles(data);
                 setLoading(false);
             })

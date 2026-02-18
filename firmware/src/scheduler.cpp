@@ -77,7 +77,7 @@ void Scheduler::loop() {
         LOG("SCHED", "Triggering scheduled clean (day=%d slot=%s)", day, slotStr.c_str());
         logSchedule("trigger", {{"day", String(day), FIELD_INT}, {"slot", slotStr, FIELD_STRING}});
 
-        serial.cleanHouse([this, day, slotStr](bool ok) {
+        serial.clean("house", [this, day, slotStr](bool ok) {
             LOG("SCHED", "Scheduled clean %s", ok ? "started" : "FAILED");
             if (!ok) {
                 logSchedule("trigger_failed", {{"day", String(day), FIELD_INT}, {"slot", slotStr, FIELD_STRING}});

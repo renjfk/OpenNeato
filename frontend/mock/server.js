@@ -240,7 +240,7 @@ const mockLogContent = [
     '{"t":1700000216,"typ":"command","d":{"cmd":"GetErr","status":"ok","ms":0,"q":0,"bytes":0,"age":1}}',
     '{"t":1700000220,"typ":"request","d":{"method":"GET","path":"/api/state","status":200,"ms":48}}',
     '{"t":1700000300,"typ":"command","d":{"cmd":"GetAnalogSensors","status":"ok","ms":120,"q":1,"bytes":480}}',
-    '{"t":1700000305,"typ":"request","d":{"method":"POST","path":"/api/clean/house","status":200,"ms":210}}',
+    '{"t":1700000305,"typ":"request","d":{"method":"POST","path":"/api/clean?action=house","status":200,"ms":210}}',
     '{"t":1700000306,"typ":"command","d":{"cmd":"Clean House","status":"ok","ms":95,"q":0,"bytes":28}}',
     '{"t":1700000400,"typ":"event","d":{"msg":"cleaning_started","mode":"house"}}',
     '{"t":1700000500,"typ":"command","d":{"cmd":"GetMotors","status":"ok","ms":110,"q":2,"bytes":520}}',
@@ -416,33 +416,24 @@ const routes = {
         jsonResponse(res, generateLidarScan());
     },
 
-    // Action routes
-    "POST /api/clean/house": (_req, res) => {
+    // Action routes — parameterized via query string
+    "POST /api/clean": (_req, res, query) => {
         if (faults.actions) return sendError(res, "UART timeout: robot not responding", 500);
-        state.cleaning = true;
-        state.spotCleaning = false;
-        state.paused = false;
-        deriveStates();
-        sendOk(res);
-    },
-
-    "POST /api/clean/spot": (_req, res) => {
-        if (faults.actions) return sendError(res, "UART timeout: robot not responding", 500);
-        state.spotCleaning = true;
-        state.cleaning = false;
-        state.paused = false;
-        deriveStates();
-        sendOk(res);
-    },
-
-    "POST /api/clean/stop": (_req, res) => {
-        if (faults.actions) return sendError(res, "Command queue full", 503);
-        if ((state.cleaning || state.spotCleaning) && !state.paused) {
-            // Running -> Paused
-            state.paused = true;
-        } else {
-            // Paused -> Idle
+        const action = query.action || "house";
+        if (action === "stop") {
+            if ((state.cleaning || state.spotCleaning) && !state.paused) {
+                state.paused = true; // Running -> Paused
+            } else {
+                state.cleaning = false; // Paused -> Idle
+                state.spotCleaning = false;
+                state.paused = false;
+            }
+        } else if (action === "spot") {
+            state.spotCleaning = true;
             state.cleaning = false;
+            state.paused = false;
+        } else {
+            state.cleaning = true;
             state.spotCleaning = false;
             state.paused = false;
         }
@@ -452,6 +443,19 @@ const routes = {
 
     "POST /api/sound": (_req, res) => {
         // Accept and ignore — just acknowledge
+        sendOk(res);
+    },
+
+    "POST /api/testmode": (_req, res, query) => {
+        if (faults.actions) return sendError(res, "UART timeout: robot not responding", 500);
+        state.testMode = query.enable === "1";
+        deriveStates();
+        sendOk(res);
+    },
+
+    "POST /api/lidar/rotate": (_req, res) => {
+        if (faults.actions) return sendError(res, "UART timeout: robot not responding", 500);
+        // LDS rotation is fire-and-forget — no state change visible in polls
         sendOk(res);
     },
 

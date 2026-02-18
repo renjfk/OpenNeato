@@ -413,29 +413,20 @@ void NeatoSerial::invalidateAll() {
 
 // -- Action command convenience methods --------------------------------------
 
-bool NeatoSerial::cleanHouse(std::function<void(bool)> callback) {
+bool NeatoSerial::clean(const String& action, std::function<void(bool)> callback) {
+    NeatoCommand cmd = CMD_CLEAN_HOUSE;
+    if (action == "spot")
+        cmd = CMD_CLEAN_SPOT;
+    else if (action == "stop")
+        cmd = CMD_CLEAN_STOP;
     invalidateState();
-    return enqueue(commandToString(CMD_CLEAN_HOUSE), commandTimeout(CMD_CLEAN_HOUSE), wrapAction(callback));
+    return enqueue(commandToString(cmd), commandTimeout(cmd), wrapAction(callback));
 }
 
-bool NeatoSerial::cleanSpot(std::function<void(bool)> callback) {
+bool NeatoSerial::testMode(bool enable, std::function<void(bool)> callback) {
+    NeatoCommand cmd = enable ? CMD_TEST_MODE_ON : CMD_TEST_MODE_OFF;
     invalidateState();
-    return enqueue(commandToString(CMD_CLEAN_SPOT), commandTimeout(CMD_CLEAN_SPOT), wrapAction(callback));
-}
-
-bool NeatoSerial::cleanStop(std::function<void(bool)> callback) {
-    invalidateState();
-    return enqueue(commandToString(CMD_CLEAN_STOP), commandTimeout(CMD_CLEAN_STOP), wrapAction(callback));
-}
-
-bool NeatoSerial::testModeOn(std::function<void(bool)> callback) {
-    invalidateState();
-    return enqueue(commandToString(CMD_TEST_MODE_ON), commandTimeout(CMD_TEST_MODE_ON), wrapAction(callback));
-}
-
-bool NeatoSerial::testModeOff(std::function<void(bool)> callback) {
-    invalidateState();
-    return enqueue(commandToString(CMD_TEST_MODE_OFF), commandTimeout(CMD_TEST_MODE_OFF), wrapAction(callback));
+    return enqueue(commandToString(cmd), commandTimeout(cmd), wrapAction(callback));
 }
 
 bool NeatoSerial::playSound(SoundId soundId, std::function<void(bool)> callback) {

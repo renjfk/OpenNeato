@@ -49,9 +49,9 @@ firmware through REST API. Everything runs on the device itself.
 10. **Pause/Resume/Stop UX** — Dashboard action buttons adapt to cleaning state: Idle
    shows House/Spot enabled with Pause disabled; Running shows Pause enabled (first stop
    goes to Paused state); Paused shows relevant resume button (play icon + "Resume" label)
-   and Stop button enabled. Single `/api/clean/stop` endpoint: first call pauses (RUNNING
-   → PAUSED), second call stops (PAUSED → IDLE). Resume reuses house/spot endpoints to
-   continue. GetErr parser fixed for code 200 (UI_ALERT_INVALID = no error). Mock server
+       and Stop button enabled. Single `POST /api/clean?action=stop`: first call pauses
+   (RUNNING → PAUSED), second call stops (PAUSED → IDLE). Resume reuses
+   `?action=house`/`?action=spot` to continue. GetErr parser fixed for code 200 (UI_ALERT_INVALID = no error). Mock server
    updated with pause state transitions.
 11. **ESP32-managed schedule** — 7-day cleaning schedule managed entirely on ESP32 (robot
    serial GetSchedule/SetSchedule NOT used — D5 4.6.0 doesn't support them). NVS storage
@@ -811,7 +811,9 @@ firmware/
                            #   SettingsManager). Request logging on all sensor/action
                            #   routes via DataLogger. Firmware routes delegate to
                            #   FirmwareManager for version/update. Template helpers:
-                           #   registerSensorRoute<T>(), registerActionRoute(),
+                            #   registerSensorRoute<T>(), registerActionRoute<A>()
+                           #   (variadic template: auto-parses query params to typed
+                           #   method args via detail::paramConvert),
                            #   sendGzipAsset(), sendError()
                            #   Thin route layer — no business logic. System actions
                            #   (restart, factoryReset) call SystemManager directly.
@@ -865,8 +867,8 @@ firmware/
                            #   convenience methods (getCharger, getVersion, etc.)
                            #   backed by AsyncCache<T> per sensor type (TTL caching,
                            #   request deduplication, concurrent waiter coalescing),
-                           #   action methods (cleanHouse, playSound, etc.) with
-                           #   automatic state cache invalidation,
+                            #   action methods (clean, testMode, playSound,
+                           #   setLdsRotation) with automatic state cache invalidation,
                            #   invalidateState()/invalidateAll() for explicit control,
                            #   time methods (getTime, setTime), no sendRaw() public API,
                            #   isBusy()/queueDepth() status,
@@ -978,8 +980,9 @@ frontend/
     server.js              # Mock API server (plain Node.js http, zero deps),
                            #   SCENARIO selector for quick state switching,
                            #   stateful simulation of all REST endpoints.
-                           #   Pause state support: POST /api/clean/stop transitions
-                           #   RUNNING → PAUSED → IDLE on successive calls.
+                            #   Pause state support: POST /api/clean?action=stop
+                           #   transitions RUNNING → PAUSED → IDLE on successive calls.
+                           #   TestMode and LDS rotation routes with query params.
                            #   Fault injection via scenario codes (fa, fs, fl,
                            #   fp, fal, etc.) with pipe-separated combining.
                            #   Reboot simulation via mutable bootTime reset on
@@ -1009,10 +1012,10 @@ frontend/
 | GET | `/api/accel` | `NeatoSerial::getAccel` -> JSON |
 | GET | `/api/buttons` | `NeatoSerial::getButtons` -> JSON |
 | GET | `/api/lidar` | `NeatoSerial::getLdsScan` -> JSON |
-| POST | `/api/clean/house` | `NeatoSerial::cleanHouse` |
-| POST | `/api/clean/spot` | `NeatoSerial::cleanSpot` |
-| POST | `/api/clean/stop` | `NeatoSerial::cleanStop` |
+| POST | `/api/clean?action=house\|spot\|stop` | `NeatoSerial::clean` |
 | POST | `/api/sound?id=N` | `NeatoSerial::playSound` |
+| POST | `/api/testmode?enable=1\|0` | `NeatoSerial::testMode` |
+| POST | `/api/lidar/rotate?enable=1\|0` | `NeatoSerial::setLdsRotation` |
 | GET | `/api/logs` | List log files with metadata (JSON array) |
 | GET | `/api/logs/{filename}` | Download a log file (compressed files auto-decompressed) |
 | DELETE | `/api/logs/{filename}` | Delete a specific log file |

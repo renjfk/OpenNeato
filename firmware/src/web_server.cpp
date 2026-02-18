@@ -45,16 +45,10 @@ void WebServer::sendOk(AsyncWebServerRequest *request) {
 }
 
 void WebServer::registerActionRoute(const char *path, bool (NeatoSerial::*method)(std::function<void(bool)>)) {
-    registerActionRoute(path, [this, method](AsyncWebServerRequest *, std::function<void(bool)> cb) {
-        return (neato.*method)(cb);
-    });
-}
-
-void WebServer::registerActionRoute(const char *path, ActionDispatch dispatch) {
-    server.on(path, HTTP_POST, [this, path, dispatch](AsyncWebServerRequest *request) {
+    server.on(path, HTTP_POST, [this, path, method](AsyncWebServerRequest *request) {
         unsigned long startMs = millis();
         auto weak = request->pause();
-        if (!dispatch(request, [this, weak, path, startMs](bool ok) {
+        if (!(neato.*method)([this, weak, path, startMs](bool ok) {
                 if (auto request = weak.lock()) {
                     unsigned long elapsed = millis() - startMs;
                     if (!ok) {
@@ -107,16 +101,13 @@ void WebServer::registerApiRoutes() {
     registerSensorRoute<LdsScanData>("/api/lidar", &NeatoSerial::getLdsScan);
 
     // -- Action endpoints ----------------------------------------------------
+    // All parameterized actions use query strings: resource URL identifies the
+    // command, query params carry arguments (mirrors Neato serial protocol).
 
-    registerActionRoute("/api/clean/house", &NeatoSerial::cleanHouse);
-    registerActionRoute("/api/clean/spot", &NeatoSerial::cleanSpot);
-    registerActionRoute("/api/clean/stop", &NeatoSerial::cleanStop);
-
-    // Sound requires a query parameter, dispatched via lambda overload
-    registerActionRoute("/api/sound", [this](AsyncWebServerRequest *request, std::function<void(bool)> cb) {
-        int id = request->getParam("id")->value().toInt();
-        return neato.playSound(static_cast<SoundId>(id), cb);
-    });
+    registerActionRoute<const String&>("/api/clean", &NeatoSerial::clean, "action", "house");
+    registerActionRoute<SoundId>("/api/sound", &NeatoSerial::playSound, "id");
+    registerActionRoute<bool>("/api/testmode", &NeatoSerial::testMode, "enable");
+    registerActionRoute<bool>("/api/lidar/rotate", &NeatoSerial::setLdsRotation, "enable");
 
     LOG("WEB", "API routes registered");
 }

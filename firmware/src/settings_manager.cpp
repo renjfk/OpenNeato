@@ -135,7 +135,7 @@ ApplyResult SettingsManager::apply(const String& json) {
         LOG("SETTINGS", "Schedule -> %s", current.scheduleEnabled ? "on" : "off");
     }
 
-    for (int d = 0; d < SCHEDULE_DAYS; d++) {
+    for (int d = 0; d < SCHEDULE_DAYS; d++) { // NOLINT(modernize-loop-convert) index needed for DAY_NAMES[d]
         SchedDay& cur = current.sched[d];
         const SchedDay& inc = incoming.sched[d];
         if (inc.hour != cur.hour || inc.minute != cur.minute || inc.on != cur.on) {
@@ -213,7 +213,7 @@ bool Settings::fromFields(const std::vector<Field>& fields) {
         scheduleEnabled = (f->value == "true");
         applied = true;
     }
-    for (int d = 0; d < SCHEDULE_DAYS; d++) {
+    for (int d = 0; d < SCHEDULE_DAYS; d++) { // NOLINT(modernize-loop-convert) index needed for field name prefix
         String prefix = "sched" + String(d);
         if ((f = findField(fields, (prefix + "Hour").c_str())) && f->type == FIELD_INT) {
             sched[d].hour = f->value.toInt();

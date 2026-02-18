@@ -40,11 +40,8 @@ public:
     void getButtons(std::function<void(bool, const ButtonData&)> callback);
     // -- Action commands (fire-and-forget by default) ------------------------
 
-    bool cleanHouse(std::function<void(bool)> callback = nullptr);
-    bool cleanSpot(std::function<void(bool)> callback = nullptr);
-    bool cleanStop(std::function<void(bool)> callback = nullptr);
-    bool testModeOn(std::function<void(bool)> callback = nullptr);
-    bool testModeOff(std::function<void(bool)> callback = nullptr);
+    bool clean(const String& action, std::function<void(bool)> callback = nullptr);
+    bool testMode(bool enable, std::function<void(bool)> callback = nullptr);
     bool playSound(SoundId soundId, std::function<void(bool)> callback = nullptr);
     bool setLdsRotation(bool on, std::function<void(bool)> callback = nullptr);
     bool setTime(int dayOfWeek, int hour, int min, int sec, std::function<void(bool)> callback = nullptr);

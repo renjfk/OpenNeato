@@ -722,8 +722,14 @@ Laser_RPM,52428 Charger_MaxPWM,65536 Charger_PWM,-858993460 Charger_mAH,52428
 - Theme persisted to localStorage only on user interaction (not on initial mount)
 - All theme-sensitive values use CSS variables (surfaces, cards, buttons, text)
 - Dynamic `<meta name="theme-color">` updated by `applyTheme()` to match active
-  theme (`#161618` dark, `#ffffff` light) — controls PWA/mobile status bar color.
+  theme (`#0c0c0c` dark, `#f5f5f7` light) — controls PWA/mobile status bar color.
   System theme tracks OS preference changes via `matchMedia` listener.
+- iOS Safari safe area: `viewport-fit=cover` extends page background into status
+  bar and home indicator areas. `html` element has solid `background-color: var(--bg)`
+  (separate from `body` gradient) so Safari can sample it for chrome coloring.
+  Header uses `padding-top: calc(Npx + env(safe-area-inset-top))`, action bar uses
+  `padding-bottom: max(Npx, env(safe-area-inset-bottom))` to keep content clear of
+  notch/home bar.
 
 **Responsive breakpoints:**
 ```css

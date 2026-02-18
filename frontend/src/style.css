@@ -94,7 +94,15 @@
     }
 }
 
-html,
+html {
+    background-color: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+    height: 100vh;
+    height: 100dvh;
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
     background: radial-gradient(
@@ -104,15 +112,7 @@ body {
         var(--bg-gradient-outer) 100%
     );
     background-attachment: fixed;
-    color: var(--text);
     line-height: 1.4;
-    -webkit-font-smoothing: antialiased;
-    overflow: hidden;
-    height: 100vh;
-    height: 100dvh;
-}
-
-body {
     max-width: 480px;
     margin: 0 auto;
     height: 100%;
@@ -131,6 +131,7 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 18px 20px 8px;
+    padding-top: calc(18px + env(safe-area-inset-top));
 }
 
 .header h1 {
@@ -1817,6 +1818,7 @@ body {
 
     .header {
         padding: 24px 28px 12px;
+        padding-top: calc(24px + env(safe-area-inset-top));
     }
 
     .header h1 {

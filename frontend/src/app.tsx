@@ -10,8 +10,8 @@ import { SettingsView } from "./views/settings";
 
 type Theme = "system" | "dark" | "light";
 
-const THEME_DARK = "#161618";
-const THEME_LIGHT = "#ffffff";
+const THEME_DARK = "#0c0c0c";
+const THEME_LIGHT = "#f5f5f7";
 
 function setThemeColor(color: string) {
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", color);

@@ -60,7 +60,7 @@ firmware through REST API. Everything runs on the device itself.
    (RUNNING → PAUSED), second call stops (PAUSED → IDLE). Resume reuses
    `?action=house`/`?action=spot` to continue. GetErr parser fixed for code 200 (UI_ALERT_INVALID = no error). Mock server
    updated with pause state transitions.
-   SetUIError dance: `Clean Stop` alone doesn't update the D5 UI state machine —
+   SetUIError dance: `Clean Stop` alone doesn't update the D7 UI state machine —
    firmware enqueues `Clean Stop` + `SetUIError setalert UI_ALERT_OLD_ERROR` +
    `SetUIError clearalert UI_ALERT_OLD_ERROR` as a 3-command sequence to force
    the state machine into reporting `CLEANINGPAUSED`.
@@ -69,7 +69,7 @@ firmware through REST API. Everything runs on the device itself.
    resume. `Clean House` would explicitly start a new clean. Spot uses `Clean Spot`
    for both start and resume.
 11. **ESP32-managed schedule** — 7-day cleaning schedule managed entirely on ESP32 (robot
-   serial GetSchedule/SetSchedule NOT used — D5 4.6.0 doesn't support them). NVS storage
+   serial GetSchedule/SetSchedule NOT used — D7 4.6.0 doesn't support them). NVS storage
    with flat keys (`scheduleEnabled`, `sched{0-6}{Hour,Min,On}`, Mon=0..Sun=6). Scheduler
    class checks time via `SystemManager::now()` every 30s, fires within a 5-minute window
    (`SCHEDULE_WINDOW_MINS`), guards against duplicate triggers and robot-busy states.
@@ -91,6 +91,17 @@ reference sections below.
 **Note for agents**: When a phase is completed, verify its details are covered in the
 Architecture/API/reference sections, then remove the full phase description from below
 and add a one-line summary to the completed list above. Do this before committing.
+
+### Silent pause/resume/stop
+- Goal: pause, resume, and stop should be completely silent — identical to
+  pressing the physical Start button on the robot, with no alert tones or
+  "Starting Cleaning" sounds
+- Current behavior: pause may trigger an alert sound due to the SetUIError
+  dance used to work around a D7 4.6.0 state machine bug; spot resume may
+  trigger a "new cleaning" sound because `Clean Spot` can be interpreted as
+  starting a new clean rather than resuming
+- Behavior may vary across robot models and firmware versions — D3/D4/D6/D7
+  may not have the state machine bug at all and may not need the workaround
 
 ### Manual control
 - Drive the robot manually from the web UI (forward, back, rotate)
@@ -478,7 +489,7 @@ Single `Clean Stop` command transitions:
 - RUNNING → PAUSED (first call)
 - PAUSED → IDLE (second call)
 
-**SetUIError dance required for pause**: The D5 (firmware 4.6.0) does not
+**SetUIError dance required for pause**: The D7 (firmware 4.6.0) does not
 transition its UI state machine to `CLEANINGPAUSED` after a bare `Clean Stop` —
 `GetState` keeps reporting `CLEANINGRUNNING` even though the robot physically
 stops. A `SetUIError setalert UI_ALERT_OLD_ERROR` + `SetUIError clearalert

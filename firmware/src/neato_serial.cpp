@@ -434,7 +434,7 @@ bool NeatoSerial::clean(const String& action, std::function<void(bool)> callback
 
         if (isRunning) {
             // Pause (RUNNING -> PAUSED): SetUIError dance required.
-            // The D5 (firmware 4.6.0) does not transition its UI state machine to
+            // The D7 (firmware 4.6.0) does not transition its UI state machine to
             // PAUSED after a bare "Clean Stop" — GetState keeps reporting RUNNING
             // even though the robot physically stops.  The SetUIError setalert /
             // clearalert dance nudges the state machine so it reports the correct

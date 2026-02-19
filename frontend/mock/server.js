@@ -306,7 +306,7 @@ const routes = {
     // Sensor routes
     "GET /api/version": (_req, res) => {
         jsonResponse(res, {
-            modelName: "BotVacD5",
+            modelName: "BotVacD7",
             serialNumber: "OPS01234AA,0000001,D",
             softwareVersion: "4.5.3-142",
             ldsVersion: "V2.6.15295",

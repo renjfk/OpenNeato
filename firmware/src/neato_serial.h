@@ -12,7 +12,6 @@
 struct CommandEntry {
     String command;
     std::function<void(bool, const String&)> callback;
-    unsigned long timeoutMs;
 };
 
 enum QueueState { QUEUE_IDLE, QUEUE_SENDING, QUEUE_WAITING_RESPONSE, QUEUE_INTER_DELAY };
@@ -81,13 +80,12 @@ private:
     String currentCommand;
     String responseBuffer;
     std::function<void(bool, const String&)> currentCallback;
-    unsigned long currentTimeout = 0;
     unsigned long commandSentAt = 0;
     unsigned long delayStartedAt = 0;
     int queueDepthAtStart = 0; // Queue depth when current command started
 
     // Enqueue a raw command with callback
-    bool enqueue(const String& command, unsigned long timeoutMs, std::function<void(bool, const String&)> callback);
+    bool enqueue(const String& command, std::function<void(bool, const String&)> callback);
 
     // Wrap action command callback (just success/fail, no response body)
     static std::function<void(bool, const String&)> wrapAction(std::function<void(bool)> callback);

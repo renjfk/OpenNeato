@@ -8,7 +8,7 @@
 #define CACHE_HIT(CMD)                                                                                                 \
     [this](unsigned long ageMs) {                                                                                      \
         if (loggerCallback)                                                                                            \
-            loggerCallback(commandToString(CMD), CMD_SUCCESS, 0, "", 0, 0, ageMs);                                     \
+            loggerCallback(CMD, CMD_SUCCESS, 0, "", 0, 0, ageMs);                                                      \
     }
 
 NeatoSerial::NeatoSerial() :
@@ -92,9 +92,9 @@ void NeatoSerial::loop() {
                 responseBuffer += c;
             }
             // Check timeout
-            if (millis() - commandSentAt >= currentTimeout) {
-                LOG("NEATO", "Timeout: %s (%lu ms, partial: %u bytes)", currentCommand.c_str(), currentTimeout,
-                    responseBuffer.length());
+            if (millis() - commandSentAt >= NEATO_CMD_TIMEOUT_MS) {
+                LOG("NEATO", "Timeout: %s (%lu ms, partial: %u bytes)", currentCommand.c_str(),
+                    (unsigned long) NEATO_CMD_TIMEOUT_MS, responseBuffer.length());
                 // Log partial response on timeout (useful for debugging serial issues).
                 // Flush UART to prevent stale bytes from leaking into the next command.
                 flushUartRx();
@@ -113,15 +113,14 @@ void NeatoSerial::loop() {
 
 // -- Queue management --------------------------------------------------------
 
-bool NeatoSerial::enqueue(const String& command, unsigned long timeoutMs,
-                          std::function<void(bool, const String&)> callback) {
+bool NeatoSerial::enqueue(const String& command, std::function<void(bool, const String&)> callback) {
     if (static_cast<int>(queue.size()) >= NEATO_QUEUE_MAX_SIZE) {
         LOG("NEATO", "Queue full, rejecting: %s", command.c_str());
         if (callback)
             callback(false, "");
         return false;
     }
-    queue.push_back({command, callback, timeoutMs});
+    queue.push_back({command, callback});
     return true;
 }
 
@@ -143,7 +142,6 @@ void NeatoSerial::dequeueNext() {
 
     currentCommand = entry.command;
     currentCallback = entry.callback;
-    currentTimeout = entry.timeoutMs;
     responseBuffer = "";
 
     state = QUEUE_SENDING;
@@ -282,7 +280,7 @@ void NeatoSerial::getButtons(std::function<void(bool, const ButtonData&)> callba
 // -- Raw fetch methods (enqueue serial command, parse response) ---------------
 
 void NeatoSerial::fetchVersion(std::function<void(bool, const VersionData&)> callback) {
-    enqueue(commandToString(CMD_GET_VERSION), commandTimeout(CMD_GET_VERSION), [callback](bool ok, const String& raw) {
+    enqueue(CMD_GET_VERSION, [callback](bool ok, const String& raw) {
         VersionData data;
         if (ok)
             ok = parseVersionData(raw, data);
@@ -292,7 +290,7 @@ void NeatoSerial::fetchVersion(std::function<void(bool, const VersionData&)> cal
 }
 
 void NeatoSerial::fetchCharger(std::function<void(bool, const ChargerData&)> callback) {
-    enqueue(commandToString(CMD_GET_CHARGER), commandTimeout(CMD_GET_CHARGER), [callback](bool ok, const String& raw) {
+    enqueue(CMD_GET_CHARGER, [callback](bool ok, const String& raw) {
         ChargerData data;
         if (ok)
             ok = parseChargerData(raw, data);
@@ -302,29 +300,27 @@ void NeatoSerial::fetchCharger(std::function<void(bool, const ChargerData&)> cal
 }
 
 void NeatoSerial::fetchAnalogSensors(std::function<void(bool, const AnalogSensorData&)> callback) {
-    enqueue(commandToString(CMD_GET_ANALOG_SENSORS), commandTimeout(CMD_GET_ANALOG_SENSORS),
-            [callback](bool ok, const String& raw) {
-                AnalogSensorData data;
-                if (ok)
-                    ok = parseAnalogSensorData(raw, data);
-                if (callback)
-                    callback(ok, data);
-            });
+    enqueue(CMD_GET_ANALOG_SENSORS, [callback](bool ok, const String& raw) {
+        AnalogSensorData data;
+        if (ok)
+            ok = parseAnalogSensorData(raw, data);
+        if (callback)
+            callback(ok, data);
+    });
 }
 
 void NeatoSerial::fetchDigitalSensors(std::function<void(bool, const DigitalSensorData&)> callback) {
-    enqueue(commandToString(CMD_GET_DIGITAL_SENSORS), commandTimeout(CMD_GET_DIGITAL_SENSORS),
-            [callback](bool ok, const String& raw) {
-                DigitalSensorData data;
-                if (ok)
-                    ok = parseDigitalSensorData(raw, data);
-                if (callback)
-                    callback(ok, data);
-            });
+    enqueue(CMD_GET_DIGITAL_SENSORS, [callback](bool ok, const String& raw) {
+        DigitalSensorData data;
+        if (ok)
+            ok = parseDigitalSensorData(raw, data);
+        if (callback)
+            callback(ok, data);
+    });
 }
 
 void NeatoSerial::fetchMotors(std::function<void(bool, const MotorData&)> callback) {
-    enqueue(commandToString(CMD_GET_MOTORS), commandTimeout(CMD_GET_MOTORS), [callback](bool ok, const String& raw) {
+    enqueue(CMD_GET_MOTORS, [callback](bool ok, const String& raw) {
         MotorData data;
         if (ok)
             ok = parseMotorData(raw, data);
@@ -334,7 +330,7 @@ void NeatoSerial::fetchMotors(std::function<void(bool, const MotorData&)> callba
 }
 
 void NeatoSerial::fetchState(std::function<void(bool, const RobotState&)> callback) {
-    enqueue(commandToString(CMD_GET_STATE), commandTimeout(CMD_GET_STATE), [callback](bool ok, const String& raw) {
+    enqueue(CMD_GET_STATE, [callback](bool ok, const String& raw) {
         RobotState data;
         if (ok)
             ok = parseRobotState(raw, data);
@@ -344,7 +340,7 @@ void NeatoSerial::fetchState(std::function<void(bool, const RobotState&)> callba
 }
 
 void NeatoSerial::fetchErr(std::function<void(bool, const ErrorData&)> callback) {
-    enqueue(commandToString(CMD_GET_ERR), commandTimeout(CMD_GET_ERR), [callback](bool ok, const String& raw) {
+    enqueue(CMD_GET_ERR, [callback](bool ok, const String& raw) {
         ErrorData data;
         if (ok)
             ok = parseErrorData(raw, data);
@@ -354,29 +350,27 @@ void NeatoSerial::fetchErr(std::function<void(bool, const ErrorData&)> callback)
 }
 
 void NeatoSerial::fetchErrClear(std::function<void(bool, const ErrorData&)> callback) {
-    enqueue(commandToString(CMD_GET_ERR_CLEAR), commandTimeout(CMD_GET_ERR_CLEAR),
-            [callback](bool ok, const String& raw) {
-                ErrorData data;
-                if (ok)
-                    ok = parseErrorData(raw, data);
-                if (callback)
-                    callback(ok, data);
-            });
+    enqueue(CMD_GET_ERR_CLEAR, [callback](bool ok, const String& raw) {
+        ErrorData data;
+        if (ok)
+            ok = parseErrorData(raw, data);
+        if (callback)
+            callback(ok, data);
+    });
 }
 
 void NeatoSerial::fetchLdsScan(std::function<void(bool, const LdsScanData&)> callback) {
-    enqueue(commandToString(CMD_GET_LDS_SCAN), commandTimeout(CMD_GET_LDS_SCAN),
-            [callback](bool ok, const String& raw) {
-                LdsScanData data;
-                if (ok)
-                    ok = parseLdsScanData(raw, data);
-                if (callback)
-                    callback(ok, data);
-            });
+    enqueue(CMD_GET_LDS_SCAN, [callback](bool ok, const String& raw) {
+        LdsScanData data;
+        if (ok)
+            ok = parseLdsScanData(raw, data);
+        if (callback)
+            callback(ok, data);
+    });
 }
 
 void NeatoSerial::fetchAccel(std::function<void(bool, const AccelData&)> callback) {
-    enqueue(commandToString(CMD_GET_ACCEL), commandTimeout(CMD_GET_ACCEL), [callback](bool ok, const String& raw) {
+    enqueue(CMD_GET_ACCEL, [callback](bool ok, const String& raw) {
         AccelData data;
         if (ok)
             ok = parseAccelData(raw, data);
@@ -386,7 +380,7 @@ void NeatoSerial::fetchAccel(std::function<void(bool, const AccelData&)> callbac
 }
 
 void NeatoSerial::fetchButtons(std::function<void(bool, const ButtonData&)> callback) {
-    enqueue(commandToString(CMD_GET_BUTTONS), commandTimeout(CMD_GET_BUTTONS), [callback](bool ok, const String& raw) {
+    enqueue(CMD_GET_BUTTONS, [callback](bool ok, const String& raw) {
         ButtonData data;
         if (ok)
             ok = parseButtonData(raw, data);
@@ -439,44 +433,42 @@ bool NeatoSerial::clean(const String& action, std::function<void(bool)> callback
             // even though the robot physically stops.  The SetUIError setalert /
             // clearalert dance nudges the state machine so it reports the correct
             // CLEANINGPAUSED state on the next GetState poll.
-            bool ok = enqueue(commandToString(CMD_CLEAN_STOP), commandTimeout(CMD_CLEAN_STOP), nullptr);
-            ok = ok && enqueue(commandToString(CMD_SET_UI_ERROR_SET_ALERT), commandTimeout(CMD_SET_UI_ERROR_SET_ALERT),
-                               nullptr);
-            ok = ok && enqueue(commandToString(CMD_SET_UI_ERROR_CLEAR_ALERT),
-                               commandTimeout(CMD_SET_UI_ERROR_CLEAR_ALERT), wrapAction(callback));
+            bool ok = enqueue(CMD_CLEAN_STOP, nullptr);
+            ok = ok && enqueue(CMD_SET_UI_ERROR_SET_ALERT, nullptr);
+            ok = ok && enqueue(CMD_SET_UI_ERROR_CLEAR_ALERT, wrapAction(callback));
             return ok;
         }
         // Stop (PAUSED -> IDLE): plain Clean Stop, no dance needed.
-        return enqueue(commandToString(CMD_CLEAN_STOP), commandTimeout(CMD_CLEAN_STOP), wrapAction(callback));
+        return enqueue(CMD_CLEAN_STOP, wrapAction(callback));
     }
 
     // House or Spot start/resume: use bare "Clean" for house (matches physical button),
     // "Clean Spot" for spot.
-    NeatoCommand cmd = (action == "spot") ? CMD_CLEAN_SPOT : CMD_CLEAN;
+    const char *cmd = (action == "spot") ? CMD_CLEAN_SPOT : CMD_CLEAN;
     invalidateState();
-    return enqueue(commandToString(cmd), commandTimeout(cmd), wrapAction(callback));
+    return enqueue(cmd, wrapAction(callback));
 }
 
 bool NeatoSerial::testMode(bool enable, std::function<void(bool)> callback) {
-    NeatoCommand cmd = enable ? CMD_TEST_MODE_ON : CMD_TEST_MODE_OFF;
+    const char *cmd = enable ? CMD_TEST_MODE_ON : CMD_TEST_MODE_OFF;
     invalidateState();
-    return enqueue(commandToString(cmd), commandTimeout(cmd), wrapAction(callback));
+    return enqueue(cmd, wrapAction(callback));
 }
 
 bool NeatoSerial::playSound(SoundId soundId, std::function<void(bool)> callback) {
-    String cmd = String(commandToString(CMD_PLAY_SOUND)) + " SoundID " + String(static_cast<int>(soundId));
-    return enqueue(cmd, commandTimeout(CMD_PLAY_SOUND), wrapAction(callback));
+    String cmd = String(CMD_PLAY_SOUND) + " SoundID " + String(static_cast<int>(soundId));
+    return enqueue(cmd, wrapAction(callback));
 }
 
 bool NeatoSerial::setLdsRotation(bool on, std::function<void(bool)> callback) {
-    NeatoCommand cmd = on ? CMD_SET_LDS_ROTATION_ON : CMD_SET_LDS_ROTATION_OFF;
-    return enqueue(commandToString(cmd), commandTimeout(cmd), wrapAction(callback));
+    const char *cmd = on ? CMD_SET_LDS_ROTATION_ON : CMD_SET_LDS_ROTATION_OFF;
+    return enqueue(cmd, wrapAction(callback));
 }
 
 // -- Time commands -----------------------------------------------------------
 
 bool NeatoSerial::getTime(std::function<void(bool, const TimeData&)> callback) {
-    return enqueue(commandToString(CMD_GET_TIME), commandTimeout(CMD_GET_TIME), [callback](bool ok, const String& raw) {
+    return enqueue(CMD_GET_TIME, [callback](bool ok, const String& raw) {
         TimeData data;
         if (ok)
             ok = parseTimeData(raw, data);
@@ -485,7 +477,7 @@ bool NeatoSerial::getTime(std::function<void(bool, const TimeData&)> callback) {
 }
 
 bool NeatoSerial::setTime(int dayOfWeek, int hour, int min, int sec, std::function<void(bool)> callback) {
-    String cmd = String(commandToString(CMD_SET_TIME)) + " Day " + String(dayOfWeek) + " Hour " + String(hour) +
-                 " Min " + String(min) + " Sec " + String(sec);
-    return enqueue(cmd, commandTimeout(CMD_SET_TIME), wrapAction(callback));
+    String cmd = String(CMD_SET_TIME) + " Day " + String(dayOfWeek) + " Hour " + String(hour) + " Min " + String(min) +
+                 " Sec " + String(sec);
+    return enqueue(cmd, wrapAction(callback));
 }

@@ -940,22 +940,26 @@ firmware/
                            #   fromFields()/fromJson() for deserialization. Used by
                            #   neato_commands, data_logger, system_manager, settings_manager,
                            #   web_server.
-    neato_commands.h/cpp   # Command enum (27 commands), response structs (VersionData,
+    neato_commands.h/cpp   # Command string constants (27 #define CMD_* macros mapping
+                           #   directly to UART command strings — no enum, no
+                           #   commandToString() lookup), response structs (VersionData,
                            #   ChargerData, AnalogSensorData, DigitalSensorData,
                            #   MotorData, RobotState, ErrorData, AccelData, ButtonData,
                            #   LdsScanData), CSV parsers, toFields() implementations,
-                           #   SoundId enum, SetUIError setalert/clearalert commands
-                           #   CMD_UNSUPPORTED status added to serial state machine.
+                           #   SoundId enum, SetUIError setalert/clearalert commands.
     neato_serial.h/cpp     # UART command queue state machine (IDLE -> SENDING ->
                            #   WAITING_RESPONSE -> INTER_DELAY -> IDLE), typed
                            #   convenience methods (getCharger, getVersion, etc.)
                            #   backed by AsyncCache<T> per sensor type (TTL caching,
                            #   request deduplication, concurrent waiter coalescing),
-                            #   action methods (clean, testMode, playSound,
+                           #   action methods (clean, testMode, playSound,
                            #   setLdsRotation) with automatic state cache invalidation,
                            #   invalidateState()/invalidateAll() for explicit control,
                            #   time methods (getTime, setTime), no sendRaw() public API,
                            #   isBusy()/queueDepth() status,
+                           #   enqueue() takes command + callback (flat timeout via
+                           #   NEATO_CMD_TIMEOUT_MS constant, no per-command override),
+                           #   CommandEntry struct: {command, callback} (no timeoutMs).
                            #   LoggerCallback hook for DataLogger integration (7-param:
                            #   cmd, status, ms, raw, queueDepth, respBytes, cacheAgeMs).
                            #   CACHE_HIT(CMD) macro creates per-cache hit lambdas that

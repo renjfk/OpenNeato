@@ -28,7 +28,6 @@
 
 // Neato command queue timing (milliseconds)
 #define NEATO_CMD_TIMEOUT_MS 3000
-#define NEATO_LDS_TIMEOUT_MS 8000
 #define NEATO_INTER_CMD_DELAY_MS 50
 #define NEATO_QUEUE_MAX_SIZE 16
 #define NEATO_RESPONSE_TERMINATOR 0x1A // Ctrl-Z

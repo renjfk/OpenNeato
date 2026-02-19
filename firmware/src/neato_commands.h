@@ -5,37 +5,35 @@
 #include <vector>
 #include "json_fields.h"
 
-// -- Command enum ------------------------------------------------------------
+// -- Command constants -------------------------------------------------------
 
-enum NeatoCommand {
-    CMD_GET_VERSION,
-    CMD_GET_CHARGER,
-    CMD_GET_ANALOG_SENSORS,
-    CMD_GET_DIGITAL_SENSORS,
-    CMD_GET_MOTORS,
-    CMD_GET_STATE,
-    CMD_GET_ERR,
-    CMD_GET_ERR_CLEAR,
-    CMD_GET_LDS_SCAN,
-    CMD_GET_ACCEL,
-    CMD_GET_BUTTONS,
-    CMD_GET_TIME,
-    CMD_GET_CAL_INFO,
-    CMD_GET_LIFE_STAT_LOG,
-    CMD_GET_WARRANTY,
-    CMD_CLEAN,
-    CMD_CLEAN_HOUSE,
-    CMD_CLEAN_SPOT,
-    CMD_CLEAN_STOP,
-    CMD_TEST_MODE_ON,
-    CMD_TEST_MODE_OFF,
-    CMD_SET_LDS_ROTATION_ON,
-    CMD_SET_LDS_ROTATION_OFF,
-    CMD_PLAY_SOUND,
-    CMD_SET_TIME,
-    CMD_SET_UI_ERROR_SET_ALERT,
-    CMD_SET_UI_ERROR_CLEAR_ALERT
-};
+#define CMD_GET_VERSION "GetVersion"
+#define CMD_GET_CHARGER "GetCharger"
+#define CMD_GET_ANALOG_SENSORS "GetAnalogSensors"
+#define CMD_GET_DIGITAL_SENSORS "GetDigitalSensors"
+#define CMD_GET_MOTORS "GetMotors"
+#define CMD_GET_STATE "GetState"
+#define CMD_GET_ERR "GetErr"
+#define CMD_GET_ERR_CLEAR "GetErr Clear"
+#define CMD_GET_LDS_SCAN "GetLDSScan"
+#define CMD_GET_ACCEL "GetAccel"
+#define CMD_GET_BUTTONS "GetButtons"
+#define CMD_GET_TIME "GetTime"
+#define CMD_GET_CAL_INFO "GetCalInfo"
+#define CMD_GET_LIFE_STAT_LOG "GetLifeStatLog"
+#define CMD_GET_WARRANTY "GetWarranty"
+#define CMD_CLEAN "Clean"
+#define CMD_CLEAN_HOUSE "Clean House"
+#define CMD_CLEAN_SPOT "Clean Spot"
+#define CMD_CLEAN_STOP "Clean Stop"
+#define CMD_TEST_MODE_ON "TestMode On"
+#define CMD_TEST_MODE_OFF "TestMode Off"
+#define CMD_SET_LDS_ROTATION_ON "SetLDSRotation On"
+#define CMD_SET_LDS_ROTATION_OFF "SetLDSRotation Off"
+#define CMD_PLAY_SOUND "PlaySound"
+#define CMD_SET_TIME "SetTime"
+#define CMD_SET_UI_ERROR_SET_ALERT "SetUIError setalert UI_ALERT_OLD_ERROR"
+#define CMD_SET_UI_ERROR_CLEAR_ALERT "SetUIError clearalert UI_ALERT_OLD_ERROR"
 
 // -- Sound IDs ---------------------------------------------------------------
 
@@ -62,12 +60,6 @@ enum SoundId {
     SOUND_ALERT = 19,
     SOUND_THANK_YOU = 20
 };
-
-// Lookup: enum -> command string to send over UART
-const char *commandToString(NeatoCommand cmd);
-
-// Lookup: enum -> timeout in ms
-unsigned long commandTimeout(NeatoCommand cmd);
 
 // -- Response structs --------------------------------------------------------
 

@@ -1,8 +1,18 @@
 import type { SettingsData } from "../../types";
 
+interface TimezonePreset {
+    label: string;
+    tz: string;
+}
+
+interface TxPowerPreset {
+    label: string;
+    value: number;
+}
+
 // Common timezone presets — label shown in UI, value is POSIX TZ string
 // UTC offset shown is the standard (non-DST) offset
-export const TIMEZONE_PRESETS: { label: string; tz: string }[] = [
+export const TIMEZONE_PRESETS: TimezonePreset[] = [
     { label: "UTC (UTC+0)", tz: "UTC0" },
     { label: "US Hawaii (UTC-10)", tz: "HST10" },
     { label: "US Alaska (UTC-9)", tz: "AKST9AKDT,M3.2.0,M11.1.0" },
@@ -22,7 +32,7 @@ export const TIMEZONE_PRESETS: { label: string; tz: string }[] = [
 ];
 
 // WiFi TX power presets — value is in 0.25 dBm units (ESP32 wifi_power_t)
-export const TX_POWER_PRESETS: { label: string; value: number }[] = [
+export const TX_POWER_PRESETS: TxPowerPreset[] = [
     { label: "8.5 dBm (low power)", value: 34 },
     { label: "11 dBm", value: 44 },
     { label: "13 dBm", value: 52 },

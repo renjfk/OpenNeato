@@ -2,17 +2,14 @@ import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import { Icon } from "../../components/icon";
 
-export function SettingsCategory({
-    title,
-    icon,
-    defaultOpen = false,
-    children,
-}: {
+interface SettingsCategoryProps {
     title: string;
     icon: string;
     defaultOpen?: boolean;
     children: ComponentChildren;
-}) {
+}
+
+export function SettingsCategory({ title, icon, defaultOpen = false, children }: SettingsCategoryProps) {
     const [open, setOpen] = useState(defaultOpen);
     return (
         <div class={`settings-category${open ? " open" : ""}`}>

@@ -38,6 +38,10 @@ interface StackedError {
     message: string;
 }
 
+interface DismissableError extends StackedError {
+    _dismiss: () => void;
+}
+
 export interface ErrorStackHandle {
     push: (message: string) => void;
     clear: () => void;
@@ -83,7 +87,7 @@ export function ErrorBannerStack({ errors }: ErrorBannerStackProps) {
                     key={e.id}
                     title="Error"
                     message={e.message}
-                    onDismiss={(e as StackedError & { _dismiss: () => void })._dismiss}
+                    onDismiss={(e as DismissableError)._dismiss}
                 />
             ))}
         </div>

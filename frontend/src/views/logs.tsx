@@ -35,7 +35,12 @@ function filenameToDate(name: string): string {
 }
 
 // Type badge for log entries
-function typeBadge(type: string): { label: string; color: string } {
+interface TypeBadge {
+    label: string;
+    color: string;
+}
+
+function typeBadge(type: string): TypeBadge {
     switch (type) {
         case "boot":
             return { label: "BOOT", color: "blue" };
@@ -71,7 +76,14 @@ function formatResp(raw: string): string {
     return raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
 }
 
-function parseLogLine(line: string): { ts: number; type: string; summary: string; resp: string | null } | null {
+interface LogEntry {
+    ts: number;
+    type: string;
+    summary: string;
+    resp: string | null;
+}
+
+function parseLogLine(line: string): LogEntry | null {
     try {
         const obj = JSON.parse(line);
         // Firmware format: { t, typ, d: {...} }

@@ -1,6 +1,10 @@
 // Battery icon matching SVGRepo style with dynamic charge fill
 
-export function BatteryIcon({ pct }: { pct: number }) {
+interface BatteryIconProps {
+    pct: number;
+}
+
+export function BatteryIcon({ pct }: BatteryIconProps) {
     // Fill width inside the battery body (8 to 48 = 40 units range)
     const fillWidth = Math.round((pct / 100) * 40);
     const fillRight = 8 + fillWidth;

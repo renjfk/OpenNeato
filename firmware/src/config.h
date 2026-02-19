@@ -91,6 +91,16 @@ enum CommandStatus {
 #define SCHEDULE_CHECK_INTERVAL_MS 30000 // Check schedule against NTP time every 30s
 #define SCHEDULE_WINDOW_MINS 5 // Fire if current time is 0..N minutes after scheduled slot
 
+// Task Watchdog Timer (TWDT) — hardware watchdog that resets the ESP32 if
+// loop() stops running (deadlock, infinite loop, blocking I/O). The main task
+// must call esp_task_wdt_reset() every iteration; if it misses the deadline,
+// the TWDT triggers a system reset. This complements the heap watchdog below
+// which only catches memory exhaustion (and requires loop() to keep running).
+#define TASK_WDT_TIMEOUT_S                                                                                             \
+    15 // Seconds before TWDT triggers reset (generous
+       // to accommodate slow SPIFFS operations and
+       // LIDAR scans that can take several seconds)
+
 // Heap watchdog — restart if free heap stays below threshold for this duration.
 // Prevents the device from becoming unresponsive when memory is exhausted
 // (e.g. by runaway async connections after a UART desync cascade).

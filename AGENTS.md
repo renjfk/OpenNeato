@@ -79,6 +79,11 @@ firmware through REST API. Everything runs on the device itself.
 12. **WiFi modem sleep** — WiFi radio powers down between AP beacons (~100ms) via
     `esp_wifi_set_ps(WIFI_PS_MIN_MODEM)`, reducing idle current from ~120mA to
     ~15-20mA. WiFi association stays active (AP buffers frames). TX power unaffected.
+13. **Task Watchdog Timer** — Hardware TWDT via `esp_task_wdt` resets the ESP32 if
+    `loop()` stops running (deadlock, infinite loop, blocking I/O). 15s timeout
+    configured after all slow boot init completes. Fed every `loop()` iteration via
+    `esp_task_wdt_reset()`. Complements the existing heap watchdog (which only catches
+    memory exhaustion and requires `loop()` to keep running).
 
 Details for completed phases are documented in the Architecture, API routes, and
 reference sections below.
@@ -768,6 +773,7 @@ firmware/
                            #   DEFAULT_HOSTNAME ("neato"), default pin/power values,
                            #   CommandStatus enum, AsyncCache TTL defines
                            #   (CACHE_TTL_STATE, CACHE_TTL_CHARGER, etc.),
+                           #   task watchdog define (TASK_WDT_TIMEOUT_S),
                            #   heap watchdog defines (HEAP_WATCHDOG_THRESHOLD,
                            #   HEAP_WATCHDOG_DURATION_MS),
                            #   schedule defines (NVS_KEY_SCHED_ENABLED,
@@ -855,6 +861,12 @@ firmware/
                            #   HEAP_WATCHDOG_DURATION_MS (10s). Prevents unresponsive
                            #   state from memory exhaustion (e.g. socket leak after
                            #   UART desync cascade).
+                           #   Task Watchdog Timer: initTaskWdt() configures ESP-IDF
+                           #   hardware TWDT (esp_task_wdt) with TASK_WDT_TIMEOUT_S
+                           #   timeout, subscribes the main Arduino task. feedTaskWdt()
+                           #   resets the timer each loop() iteration. If loop() hangs,
+                           #   TWDT triggers a hardware reset. Initialized after all
+                           #   slow boot init to avoid false triggers.
 
     web_server.h/cpp       # Serves embedded frontend assets from PROGMEM, registers
                            #   all REST API routes (sensor GET, action POST),

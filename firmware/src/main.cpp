@@ -165,6 +165,10 @@ void setup() {
         LOG("MAIN", "Robot time: %02d:%02d:%02d -> epoch %ld", t.hour, t.minute, t.second, static_cast<long>(epoch));
     });
 
+    // Start task watchdog AFTER all slow init is complete (SPIFFS mount,
+    // WiFi connect, etc.) so boot sequence doesn't trigger a false reset.
+    systemManager.initTaskWdt();
+
     LOG("BOOT", "========================================");
     LOG("BOOT", "System initialization complete");
     LOG("BOOT", "========================================");
@@ -179,6 +183,9 @@ void setup() {
 }
 
 void loop() {
+    // Feed task watchdog — must happen every iteration to prevent TWDT reset
+    systemManager.feedTaskWdt();
+
     // Deferred reboot — gives the web server time to flush the HTTP response
     systemManager.checkPendingReboot();
 

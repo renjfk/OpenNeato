@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include <Preferences.h>
+#include <esp_task_wdt.h>
 #include <functional>
 #include "config.h"
 #include "json_fields.h"
@@ -29,6 +30,11 @@ public:
 
     void begin();
     void loop();
+
+    // Task Watchdog Timer — must be called from setup() after all slow init,
+    // and feedTaskWdt() from every loop() iteration to prevent TWDT reset.
+    void initTaskWdt();
+    void feedTaskWdt();
 
     // Best-available epoch (NTP > fallback clock > millis)
     time_t now() const;

@@ -12,6 +12,20 @@ void SystemManager::begin() {
     LOG("SYS", "System manager initialized (NTP pending timezone from settings)");
 }
 
+// -- Task Watchdog Timer -----------------------------------------------------
+
+void SystemManager::initTaskWdt() {
+    // Initialize TWDT with configured timeout. If loop() stops calling
+    // feedTaskWdt(), the hardware watchdog resets the ESP32.
+    esp_task_wdt_init(TASK_WDT_TIMEOUT_S, true); // true = panic (reset) on timeout
+    esp_task_wdt_add(nullptr); // nullptr = subscribe current task (loopTask)
+    LOG("SYS", "Task watchdog initialized (%ds timeout)", TASK_WDT_TIMEOUT_S);
+}
+
+void SystemManager::feedTaskWdt() {
+    esp_task_wdt_reset();
+}
+
 void SystemManager::loop() {
     // Detect NTP sync transition
     if (!ntpSynced) {

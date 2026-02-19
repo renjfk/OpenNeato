@@ -754,7 +754,7 @@ platformio.ini             # PIO config (src_dir = firmware/src)
 scripts/
   env_config.py            # Pre-build script: injects FIRMWARE_VERSION build flag,
                            #   auto-generates 0.0.0+<git-hash> when not set,
-                           #   sets UPLOAD_PORT from NEATO_HOST env var for OTA uploads,
+                           #   sets UPLOAD_PORT from OTA_HOST env var for OTA uploads,
                            #   BUILD_FRONTEND=1 triggers `npm run build` before compile
 firmware/
   src/
@@ -1112,7 +1112,7 @@ pio run -e Debug -t upload              # Build and upload via USB serial
 pio run -e Debug -t upload -t monitor   # Upload and open serial monitor
 pio run -e Debug -t monitor             # Serial monitor only
 pio run -e OTA -t upload                # OTA upload (defaults to neato.home)
-NEATO_HOST=10.10.10.15 pio run -e OTA -t upload  # OTA to specific host
+OTA_HOST=10.10.10.15 pio run -e OTA -t upload  # OTA to specific host
 pio run -e Debug --target clean         # Clean build artifacts
 pio check -e Debug                      # Static analysis (clang-tidy)
 clang-format -i firmware/src/*.cpp firmware/src/*.h  # Format code

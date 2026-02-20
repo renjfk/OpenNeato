@@ -11,6 +11,7 @@
 #include "neato_serial.h"
 #include "data_logger.h"
 #include "scheduler.h"
+#include "manual_clean_manager.h"
 
 // Global objects
 Preferences prefs;
@@ -22,7 +23,8 @@ SystemManager systemManager(prefs);
 SettingsManager settingsManager(prefs);
 DataLogger dataLogger(neatoSerial, systemManager);
 Scheduler scheduler(settingsManager, systemManager, neatoSerial);
-WebServer webServer(server, neatoSerial, dataLogger, systemManager, firmwareManager, settingsManager);
+ManualCleanManager manualClean(neatoSerial);
+WebServer webServer(server, neatoSerial, dataLogger, systemManager, firmwareManager, settingsManager, manualClean);
 
 // Robot time sync state (managed here, not in SystemManager)
 unsigned long lastRobotSync = 0;
@@ -65,9 +67,16 @@ void setup() {
     settingsManager.onRebootRequired([&] { systemManager.restart(); });
     settingsManager.begin();
 
+    // Apply manual clean settings from NVS (stall threshold, motor speeds)
+    const auto& s = settingsManager.get();
+    manualClean.setStallThreshold(s.stallThreshold);
+    manualClean.setBrushRpm(s.brushRpm);
+    manualClean.setVacuumSpeed(s.vacuumSpeed);
+    manualClean.setSideBrushPower(s.sideBrushPower);
+
     // Initialize Neato UART with configured pins
     LOG("BOOT", "Initializing Neato serial...");
-    neatoSerial.begin(settingsManager.get().uartTxPin, settingsManager.get().uartRxPin);
+    neatoSerial.begin(s.uartTxPin, s.uartRxPin);
 
     // Wire WiFi events to data logger BEFORE WiFi connects so boot events are captured.
     // DataLogger buffers entries in memory — they get flushed once SPIFFS mounts in begin().
@@ -245,6 +254,9 @@ void loop() {
 
     // Pump Neato serial command queue
     neatoSerial.loop();
+
+    // Manual clean safety polling and watchdog
+    manualClean.loop();
 
     // System manager housekeeping (NTP detection)
     systemManager.loop();

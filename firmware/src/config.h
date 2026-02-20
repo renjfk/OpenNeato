@@ -25,6 +25,7 @@
 #define NEATO_DEFAULT_TX_PIN 3
 #define NEATO_DEFAULT_RX_PIN 4
 #define NEATO_BAUD_RATE 115200
+#define NEATO_UART_RX_BUFFER 4096 // Default 256 bytes overflows during GetLDSScan (~5KB response)
 
 // Neato command queue timing (milliseconds)
 #define NEATO_CMD_TIMEOUT_MS 3000
@@ -37,11 +38,21 @@
 // during an in-flight fetch are coalesced (only one serial command dispatched).
 #define CACHE_TTL_STATE 2000 // GetState + GetErr — polled every 2s
 #define CACHE_TTL_CHARGER 30000 // GetCharger — battery data (30s)
-#define CACHE_TTL_SENSORS 5000 // Analog/digital sensors, motors (5s)
+#define CACHE_TTL_SENSORS 1000 // Analog/digital sensors, motors (1s — fast for manual clean safety)
 #define CACHE_TTL_VERSION 300000 // GetVersion — rarely changes (5 min)
 #define CACHE_TTL_ACCEL 5000 // Accelerometer (5s)
 #define CACHE_TTL_BUTTONS 2000 // Button state (2s)
-#define CACHE_TTL_LDS 2000 // LIDAR scan — 2s (scan takes ~1.5s)
+#define CACHE_TTL_LDS 1500 // LIDAR scan — 1.5s (scan takes ~800ms on serial)
+
+// Manual clean safety
+#define MANUAL_SAFETY_POLL_MS 500 // Poll bumpers every 500ms during manual clean
+#define MANUAL_STALL_POLL_MS 500 // Poll wheel load every 500ms while wheels are moving
+#define MANUAL_STALL_LOAD_PCT 60 // Wheel load % threshold — above this is considered stalled
+#define MANUAL_STALL_COUNT 2 // Consecutive overloaded polls before stopping (2 × 500ms = 1s grace)
+#define MANUAL_CLIENT_TIMEOUT_MS 5000 // Stop wheels if no API activity (any request) within this window
+#define MANUAL_BRUSH_RPM 1200 // Default brush RPM in manual mode
+#define MANUAL_VACUUM_SPEED_PCT 80 // Default vacuum speed (%) in manual mode
+#define MANUAL_SIDE_BRUSH_POWER_MW 1500 // Default side brush power (mW) — universal Neato Botvac default
 
 // Command completion status (for enhanced logging)
 enum CommandStatus {
@@ -49,7 +60,8 @@ enum CommandStatus {
     CMD_TIMEOUT, // No complete response within timeout (may have partial data)
     CMD_PARSE_FAILED, // Got response but parse failed (not used yet)
     CMD_SERIAL_ERROR, // UART error or other serial issue (e.g. response desync)
-    CMD_UNSUPPORTED // Robot responded with "Unknown Cmd" — command not available
+    CMD_UNSUPPORTED, // Robot responded with "Unknown Cmd" — command not available
+    CMD_QUEUE_FULL // Command rejected because the serial queue was full
 };
 
 // Timing intervals (milliseconds)
@@ -81,6 +93,11 @@ enum CommandStatus {
 #define NVS_KEY_WIFI_TX_POWER "wifi_tx_pwr"
 #define NVS_KEY_UART_TX_PIN "uart_tx_pin"
 #define NVS_KEY_UART_RX_PIN "uart_rx_pin"
+// NVS keys — Manual clean
+#define NVS_KEY_MC_STALL_THR "mc_stall_thr"
+#define NVS_KEY_MC_BRUSH_RPM "mc_brush_rpm"
+#define NVS_KEY_MC_VACUUM_PCT "mc_vacuum_pct"
+#define NVS_KEY_MC_SBRUSH_MW "mc_sbrush_mw"
 
 // NVS keys — Schedule (ESP32-managed, not robot serial)
 #define NVS_KEY_SCHED_ENABLED "sched_on"

@@ -33,6 +33,7 @@ firmware through REST API. Everything runs on the device itself.
 11. **Schedule** — ESP32-managed 7-day schedule (robot serial schedule commands not used)
 12. **WiFi modem sleep** — `WIFI_PS_MIN_MODEM` for ~15-20mA idle
 13. **Task Watchdog** — Hardware TWDT resets ESP32 if loop() hangs
+14. **Manual clean** — Full-stack manual driving: firmware backend (TestMode lifecycle, motor commands, safety polling, stall detection, client timeout), configurable motor settings (brush RPM, vacuum speed, side brush power, stall threshold) with NVS persistence and preset dropdowns in settings UI
 
 **Note for agents**: When a phase is completed, add a one-line summary to the list above.
 
@@ -40,9 +41,6 @@ firmware through REST API. Everything runs on the device itself.
 
 **Silent pause/resume/stop** — Eliminate alert tones from SetUIError dance and spot resume.
 May vary across robot models/firmware versions.
-
-**Manual clean** — Frontend complete (LIDAR map, joystick, motor toggles), firmware
-backend pending (TestMode management, safety checks, move/motor commands).
 
 **OTA via GitHub Releases** — Browser-side only (ESP32 makes no outbound connections).
 Browser fetches releases API, downloads .bin, uploads to device.
@@ -141,15 +139,77 @@ Robot GND -> ESP GND. The robot provides 3.3V to power the ESP.
   - reboot: Reset robot after upload
 
 **TestMode required:**
-- `SetMotor [LWheelDist <mm>] [RWheelDist <mm>] [Speed <mm/s>] [Accel <mm/s>]` — Drive wheels
-  - Distance in millimeters (pos = forward, neg = backward)
-  - Speed required only for wheel movements
-  - Accel defaults to Speed value if not specified
-- `SetMotor [RPM <rpm>] [Brush] [VacuumOn|VacuumOff] [VacuumSpeed <percent>]` — Control motors
-  - RPM not used for wheels, applied to all other motors
-  - Brush motor forward (mutually exclusive with wheels and vacuum)
-  - VacuumSpeed in percent (1-100)
-- `SetMotor [RWheelDisable|LWheelDisable|BrushDisable] [RWheelEnable|LWheelEnable|BrushEnable]` — Enable/disable motors
+- `SetMotor` — Full syntax (XV-series base + Botvac extensions):
+  ```
+  SetMotor [LWheelDist <mm>] [RWheelDist <mm>] [Speed <mm/s>] [Accel <mm/s>]
+           [RPM <rpm>] [Brush] [VacuumOn|VacuumOff] [VacuumSpeed <percent>]
+           [RWheelDisable|RWheelEnable] [LWheelDisable|LWheelEnable]
+           [BrushDisable|BrushEnable]
+           [SideBrushEnable|SideBrushDisable] [SideBrushOn|SideBrushOff]
+           [SideBrushPower <mW>]
+  ```
+  **Motor control table:**
+
+  | Motor | Enable/Disable | Activate | Speed Control | Range |
+  |-------|---------------|----------|---------------|-------|
+  | Left Wheel | `LWheelEnable` / `LWheelDisable` | `LWheelDist <mm>` | `Speed <mm/s>` | 0–300 mm/s |
+  | Right Wheel | `RWheelEnable` / `RWheelDisable` | `RWheelDist <mm>` | `Speed <mm/s>` | 0–300 mm/s |
+  | Main Brush | `BrushEnable` / `BrushDisable` | `Brush` flag | `RPM <value>` | ~500–10000 RPM |
+  | Side Brush (Botvac only) | `SideBrushEnable` / `SideBrushDisable` | `SideBrushOn` / `SideBrushOff` | `SideBrushPower <mW>` | milliwatts |
+  | Vacuum | — | `VacuumOn` / `VacuumOff` | `VacuumSpeed <pct>` | 1–100% |
+
+  **Wheel commands:**
+  - LWheelDist/RWheelDist: ±10,000 mm (positive = forward, negative = backward)
+  - All three params (both distances + speed) required in a single call
+  - Accel: 0–300 mm/s², defaults to Speed value if not specified
+  - Track width: 248 mm (wheel separation)
+  - Nominal cleaning speeds: 200 mm/s (hard floor), 100 mm/s (carpet)
+  - When L/R distances differ, firmware applies Speed to the farther wheel and
+    proportionally scales the nearer wheel so both finish simultaneously
+  - `SetMotor 0 0 0` has a known bug — values of 0 are ignored, robot may coast
+    for ~1s. Workaround: send `SetMotor 1 1 1` then `SetMotor 0 0 0`, or use
+    `LWheelDisable RWheelDisable` for immediate stop
+
+  **Main brush:**
+  - Closed-loop RPM feedback control (8-pole magnetic disk + Hall effect sensor)
+  - `Brush` flag is mutually exclusive with wheel and vacuum commands in a single call
+  - Firmware-default BrushSpeed values per model:
+
+    | Model | Normal RPM | Eco RPM |
+    |-------|:---:|:---:|
+    | XV-11/15/21/25/28, Botvac 65/70e/75/80/85 | 1,200 | N/A |
+    | Botvac Connected, D3, D5 | 1,200–1,400 | 800 |
+    | D6, D7 | 1,400 | 1,100 |
+    | Vorwerk VR200 | 1,800 | 1,450 |
+
+  - Practical limits: below ~500 RPM controller is unstable (speed fluctuates);
+    above ~2,000 RPM the motor shuts off on XV firmware
+  - Higher RPM dramatically increases power draw (1,450 vs 1,200 RPM halved
+    battery runtime in testing)
+
+  **Side brush (Botvac D3–D7 only, not XV-series):**
+  - Uses open-loop power control in milliwatts (no encoder feedback)
+  - Universal default: 1,500 mW across all Neato Botvacs (Vorwerk VR200: 700 mW)
+  - Two-layer control: `SideBrushEnable` energizes motor driver, `SideBrushOn` starts spinning
+  - Both layers needed: `SideBrushEnable` then `SideBrushOn SideBrushPower <mW>`
+  - Draws 28 mA idle current even when nominally "off"
+  - XV-series robots report `SideBrushType,1,SIDE_BRUSH_NONE` — no hardware
+  - SideBrushType values: `SIDE_BRUSH_NONE` (XV), `SIDE_BRUSH_VORWERK_REV1` (VR100,
+    Botvac Connected), `SIDE_BRUSH_PRESENT` (D3/D5/D6/D7)
+
+  **Vacuum:**
+  - `VacuumSpeed` must be combined with `VacuumOn` in the same call
+  - `SetMotor VacuumSpeed 50` alone fails with "No recognizable parameters"
+  - Default when `VacuumOn` used without `VacuumSpeed`: ~90%
+  - Firmware-stored VacuumPwr: 52% (older Botvac Basic), 65% (newer Basic/D85),
+    80% (Connected/VR200 turbo), 65% (Connected/VR200 eco)
+  - Higher vacuum speeds substantially increase current; filter condition also
+    affects draw (~0.5A extra with clogged filter)
+
+  **Protocol quirks:**
+  - Commands run asynchronously — queries like `GetMotors` work while motors spin
+  - Motor power on the 15V bus only available when TestMode is active or robot is cleaning
+  - `SideBrushDisable` help text has a firmware bug (says "Enable" but actually disables)
 - `SetLED [BacklightOn|BacklightOff] [ButtonAmber|ButtonGreen|LEDRed|LEDGreen|ButtonAmberDim|ButtonGreenDim|ButtonOff]` — Control LEDs
   - BacklightOn/Off: LCD Backlight (mutually exclusive)
   - ButtonAmber/Green/Red/Green/Dim: Start Button (mutually exclusive)
@@ -376,7 +436,7 @@ ChassisRev,-1,, UIPanelRev,-1,,
 ### UI States (UIMGR_STATE_*)
 Key states: `POWERUP`, `STANDBY`, `IDLE`, `HOUSECLEANINGRUNNING`,
 `HOUSECLEANINGPAUSED`, `SPOTCLEANINGRUNNING`, `SPOTCLEANINGPAUSED`,
-`DOCKINGRUNNING`, `DOCKINGPAUSED`, `TESTMODE`, `MANUALDRIVING`
+`DOCKINGRUNNING`, `DOCKINGPAUSED`, `TESTMODE`, `MANUALCLEANING`
 
 ### Clean Stop Behavior
 Single `Clean Stop` command transitions:
@@ -529,6 +589,7 @@ Two top-level directories: `firmware/` for ESP32 code, `frontend/` for the web U
 | `scheduler` | 7-day cleaning scheduler, window-based triggering |
 | `system_manager` | NTP sync, system health, deferred reboot, heap/task watchdogs |
 | `data_logger` | SPIFFS JSON-lines logging, heatshrink compression, log management |
+| `manual_clean_manager` | Manual clean lifecycle, safety polling, obstacle blocking |
 | `json_fields` | Lightweight field-based JSON serialization (no ArduinoJson) |
 | `serial_menu` | Interactive serial menu for USB debug console |
 
@@ -601,9 +662,10 @@ Frontend is part of the firmware binary — single OTA update covers both.
 | POST | `/api/system/reset` | Factory reset |
 | GET | `/api/settings` | All user settings |
 | PUT | `/api/settings` | Partial settings update |
-| POST | `/api/manual?enable=1\|0` | Manual mode (mock only) |
-| POST | `/api/manual/move?left=N&right=N&speed=N` | Manual drive (mock only) |
-| POST | `/api/manual/motors?brush=0\|1&vacuum=0\|1&sideBrush=0\|1` | Motor control (mock only) |
+| POST | `/api/manual?enable=1\|0` | Manual mode (TestMode + LDS lifecycle) |
+| GET | `/api/manual/status` | Manual clean status (safety, motors, stall) |
+| POST | `/api/manual/move?left=N&right=N&speed=N` | Manual clean movement (safety-checked) |
+| POST | `/api/manual/motors?brush=0\|1&vacuum=0\|1&sideBrush=0\|1` | Motor control |
 
 ## Build Commands
 

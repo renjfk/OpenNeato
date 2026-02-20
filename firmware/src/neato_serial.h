@@ -11,7 +11,15 @@
 // Internal queue entry — raw callback wraps the typed one
 struct CommandEntry {
     String command;
+    uint8_t priority;
     std::function<void(bool, const String&)> callback;
+};
+
+enum CommandPriority : uint8_t {
+    PRIORITY_CRITICAL = 1,
+    PRIORITY_HIGH = 2,
+    PRIORITY_MEDIUM = 3,
+    PRIORITY_NORMAL = 4,
 };
 
 enum QueueState { QUEUE_IDLE, QUEUE_SENDING, QUEUE_WAITING_RESPONSE, QUEUE_INTER_DELAY };
@@ -30,7 +38,9 @@ public:
     void getCharger(std::function<void(bool, const ChargerData&)> callback);
     void getAnalogSensors(std::function<void(bool, const AnalogSensorData&)> callback);
     void getDigitalSensors(std::function<void(bool, const DigitalSensorData&)> callback);
+    void getDigitalSensors(std::function<void(bool, const DigitalSensorData&)> callback, CommandPriority priority);
     void getMotors(std::function<void(bool, const MotorData&)> callback);
+    void getMotors(std::function<void(bool, const MotorData&)> callback, CommandPriority priority);
     void getState(std::function<void(bool, const RobotState&)> callback);
     void getErr(std::function<void(bool, const ErrorData&)> callback);
     void getErrClear(std::function<void(bool, const ErrorData&)> callback);
@@ -43,6 +53,10 @@ public:
     bool testMode(bool enable, std::function<void(bool)> callback = nullptr);
     bool playSound(SoundId soundId, std::function<void(bool)> callback = nullptr);
     bool setLdsRotation(bool on, std::function<void(bool)> callback = nullptr);
+    bool setMotorWheels(int leftMM, int rightMM, int speedMMs, std::function<void(bool)> callback = nullptr);
+    bool setMotorBrush(int rpm, std::function<void(bool)> callback = nullptr);
+    bool setMotorVacuum(bool on, int speedPercent = 80, std::function<void(bool)> callback = nullptr);
+    bool setMotorSideBrush(bool on, int powerMw = 5000, std::function<void(bool)> callback = nullptr);
     bool setTime(int dayOfWeek, int hour, int min, int sec, std::function<void(bool)> callback = nullptr);
     // -- Time query --------------------------------------------------------------
 
@@ -54,6 +68,11 @@ public:
 
     void invalidateState();
     void invalidateAll();
+
+    // -- Manual clean state override -----------------------------------------
+    // When set, getState() patches uiState to "UIMGR_STATE_MANUALCLEANING"
+    // since the robot reports TESTMODE during manual clean.
+    void setManualCleanActive(bool active) { manualCleanActive = active; }
 
     // -- Logger hook ---------------------------------------------------------
 
@@ -72,6 +91,7 @@ private:
     HardwareSerial& uart = Serial1;
     std::vector<CommandEntry> queue;
     QueueState state = QUEUE_IDLE;
+    bool manualCleanActive = false;
 
     // Logger hook
     LoggerCallback loggerCallback;
@@ -84,8 +104,10 @@ private:
     unsigned long delayStartedAt = 0;
     int queueDepthAtStart = 0; // Queue depth when current command started
 
-    // Enqueue a raw command with callback
-    bool enqueue(const String& command, std::function<void(bool, const String&)> callback);
+    // Enqueue a raw command with callback and priority.
+    // Lower number = higher priority (1 highest).
+    bool enqueue(const String& command, std::function<void(bool, const String&)> callback,
+                 CommandPriority priority = PRIORITY_NORMAL);
 
     // Wrap action command callback (just success/fail, no response body)
     static std::function<void(bool, const String&)> wrapAction(std::function<void(bool)> callback);
@@ -119,8 +141,9 @@ private:
     void fetchVersion(std::function<void(bool, const VersionData&)> callback);
     void fetchCharger(std::function<void(bool, const ChargerData&)> callback);
     void fetchAnalogSensors(std::function<void(bool, const AnalogSensorData&)> callback);
-    void fetchDigitalSensors(std::function<void(bool, const DigitalSensorData&)> callback);
-    void fetchMotors(std::function<void(bool, const MotorData&)> callback);
+    void fetchDigitalSensors(std::function<void(bool, const DigitalSensorData&)> callback,
+                             CommandPriority priority = PRIORITY_NORMAL);
+    void fetchMotors(std::function<void(bool, const MotorData&)> callback, CommandPriority priority = PRIORITY_NORMAL);
     void fetchState(std::function<void(bool, const RobotState&)> callback);
     void fetchErr(std::function<void(bool, const ErrorData&)> callback);
     void fetchErrClear(std::function<void(bool, const ErrorData&)> callback);

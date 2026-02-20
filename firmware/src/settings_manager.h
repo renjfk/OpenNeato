@@ -22,6 +22,11 @@ struct Settings : public JsonSerializable {
     int wifiTxPower = WIFI_DEFAULT_TX_POWER; // 0.25 dBm units (34 = 8.5 dBm)
     int uartTxPin = NEATO_DEFAULT_TX_PIN; // ESP GPIO -> Robot RX
     int uartRxPin = NEATO_DEFAULT_RX_PIN; // ESP GPIO <- Robot TX
+    // Manual clean motor settings
+    int stallThreshold = MANUAL_STALL_LOAD_PCT; // Wheel load % for stall detection (30-80)
+    int brushRpm = MANUAL_BRUSH_RPM; // Main brush RPM (500-1600)
+    int vacuumSpeed = MANUAL_VACUUM_SPEED_PCT; // Vacuum speed % (40-100)
+    int sideBrushPower = MANUAL_SIDE_BRUSH_POWER_MW; // Side brush power in mW (500-1500)
 
     // Schedule (ESP32-managed, not robot serial)
     bool scheduleEnabled = false;

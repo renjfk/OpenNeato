@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { api } from "./api";
 import { Route, Router } from "./components/router";
 import { usePolling } from "./hooks/use-polling";
-import type { ChargerData, ErrorData, FirmwareVersion, StateData, SystemData } from "./types";
+import type { FirmwareVersion, ManualStatus, StateData } from "./types";
 import { DashboardView } from "./views/dashboard";
 import { LogsView } from "./views/logs";
 import { ManualView } from "./views/manual";
@@ -60,78 +60,71 @@ export function App() {
     }, [theme]);
 
     const state = usePolling<StateData>(api.getState, 2000);
-    const charger = usePolling<ChargerData>(api.getCharger, 5000);
-    const error = usePolling<ErrorData>(api.getError, 2000);
-    const system = usePolling<SystemData>(api.getSystem, 10000);
     const firmware = usePolling<FirmwareVersion>(api.getFirmwareVersion, 60000);
 
     // Derive manual mode from polled state — single source of truth
     const isManual = state.data?.uiState?.includes("MANUALCLEANING") ?? false;
+
+    // Poll manual status (safety + motor state) when in manual mode
+    const manualStatus = usePolling<ManualStatus>(api.getManualStatus, isManual ? 500 : 0);
 
     // Motor toggle state — owned at app level, persists across page navigation
     const [brush, setBrush] = useState(false);
     const [vacuum, setVacuum] = useState(false);
     const [sideBrush, setSideBrush] = useState(false);
 
-    // Reset motor state when manual mode ends
+    // Sync motor state from firmware (e.g. after wheel-lift safety stop)
     useEffect(() => {
         if (!isManual) {
             setBrush(false);
             setVacuum(false);
             setSideBrush(false);
+        } else if (manualStatus.data) {
+            setBrush(manualStatus.data.brush);
+            setVacuum(manualStatus.data.vacuum);
+            setSideBrush(manualStatus.data.sideBrush);
         }
-    }, [isManual]);
+    }, [isManual, manualStatus.data]);
 
-    const sendMotors = useCallback((b: boolean, v: boolean, s: boolean) => {
-        api.manualMotors(b, v, s).catch(() => {});
-    }, []);
-
-    const toggleBrush = useCallback(() => {
+    const toggleBrush = useCallback(async () => {
         const next = !brush;
+        await api.manualMotors(next, vacuum, sideBrush);
         setBrush(next);
-        sendMotors(next, vacuum, sideBrush);
-    }, [brush, vacuum, sideBrush, sendMotors]);
+    }, [brush, vacuum, sideBrush]);
 
-    const toggleVacuum = useCallback(() => {
+    const toggleVacuum = useCallback(async () => {
         const next = !vacuum;
+        await api.manualMotors(brush, next, sideBrush);
         setVacuum(next);
-        sendMotors(brush, next, sideBrush);
-    }, [brush, vacuum, sideBrush, sendMotors]);
+    }, [brush, vacuum, sideBrush]);
 
-    const toggleSideBrush = useCallback(() => {
+    const toggleSideBrush = useCallback(async () => {
         const next = !sideBrush;
+        await api.manualMotors(brush, vacuum, next);
         setSideBrush(next);
-        sendMotors(brush, vacuum, next);
-    }, [brush, vacuum, sideBrush, sendMotors]);
+    }, [brush, vacuum, sideBrush]);
 
-    const toggleAll = useCallback(() => {
+    const toggleAll = useCallback(async () => {
         const allOn = brush && vacuum && sideBrush;
         const next = !allOn;
+        await api.manualMotors(next, next, next);
         setBrush(next);
         setVacuum(next);
         setSideBrush(next);
-        sendMotors(next, next, next);
-    }, [brush, vacuum, sideBrush, sendMotors]);
+    }, [brush, vacuum, sideBrush]);
 
     return (
         <Router>
             <Route path="/">
-                <DashboardView
-                    system={system}
-                    firmware={firmware}
-                    error={error}
-                    state={state}
-                    charger={charger}
-                    isManual={isManual}
-                />
+                <DashboardView firmware={firmware} state={state} isManual={isManual} />
             </Route>
             <Route path="/settings">
-                <SettingsView theme={theme} onThemeChange={setTheme} system={system.data} firmware={firmware.data} />
+                <SettingsView theme={theme} onThemeChange={setTheme} firmware={firmware.data} />
             </Route>
             <Route path="/manual">
                 <ManualView
                     isManual={isManual}
-                    charger={charger.data}
+                    status={manualStatus.data}
                     brush={brush}
                     vacuum={vacuum}
                     sideBrush={sideBrush}

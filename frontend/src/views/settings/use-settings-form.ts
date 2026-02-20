@@ -13,6 +13,10 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
     const [uartTxPin, setUartTxPin] = useState(3);
     const [uartRxPin, setUartRxPin] = useState(4);
     const [hostname, setHostname] = useState("neato");
+    const [stallThreshold, setStallThreshold] = useState(60);
+    const [brushRpm, setBrushRpm] = useState(1200);
+    const [vacuumSpeed, setVacuumSpeed] = useState(80);
+    const [sideBrushPower, setSideBrushPower] = useState(1500);
 
     // Server-confirmed state — used to compute dirty/needsReboot
     const server = useRef<SettingsData>({ ...DEFAULT_SERVER });
@@ -34,6 +38,10 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
             setUartTxPin(fetched.uartTxPin);
             setUartRxPin(fetched.uartRxPin);
             setHostname(fetched.hostname);
+            setStallThreshold(fetched.stallThreshold);
+            setBrushRpm(fetched.brushRpm);
+            setVacuumSpeed(fetched.vacuumSpeed);
+            setSideBrushPower(fetched.sideBrushPower);
             setSettingsLoaded(true);
         }
     }, [fetched]);
@@ -47,7 +55,11 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
             wifiTxPower !== server.current.wifiTxPower ||
             uartTxPin !== server.current.uartTxPin ||
             uartRxPin !== server.current.uartRxPin ||
-            hostname !== server.current.hostname);
+            hostname !== server.current.hostname ||
+            stallThreshold !== server.current.stallThreshold ||
+            brushRpm !== server.current.brushRpm ||
+            vacuumSpeed !== server.current.vacuumSpeed ||
+            sideBrushPower !== server.current.sideBrushPower);
 
     const needsReboot =
         uartTxPin !== server.current.uartTxPin ||
@@ -82,8 +94,23 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         if (uartTxPin !== server.current.uartTxPin) patch.uartTxPin = uartTxPin;
         if (uartRxPin !== server.current.uartRxPin) patch.uartRxPin = uartRxPin;
         if (hostname !== server.current.hostname) patch.hostname = hostname;
+        if (stallThreshold !== server.current.stallThreshold) patch.stallThreshold = stallThreshold;
+        if (brushRpm !== server.current.brushRpm) patch.brushRpm = brushRpm;
+        if (vacuumSpeed !== server.current.vacuumSpeed) patch.vacuumSpeed = vacuumSpeed;
+        if (sideBrushPower !== server.current.sideBrushPower) patch.sideBrushPower = sideBrushPower;
         return patch;
-    }, [tz, debugLog, wifiTxPower, uartTxPin, uartRxPin, hostname]);
+    }, [
+        tz,
+        debugLog,
+        wifiTxPower,
+        uartTxPin,
+        uartRxPin,
+        hostname,
+        stallThreshold,
+        brushRpm,
+        vacuumSpeed,
+        sideBrushPower,
+    ]);
 
     const handleSave = useCallback(() => {
         const willReboot = needsReboot;
@@ -132,6 +159,14 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         setUartRxPin,
         hostname,
         setHostname,
+        stallThreshold,
+        setStallThreshold,
+        brushRpm,
+        setBrushRpm,
+        vacuumSpeed,
+        setVacuumSpeed,
+        sideBrushPower,
+        setSideBrushPower,
         // Derived state
         isDirty,
         needsReboot,

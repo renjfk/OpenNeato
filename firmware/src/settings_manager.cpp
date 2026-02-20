@@ -28,6 +28,10 @@ void SettingsManager::load() {
     current.wifiTxPower = prefs.getInt(NVS_KEY_WIFI_TX_POWER, WIFI_DEFAULT_TX_POWER);
     current.uartTxPin = prefs.getInt(NVS_KEY_UART_TX_PIN, NEATO_DEFAULT_TX_PIN);
     current.uartRxPin = prefs.getInt(NVS_KEY_UART_RX_PIN, NEATO_DEFAULT_RX_PIN);
+    current.stallThreshold = prefs.getInt(NVS_KEY_MC_STALL_THR, MANUAL_STALL_LOAD_PCT);
+    current.brushRpm = prefs.getInt(NVS_KEY_MC_BRUSH_RPM, MANUAL_BRUSH_RPM);
+    current.vacuumSpeed = prefs.getInt(NVS_KEY_MC_VACUUM_PCT, MANUAL_VACUUM_SPEED_PCT);
+    current.sideBrushPower = prefs.getInt(NVS_KEY_MC_SBRUSH_MW, MANUAL_SIDE_BRUSH_POWER_MW);
     current.scheduleEnabled = prefs.getBool(NVS_KEY_SCHED_ENABLED, false);
     for (int d = 0; d < SCHEDULE_DAYS; d++) {
         current.sched[d].hour = prefs.getInt(schedKey(d, "h").c_str(), 0);
@@ -43,6 +47,10 @@ void SettingsManager::save() {
     prefs.putInt(NVS_KEY_WIFI_TX_POWER, current.wifiTxPower);
     prefs.putInt(NVS_KEY_UART_TX_PIN, current.uartTxPin);
     prefs.putInt(NVS_KEY_UART_RX_PIN, current.uartRxPin);
+    prefs.putInt(NVS_KEY_MC_STALL_THR, current.stallThreshold);
+    prefs.putInt(NVS_KEY_MC_BRUSH_RPM, current.brushRpm);
+    prefs.putInt(NVS_KEY_MC_VACUUM_PCT, current.vacuumSpeed);
+    prefs.putInt(NVS_KEY_MC_SBRUSH_MW, current.sideBrushPower);
     prefs.putBool(NVS_KEY_SCHED_ENABLED, current.scheduleEnabled);
     for (int d = 0; d < SCHEDULE_DAYS; d++) {
         prefs.putInt(schedKey(d, "h").c_str(), current.sched[d].hour);
@@ -129,6 +137,28 @@ ApplyResult SettingsManager::apply(const String& json) {
         LOG("SETTINGS", "UART RX pin -> GPIO%d (reboot required)", current.uartRxPin);
     }
 
+    // Manual clean motor settings — clamp to safe hardware ranges
+    if (incoming.stallThreshold != current.stallThreshold) {
+        current.stallThreshold = constrain(incoming.stallThreshold, 30, 80);
+        changed = true;
+        LOG("SETTINGS", "Stall threshold -> %d%%", current.stallThreshold);
+    }
+    if (incoming.brushRpm != current.brushRpm) {
+        current.brushRpm = constrain(incoming.brushRpm, 500, 1600);
+        changed = true;
+        LOG("SETTINGS", "Brush RPM -> %d", current.brushRpm);
+    }
+    if (incoming.vacuumSpeed != current.vacuumSpeed) {
+        current.vacuumSpeed = constrain(incoming.vacuumSpeed, 40, 100);
+        changed = true;
+        LOG("SETTINGS", "Vacuum speed -> %d%%", current.vacuumSpeed);
+    }
+    if (incoming.sideBrushPower != current.sideBrushPower) {
+        current.sideBrushPower = constrain(incoming.sideBrushPower, 500, 1500);
+        changed = true;
+        LOG("SETTINGS", "Side brush power -> %d mW", current.sideBrushPower);
+    }
+
     if (incoming.scheduleEnabled != current.scheduleEnabled) {
         current.scheduleEnabled = incoming.scheduleEnabled;
         changed = true;
@@ -170,6 +200,10 @@ std::vector<Field> Settings::toFields() const {
             {"wifiTxPower", String(wifiTxPower), FIELD_INT},
             {"uartTxPin", String(uartTxPin), FIELD_INT},
             {"uartRxPin", String(uartRxPin), FIELD_INT},
+            {"stallThreshold", String(stallThreshold), FIELD_INT},
+            {"brushRpm", String(brushRpm), FIELD_INT},
+            {"vacuumSpeed", String(vacuumSpeed), FIELD_INT},
+            {"sideBrushPower", String(sideBrushPower), FIELD_INT},
             {"scheduleEnabled", scheduleEnabled ? "true" : "false", FIELD_BOOL},
     };
     for (int d = 0; d < SCHEDULE_DAYS; d++) {
@@ -207,6 +241,22 @@ bool Settings::fromFields(const std::vector<Field>& fields) {
     }
     if ((f = findField(fields, "uartRxPin")) && f->type == FIELD_INT) {
         uartRxPin = f->value.toInt();
+        applied = true;
+    }
+    if ((f = findField(fields, "stallThreshold")) && f->type == FIELD_INT) {
+        stallThreshold = f->value.toInt();
+        applied = true;
+    }
+    if ((f = findField(fields, "brushRpm")) && f->type == FIELD_INT) {
+        brushRpm = f->value.toInt();
+        applied = true;
+    }
+    if ((f = findField(fields, "vacuumSpeed")) && f->type == FIELD_INT) {
+        vacuumSpeed = f->value.toInt();
+        applied = true;
+    }
+    if ((f = findField(fields, "sideBrushPower")) && f->type == FIELD_INT) {
+        sideBrushPower = f->value.toInt();
         applied = true;
     }
     if ((f = findField(fields, "scheduleEnabled")) && f->type == FIELD_BOOL) {

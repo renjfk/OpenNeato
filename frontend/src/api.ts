@@ -4,6 +4,7 @@ import type {
     FirmwareVersion,
     LidarScan,
     LogFileInfo,
+    ManualStatus,
     SettingsData,
     StateData,
     SystemData,
@@ -92,6 +93,7 @@ export const api = {
         post(`/api/manual/move?left=${left}&right=${right}&speed=${speed}`),
     manualMotors: (brush: boolean, vacuum: boolean, sideBrush: boolean) =>
         post(`/api/manual/motors?brush=${brush ? 1 : 0}&vacuum=${vacuum ? 1 : 0}&sideBrush=${sideBrush ? 1 : 0}`),
+    getManualStatus: () => get<ManualStatus>("/api/manual/status"),
     getLidar: () => get<LidarScan>("/api/lidar"),
     lidarRotate: (enable: boolean) => post(`/api/lidar/rotate?enable=${enable ? 1 : 0}`),
     getSettings: () => get<SettingsData>("/api/settings"),

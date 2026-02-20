@@ -34,6 +34,7 @@
 #define CMD_SET_TIME "SetTime"
 #define CMD_SET_UI_ERROR_SET_ALERT "SetUIError setalert UI_ALERT_OLD_ERROR"
 #define CMD_SET_UI_ERROR_CLEAR_ALERT "SetUIError clearalert UI_ALERT_OLD_ERROR"
+#define CMD_SET_MOTOR "SetMotor"
 
 // -- Sound IDs ---------------------------------------------------------------
 

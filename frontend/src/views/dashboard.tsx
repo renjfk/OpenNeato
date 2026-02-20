@@ -23,6 +23,7 @@ import { ErrorBanner, ErrorBannerStack, useErrorStack } from "../components/erro
 import { Icon } from "../components/icon";
 import { useNavigate } from "../components/router";
 import type { PollResult } from "../hooks/use-polling";
+import { usePolling } from "../hooks/use-polling";
 import type { ChargerData, ErrorData, FirmwareVersion, StateData, SystemData } from "../types";
 
 // -- Helpers --
@@ -102,16 +103,16 @@ function wifiStrength(rssi: number): string {
 // -- Dashboard view --
 
 interface DashboardViewProps {
-    system: PollResult<SystemData>;
     firmware: PollResult<FirmwareVersion>;
-    error: PollResult<ErrorData>;
     state: PollResult<StateData>;
-    charger: PollResult<ChargerData>;
     isManual: boolean;
 }
 
-export function DashboardView({ system, firmware, error, state, charger, isManual }: DashboardViewProps) {
+export function DashboardView({ firmware, state, isManual }: DashboardViewProps) {
     const navigate = useNavigate();
+    const charger = usePolling<ChargerData>(api.getCharger, 5000);
+    const error = usePolling<ErrorData>(api.getError, 2000);
+    const system = usePolling<SystemData>(api.getSystem, 10000);
 
     const connErr = state.error && charger.error;
     const hasData = state.data || charger.data;

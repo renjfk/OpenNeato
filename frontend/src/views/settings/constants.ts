@@ -41,6 +41,62 @@ export const TX_POWER_PRESETS: TxPowerPreset[] = [
     { label: "19.5 dBm (max range)", value: 78 },
 ];
 
+// Stall detection presets — wheel load % threshold
+export interface StallPreset {
+    label: string;
+    value: number;
+}
+
+export const STALL_PRESETS: StallPreset[] = [
+    { label: "30% (very sensitive)", value: 30 },
+    { label: "40%", value: 40 },
+    { label: "50%", value: 50 },
+    { label: "60% (recommended)", value: 60 },
+    { label: "70%", value: 70 },
+    { label: "80% (less sensitive)", value: 80 },
+];
+
+// Brush RPM presets — safe range 500-2000, above 2000 motor shuts off
+export interface BrushPreset {
+    label: string;
+    value: number;
+}
+
+export const BRUSH_PRESETS: BrushPreset[] = [
+    { label: "800 RPM (eco)", value: 800 },
+    { label: "1000 RPM", value: 1000 },
+    { label: "1200 RPM (recommended)", value: 1200 },
+    { label: "1400 RPM", value: 1400 },
+    { label: "1600 RPM (high)", value: 1600 },
+];
+
+// Vacuum speed presets — 1-100%
+export interface VacuumPreset {
+    label: string;
+    value: number;
+}
+
+export const VACUUM_PRESETS: VacuumPreset[] = [
+    { label: "40% (eco)", value: 40 },
+    { label: "60%", value: 60 },
+    { label: "80% (recommended)", value: 80 },
+    { label: "90%", value: 90 },
+    { label: "100% (turbo)", value: 100 },
+];
+
+// Side brush power presets — milliwatts, open-loop
+export interface SideBrushPreset {
+    label: string;
+    value: number;
+}
+
+export const SIDE_BRUSH_PRESETS: SideBrushPreset[] = [
+    { label: "700 mW", value: 700 },
+    { label: "1000 mW", value: 1000 },
+    { label: "1200 mW", value: 1200 },
+    { label: "1500 mW (recommended)", value: 1500 },
+];
+
 export const DEFAULT_SERVER: SettingsData = {
     tz: "UTC0",
     debugLog: false,
@@ -48,4 +104,8 @@ export const DEFAULT_SERVER: SettingsData = {
     uartTxPin: 3,
     uartRxPin: 4,
     hostname: "neato",
+    stallThreshold: 60,
+    brushRpm: 1200,
+    vacuumSpeed: 80,
+    sideBrushPower: 1500,
 } as SettingsData;

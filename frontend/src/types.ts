@@ -46,6 +46,10 @@ export interface SettingsData {
     uartTxPin: number;
     uartRxPin: number;
     hostname: string;
+    stallThreshold: number; // Wheel load % for stall detection (30-80)
+    brushRpm: number; // Main brush RPM (500-1600)
+    vacuumSpeed: number; // Vacuum speed % (40-100)
+    sideBrushPower: number; // Side brush power in mW (500-1500)
     scheduleEnabled: boolean;
     sched0Hour: number;
     sched0Min: number;
@@ -86,6 +90,20 @@ export interface LidarScan {
 export interface FirmwareVersion {
     version: string;
     chip: string;
+}
+
+export interface ManualStatus {
+    active: boolean;
+    brush: boolean;
+    vacuum: boolean;
+    sideBrush: boolean;
+    lifted: boolean;
+    bumperFrontLeft: boolean;
+    bumperFrontRight: boolean;
+    bumperSideLeft: boolean;
+    bumperSideRight: boolean;
+    stallFront: boolean;
+    stallRear: boolean;
 }
 
 export interface LogFileInfo {

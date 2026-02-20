@@ -2,17 +2,21 @@ import { useCallback, useMemo, useRef, useState } from "preact/hooks";
 import alertSvg from "../assets/icons/alert.svg?raw";
 import { Icon } from "./icon";
 
-// -- Single error banner (fixed or dismissible) --
+// -- Single banner (error or warning) --
+
+type BannerVariant = "error" | "warning";
 
 interface ErrorBannerProps {
     title?: string;
     message: string;
+    variant?: BannerVariant;
     onDismiss?: () => void;
 }
 
-export function ErrorBanner({ title = "Alert", message, onDismiss }: ErrorBannerProps) {
+export function ErrorBanner({ title = "Alert", message, variant = "error", onDismiss }: ErrorBannerProps) {
+    const cls = variant === "warning" ? "error-banner warning" : "error-banner";
     return (
-        <div class="error-banner">
+        <div class={cls}>
             <div class="error-banner-row">
                 <div class="error-banner-icon">
                     <Icon svg={alertSvg} />

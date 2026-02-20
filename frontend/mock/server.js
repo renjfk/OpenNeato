@@ -4,6 +4,8 @@
 // To test different scenarios, edit the `state` object directly and reload
 
 const { execSync } = require("node:child_process");
+const { readFileSync } = require("node:fs");
+const { join } = require("node:path");
 
 // --- Helpers ---
 
@@ -61,6 +63,7 @@ const randf = (min, max, decimals = 2) => parseFloat((Math.random() * (max - min
 //   "ok"          — Robot idle, online, battery 85%
 //   "err|fa"      — Robot error (brush stuck) + action faults
 //   "low|fl|fs"   — Low battery + log faults + settings fault
+//   "man|llq"     — Manual clean + low LIDAR quality
 //
 // Robot state:
 //   ok   — Idle, battery 85%          off — Device unreachable
@@ -69,6 +72,19 @@ const randf = (min, max, decimals = 2) => parseFloat((Math.random() * (max - min
 //   ful  — Full, on dock              mid — Battery 45%
 //   low  — Battery 12%                ded — Battery 0%
 //   err  — Brush stuck error
+//
+// Manual clean (combine with each other or fault scenarios):
+//   man  — Manual mode active (no safety issues)
+//   mlf  — Manual + robot lifted
+//   mbf  — Manual + front-left bumper contact
+//   mbs  — Manual + side-right bumper contact
+//   msf  — Manual + forward stall (reverse to clear)
+//   msr  — Manual + rear stall (move forward to clear)
+//
+// LIDAR quality (combine with any state):
+//   llq  — Low scan quality (<90 valid points)
+//   lsl  — Slow LDS rotation (2.8 Hz)
+//   lno  — LIDAR unavailable (GET /api/lidar returns error)
 //
 // Fault injection (combine with any state above):
 //   fa   — Action faults (clean house/spot/stop return errors)
@@ -101,6 +117,18 @@ const SCENARIOS = {
         errorCode: 234,
         errorMessage: "My Brush is stuck. Please free it from debris",
     },
+    // Manual clean scenarios
+    man: { manualClean: true },
+    mlf: { manualClean: true, manualLifted: true },
+    mbf: { manualClean: true, manualBumperFrontLeft: true },
+    mbs: { manualClean: true, manualBumperSideRight: true },
+    msf: { manualClean: true, manualStallFront: true },
+    msr: { manualClean: true, manualStallRear: true },
+    // LIDAR quality scenarios
+    llq: { lidarLowQuality: true }, // Few valid points (<90)
+    lsl: { lidarSlowRotation: true }, // Slow LDS rotation (<4 Hz)
+    lno: { lidarUnavailable: true }, // LIDAR unavailable (error response)
+    // Fault scenarios
     fa: { faults: { actions: true } },
     fs: { faults: { settings: true } },
     flr: { faults: { logsRead: true } },
@@ -161,12 +189,30 @@ const state = {
     errorMessage: "",
     testMode: false,
     manualClean: false,
+    // Manual clean motor + safety state
+    manualBrush: false,
+    manualVacuum: false,
+    manualSideBrush: false,
+    manualLifted: false,
+    manualBumperFrontLeft: false,
+    manualBumperFrontRight: false,
+    manualBumperSideLeft: false,
+    manualBumperSideRight: false,
+    manualStallFront: false,
+    manualStallRear: false,
+    // LIDAR quality overrides
+    lidarLowQuality: false,
+    lidarSlowRotation: false,
     tz: "UTC0",
     debugLog: false,
     wifiTxPower: 60, // 15 dBm in 0.25 dBm units
     uartTxPin: 3,
     uartRxPin: 4,
     hostname: "neato",
+    stallThreshold: 60,
+    brushRpm: 1200,
+    vacuumSpeed: 80,
+    sideBrushPower: 1500,
     // Schedule (Mon=0..Sun=6)
     scheduleEnabled: true,
     sched0Hour: 9,
@@ -200,42 +246,17 @@ let bootTime = Date.now();
 
 const vBattFromFuel = (fuel) => parseFloat((12.0 + (fuel / 100) * 4.6).toFixed(2));
 
-// --- LIDAR synthetic room generator ---
+// --- LIDAR captured scans (real data from Neato D7) ---
 
-const generateLidarScan = () => {
-    const points = [];
-    for (let angle = 0; angle < 360; angle++) {
-        const rad = (angle * Math.PI) / 180;
+const lidarScans = [1, 2, 3, 4, 5, 6].map((n) =>
+    JSON.parse(readFileSync(join(__dirname, `lidar-scan${n}.json`), "utf8")),
+);
+let lidarScanIndex = 0;
 
-        // Simple rectangular room ~4m x 3m, robot near center
-        const cos = Math.cos(rad);
-        const sin = Math.sin(rad);
-
-        // Distance to room walls from center
-        let dist;
-        if (Math.abs(cos) > Math.abs(sin)) {
-            dist = Math.abs(2000 / cos); // 2m to left/right walls
-        } else {
-            dist = Math.abs(1500 / sin); // 1.5m to front/back walls
-        }
-
-        // Cap at reasonable max and add noise
-        dist = Math.min(dist, 5000);
-        dist = Math.round(dist + rand(-30, 30));
-
-        // Some angles get errors (simulating LIDAR artifacts)
-        const hasError = Math.random() < 0.05;
-
-        points.push({
-            angle,
-            dist: hasError ? 0 : Math.max(0, dist),
-            intensity: hasError ? 0 : rand(1200, 1600),
-            error: hasError ? rand(1, 3) : 0,
-        });
-    }
-
-    const validPoints = points.filter((p) => p.error === 0).length;
-    return { rotationSpeed: randf(4.8, 5.2), validPoints, points };
+const getLidarScan = () => {
+    const scan = lidarScans[lidarScanIndex];
+    lidarScanIndex = (lidarScanIndex + 1) % lidarScans.length;
+    return scan;
 };
 
 // --- Mock log files ---
@@ -434,7 +455,22 @@ const routes = {
     },
 
     "GET /api/lidar": (_req, res) => {
-        jsonResponse(res, generateLidarScan());
+        if (state.lidarUnavailable) return sendError(res, "UART timeout reading LDS scan", 500);
+        const scan = getLidarScan();
+        // Degrade scan for quality scenarios
+        if (state.lidarLowQuality || state.lidarSlowRotation) {
+            const degraded = { ...scan };
+            if (state.lidarSlowRotation) degraded.rotationSpeed = 2.8;
+            if (state.lidarLowQuality) {
+                // Zero out most points to simulate poor readings
+                degraded.points = scan.points.map((p, i) =>
+                    i % 5 === 0 ? p : { ...p, dist: 0, intensity: 0, error: 8035 },
+                );
+                degraded.validPoints = degraded.points.filter((p) => p.dist > 0).length;
+            }
+            return jsonResponse(res, degraded);
+        }
+        jsonResponse(res, scan);
     },
 
     // Action routes — parameterized via query string
@@ -462,16 +498,35 @@ const routes = {
         sendOk(res);
     },
 
+    "GET /api/manual/status": (_req, res) => {
+        jsonResponse(res, {
+            active: state.manualClean,
+            brush: state.manualBrush,
+            vacuum: state.manualVacuum,
+            sideBrush: state.manualSideBrush,
+            lifted: state.manualLifted,
+            bumperFrontLeft: state.manualBumperFrontLeft,
+            bumperFrontRight: state.manualBumperFrontRight,
+            bumperSideLeft: state.manualBumperSideLeft,
+            bumperSideRight: state.manualBumperSideRight,
+            stallFront: state.manualStallFront,
+            stallRear: state.manualStallRear,
+        });
+    },
+
     "POST /api/manual/move": (_req, res) => {
         if (faults.actions) return sendError(res, "UART timeout: robot not responding", 500);
         if (!state.manualClean) return sendError(res, "Not in manual mode", 400);
         sendOk(res);
     },
 
-    "POST /api/manual/motors": (_req, res) => {
+    "POST /api/manual/motors": (_req, res, query) => {
         if (faults.actions) return sendError(res, "UART timeout: robot not responding", 500);
         if (!state.manualClean) return sendError(res, "Not in manual mode", 400);
-        sendOk(res);
+        state.manualBrush = query.brush === "1";
+        state.manualVacuum = query.vacuum === "1";
+        state.manualSideBrush = query.sideBrush === "1";
+        setTimeout(() => sendOk(res), 600);
     },
 
     "POST /api/sound": (_req, res) => {
@@ -494,6 +549,19 @@ const routes = {
             state.cleaning = false;
             state.spotCleaning = false;
             state.paused = false;
+        }
+        // Reset motor and safety state on enable/disable
+        state.manualBrush = false;
+        state.manualVacuum = false;
+        state.manualSideBrush = false;
+        if (!enable) {
+            state.manualLifted = false;
+            state.manualBumperFrontLeft = false;
+            state.manualBumperFrontRight = false;
+            state.manualBumperSideLeft = false;
+            state.manualBumperSideRight = false;
+            state.manualStallFront = false;
+            state.manualStallRear = false;
         }
         deriveStates();
         sendOk(res);
@@ -548,7 +616,19 @@ const routes = {
 
     "GET /api/settings": (_req, res) => {
         const s = {};
-        const keys = ["tz", "debugLog", "wifiTxPower", "uartTxPin", "uartRxPin", "hostname", "scheduleEnabled"];
+        const keys = [
+            "tz",
+            "debugLog",
+            "wifiTxPower",
+            "uartTxPin",
+            "uartRxPin",
+            "hostname",
+            "stallThreshold",
+            "brushRpm",
+            "vacuumSpeed",
+            "sideBrushPower",
+            "scheduleEnabled",
+        ];
         for (const k of keys) s[k] = state[k];
         for (let d = 0; d < 7; d++) {
             s[`sched${d}Hour`] = state[`sched${d}Hour`];
@@ -645,6 +725,10 @@ const handleRequest = async (req, res) => {
             if (data.uartRxPin !== undefined) state.uartRxPin = data.uartRxPin;
             const hostnameChanged = data.hostname !== undefined && data.hostname !== state.hostname;
             if (data.hostname !== undefined) state.hostname = data.hostname;
+            if (data.stallThreshold !== undefined) state.stallThreshold = data.stallThreshold;
+            if (data.brushRpm !== undefined) state.brushRpm = data.brushRpm;
+            if (data.vacuumSpeed !== undefined) state.vacuumSpeed = data.vacuumSpeed;
+            if (data.sideBrushPower !== undefined) state.sideBrushPower = data.sideBrushPower;
             if (data.scheduleEnabled !== undefined) state.scheduleEnabled = data.scheduleEnabled;
             for (let d = 0; d < 7; d++) {
                 if (data[`sched${d}Hour`] !== undefined) state[`sched${d}Hour`] = data[`sched${d}Hour`];
@@ -658,7 +742,19 @@ const handleRequest = async (req, res) => {
             }
             // Return full settings (reuse GET handler logic)
             const s = {};
-            const keys = ["tz", "debugLog", "wifiTxPower", "uartTxPin", "uartRxPin", "hostname", "scheduleEnabled"];
+            const keys = [
+                "tz",
+                "debugLog",
+                "wifiTxPower",
+                "uartTxPin",
+                "uartRxPin",
+                "hostname",
+                "stallThreshold",
+                "brushRpm",
+                "vacuumSpeed",
+                "sideBrushPower",
+                "scheduleEnabled",
+            ];
             for (const k of keys) s[k] = state[k];
             for (let d = 0; d < 7; d++) {
                 s[`sched${d}Hour`] = state[`sched${d}Hour`];

@@ -43,6 +43,7 @@ NeatoSerial::NeatoSerial() :
 #undef CACHE_HIT
 
 void NeatoSerial::begin(int txPin, int rxPin) {
+    uart.setRxBufferSize(NEATO_UART_RX_BUFFER);
     uart.begin(NEATO_BAUD_RATE, SERIAL_8N1, rxPin, txPin);
     LOG("NEATO", "UART initialized (TX=GPIO%d, RX=GPIO%d, baud=%d)", txPin, rxPin, NEATO_BAUD_RATE);
 }
@@ -113,14 +114,23 @@ void NeatoSerial::loop() {
 
 // -- Queue management --------------------------------------------------------
 
-bool NeatoSerial::enqueue(const String& command, std::function<void(bool, const String&)> callback) {
+bool NeatoSerial::enqueue(const String& command, std::function<void(bool, const String&)> callback,
+                          CommandPriority priority) {
     if (static_cast<int>(queue.size()) >= NEATO_QUEUE_MAX_SIZE) {
         LOG("NEATO", "Queue full, rejecting: %s", command.c_str());
+        if (loggerCallback)
+            loggerCallback(command, CMD_QUEUE_FULL, 0, "", static_cast<int>(queue.size()), 0, 0);
         if (callback)
             callback(false, "");
         return false;
     }
-    queue.push_back({command, callback});
+    // Lower number = higher priority. Keep FIFO order within same priority.
+    auto it = queue.begin();
+    for (; it != queue.end(); ++it) {
+        if (it->priority > priority)
+            break;
+    }
+    queue.insert(it, {command, static_cast<uint8_t>(priority), callback});
     return true;
 }
 
@@ -245,14 +255,51 @@ void NeatoSerial::getAnalogSensors(std::function<void(bool, const AnalogSensorDa
 }
 
 void NeatoSerial::getDigitalSensors(std::function<void(bool, const DigitalSensorData&)> callback) {
-    digitalCache.get(callback);
+    getDigitalSensors(callback, PRIORITY_NORMAL);
+}
+
+void NeatoSerial::getDigitalSensors(std::function<void(bool, const DigitalSensorData&)> callback,
+                                    CommandPriority priority) {
+    // Normal priority goes through cache; elevated priority bypasses it
+    // to guarantee commands are enqueued at the requested priority.
+    if (priority == PRIORITY_NORMAL) {
+        digitalCache.get(callback);
+    } else {
+        fetchDigitalSensors(callback, priority);
+    }
 }
 
 void NeatoSerial::getMotors(std::function<void(bool, const MotorData&)> callback) {
-    motorCache.get(callback);
+    getMotors(callback, PRIORITY_NORMAL);
+}
+
+void NeatoSerial::getMotors(std::function<void(bool, const MotorData&)> callback, CommandPriority priority) {
+    // Normal priority goes through cache; elevated priority bypasses it
+    // to guarantee commands are enqueued at the requested priority.
+    if (priority == PRIORITY_NORMAL) {
+        motorCache.get(callback);
+    } else {
+        fetchMotors(callback, priority);
+    }
 }
 
 void NeatoSerial::getState(std::function<void(bool, const RobotState&)> callback) {
+    // During manual clean, the robot reports UIMGR_STATE_TESTMODE.
+    // Override to UIMGR_STATE_MANUALCLEANING so callers (frontend, dashboard)
+    // see the correct pseudo-state without needing to know about TestMode internals.
+    if (manualCleanActive) {
+        stateCache.get([callback](bool ok, const RobotState& data) {
+            if (!ok || !callback) {
+                if (callback)
+                    callback(ok, data);
+                return;
+            }
+            RobotState patched = data;
+            patched.uiState = "UIMGR_STATE_MANUALCLEANING";
+            callback(true, patched);
+        });
+        return;
+    }
     stateCache.get(callback);
 }
 
@@ -309,24 +356,31 @@ void NeatoSerial::fetchAnalogSensors(std::function<void(bool, const AnalogSensor
     });
 }
 
-void NeatoSerial::fetchDigitalSensors(std::function<void(bool, const DigitalSensorData&)> callback) {
-    enqueue(CMD_GET_DIGITAL_SENSORS, [callback](bool ok, const String& raw) {
-        DigitalSensorData data;
-        if (ok)
-            ok = parseDigitalSensorData(raw, data);
-        if (callback)
-            callback(ok, data);
-    });
+void NeatoSerial::fetchDigitalSensors(std::function<void(bool, const DigitalSensorData&)> callback,
+                                      CommandPriority priority) {
+    enqueue(
+            CMD_GET_DIGITAL_SENSORS,
+            [callback](bool ok, const String& raw) {
+                DigitalSensorData data;
+                if (ok)
+                    ok = parseDigitalSensorData(raw, data);
+                if (callback)
+                    callback(ok, data);
+            },
+            priority);
 }
 
-void NeatoSerial::fetchMotors(std::function<void(bool, const MotorData&)> callback) {
-    enqueue(CMD_GET_MOTORS, [callback](bool ok, const String& raw) {
-        MotorData data;
-        if (ok)
-            ok = parseMotorData(raw, data);
-        if (callback)
-            callback(ok, data);
-    });
+void NeatoSerial::fetchMotors(std::function<void(bool, const MotorData&)> callback, CommandPriority priority) {
+    enqueue(
+            CMD_GET_MOTORS,
+            [callback](bool ok, const String& raw) {
+                MotorData data;
+                if (ok)
+                    ok = parseMotorData(raw, data);
+                if (callback)
+                    callback(ok, data);
+            },
+            priority);
 }
 
 void NeatoSerial::fetchState(std::function<void(bool, const RobotState&)> callback) {
@@ -433,9 +487,11 @@ bool NeatoSerial::clean(const String& action, std::function<void(bool)> callback
             // even though the robot physically stops.  The SetUIError setalert /
             // clearalert dance nudges the state machine so it reports the correct
             // CLEANINGPAUSED state on the next GetState poll.
-            bool ok = enqueue(CMD_CLEAN_STOP, nullptr);
-            ok = ok && enqueue(CMD_SET_UI_ERROR_SET_ALERT, nullptr);
-            ok = ok && enqueue(CMD_SET_UI_ERROR_CLEAR_ALERT, wrapAction(callback));
+            // HIGH priority keeps all three commands together — prevents MEDIUM motor
+            // commands from interleaving and breaking the atomic dance.
+            bool ok = enqueue(CMD_CLEAN_STOP, nullptr, PRIORITY_HIGH);
+            ok = ok && enqueue(CMD_SET_UI_ERROR_SET_ALERT, nullptr, PRIORITY_HIGH);
+            ok = ok && enqueue(CMD_SET_UI_ERROR_CLEAR_ALERT, wrapAction(callback), PRIORITY_HIGH);
             return ok;
         }
         // Stop (PAUSED -> IDLE): plain Clean Stop, no dance needed.
@@ -452,7 +508,9 @@ bool NeatoSerial::clean(const String& action, std::function<void(bool)> callback
 bool NeatoSerial::testMode(bool enable, std::function<void(bool)> callback) {
     const char *cmd = enable ? CMD_TEST_MODE_ON : CMD_TEST_MODE_OFF;
     invalidateState();
-    return enqueue(cmd, wrapAction(callback));
+    // HIGH priority: TestMode is a prerequisite for motor commands — must execute
+    // before any CRITICAL/MEDIUM motor commands that may already be queued.
+    return enqueue(cmd, wrapAction(callback), PRIORITY_HIGH);
 }
 
 bool NeatoSerial::playSound(SoundId soundId, std::function<void(bool)> callback) {
@@ -462,7 +520,84 @@ bool NeatoSerial::playSound(SoundId soundId, std::function<void(bool)> callback)
 
 bool NeatoSerial::setLdsRotation(bool on, std::function<void(bool)> callback) {
     const char *cmd = on ? CMD_SET_LDS_ROTATION_ON : CMD_SET_LDS_ROTATION_OFF;
-    return enqueue(cmd, wrapAction(callback));
+    // HIGH priority: LDS rotation is a setup/teardown command that must execute
+    // before motor commands during manual clean enable/disable sequences.
+    return enqueue(cmd, wrapAction(callback), PRIORITY_HIGH);
+}
+
+bool NeatoSerial::setMotorWheels(int leftMM, int rightMM, int speedMMs, std::function<void(bool)> callback) {
+    // SetMotor 0 0 0 bug: zero values are ignored, robot coasts for ~1s.
+    // Workaround: disable wheels for immediate stop, then re-enable for next command.
+    if (leftMM == 0 && rightMM == 0) {
+        return enqueue(
+                String(CMD_SET_MOTOR) + " LWheelDisable RWheelDisable",
+                [this, callback](bool ok, const String&) {
+                    // Re-enable wheels so subsequent move commands work
+                    enqueue(String(CMD_SET_MOTOR) + " LWheelEnable RWheelEnable", wrapAction(callback),
+                            PRIORITY_CRITICAL);
+                },
+                PRIORITY_CRITICAL);
+    }
+    // Robot rejects distances outside ±10000mm — clamp to protocol limits
+    leftMM = constrain(leftMM, -10000, 10000);
+    rightMM = constrain(rightMM, -10000, 10000);
+    speedMMs = constrain(speedMMs, 0, 300);
+    String cmd = String(CMD_SET_MOTOR) + " LWheelDist " + String(leftMM) + " RWheelDist " + String(rightMM) +
+                 " Speed " + String(speedMMs);
+    return enqueue(cmd, wrapAction(callback), PRIORITY_CRITICAL);
+}
+
+bool NeatoSerial::setMotorBrush(int rpm, std::function<void(bool)> callback) {
+    if (rpm <= 0) {
+        return enqueue(String(CMD_SET_MOTOR) + " BrushDisable", wrapAction(callback), PRIORITY_MEDIUM);
+    }
+    // BrushEnable energizes the motor driver, then Brush + RPM starts spinning.
+    // Brush flag is mutually exclusive with wheel/vacuum commands per call.
+    return enqueue(
+            String(CMD_SET_MOTOR) + " BrushEnable",
+            [this, rpm, callback](bool ok, const String&) {
+                if (!ok) {
+                    if (callback)
+                        callback(false);
+                    return;
+                }
+                enqueue(String(CMD_SET_MOTOR) + " Brush RPM " + String(rpm), wrapAction(callback), PRIORITY_MEDIUM);
+            },
+            PRIORITY_MEDIUM);
+}
+
+bool NeatoSerial::setMotorVacuum(bool on, int speedPercent, std::function<void(bool)> callback) {
+    // VacuumSpeed must be combined with VacuumOn in the same call.
+    String cmd = String(CMD_SET_MOTOR);
+    cmd += on ? " VacuumOn VacuumSpeed " + String(speedPercent) : " VacuumOff";
+    return enqueue(cmd, wrapAction(callback), PRIORITY_MEDIUM);
+}
+
+bool NeatoSerial::setMotorSideBrush(bool on, int powerMw, std::function<void(bool)> callback) {
+    // Side brush (Botvac D3-D7 only) uses open-loop power control in milliwatts.
+    // Two-layer control: SideBrushEnable energizes motor driver, SideBrushOn starts spinning.
+    // Completely independent from the main brush.
+    if (!on) {
+        return enqueue(
+                String(CMD_SET_MOTOR) + " SideBrushOff",
+                [this, callback](bool ok, const String&) {
+                    // Best-effort disable after stopping
+                    enqueue(String(CMD_SET_MOTOR) + " SideBrushDisable", wrapAction(callback), PRIORITY_MEDIUM);
+                },
+                PRIORITY_MEDIUM);
+    }
+    return enqueue(
+            String(CMD_SET_MOTOR) + " SideBrushEnable",
+            [this, powerMw, callback](bool ok, const String&) {
+                if (!ok) {
+                    if (callback)
+                        callback(false);
+                    return;
+                }
+                enqueue(String(CMD_SET_MOTOR) + " SideBrushOn SideBrushPower " + String(powerMw), wrapAction(callback),
+                        PRIORITY_MEDIUM);
+            },
+            PRIORITY_MEDIUM);
 }
 
 // -- Time commands -----------------------------------------------------------

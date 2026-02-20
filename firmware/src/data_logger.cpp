@@ -505,6 +505,12 @@ void DataLogger::onCommand(const String& cmd, CommandStatus status, unsigned lon
         case CMD_SERIAL_ERROR:
             statusStr = "serial_error";
             break;
+        case CMD_UNSUPPORTED:
+            statusStr = "unsupported";
+            break;
+        case CMD_QUEUE_FULL:
+            statusStr = "queue_full";
+            break;
         default:
             statusStr = "unknown";
             break;

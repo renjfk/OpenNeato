@@ -6,6 +6,7 @@ import calendarSvg from "../assets/icons/calendar.svg?raw";
 import chipSvg from "../assets/icons/chip.svg?raw";
 import clockSvg from "../assets/icons/clock.svg?raw";
 import databaseSvg from "../assets/icons/database.svg?raw";
+import manualSvg from "../assets/icons/manual.svg?raw";
 import moonSvg from "../assets/icons/moon.svg?raw";
 import paletteSvg from "../assets/icons/palette.svg?raw";
 import powerSvg from "../assets/icons/power.svg?raw";
@@ -18,8 +19,16 @@ import { ConfirmDialog } from "../components/confirm-dialog";
 import { ErrorBannerStack, useErrorStack } from "../components/error-banner";
 import { Icon } from "../components/icon";
 import { useNavigate } from "../components/router";
+import { usePolling } from "../hooks/use-polling";
 import type { FirmwareVersion, SystemData } from "../types";
-import { TIMEZONE_PRESETS, TX_POWER_PRESETS } from "./settings/constants";
+import {
+    BRUSH_PRESETS,
+    SIDE_BRUSH_PRESETS,
+    STALL_PRESETS,
+    TIMEZONE_PRESETS,
+    TX_POWER_PRESETS,
+    VACUUM_PRESETS,
+} from "./settings/constants";
 import { findPresetLabel, formatRobotTime } from "./settings/helpers";
 import { SettingsCategory } from "./settings/settings-category";
 import { useFirmwareUpload } from "./settings/use-firmware-upload";
@@ -31,12 +40,13 @@ type Theme = "system" | "dark" | "light";
 interface SettingsViewProps {
     theme: Theme;
     onThemeChange: (t: Theme) => void;
-    system: SystemData | null;
     firmware: FirmwareVersion | null;
 }
 
-export function SettingsView({ theme, onThemeChange, system, firmware }: SettingsViewProps) {
+export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewProps) {
     const navigate = useNavigate();
+    const systemPoll = usePolling<SystemData>(api.getSystem, 10000);
+    const system = systemPoll.data;
     const [errors, errorStack] = useErrorStack();
     const { rebooting, startRebootFlow } = useReboot(system?.uptime ?? 0);
 
@@ -55,6 +65,14 @@ export function SettingsView({ theme, onThemeChange, system, firmware }: Setting
         setUartRxPin,
         hostname,
         setHostname,
+        stallThreshold,
+        setStallThreshold,
+        brushRpm,
+        setBrushRpm,
+        vacuumSpeed,
+        setVacuumSpeed,
+        sideBrushPower,
+        setSideBrushPower,
         isDirty,
         pinError,
         hostnameError,
@@ -319,6 +337,85 @@ export function SettingsView({ theme, onThemeChange, system, firmware }: Setting
                             </div>
                             <span class="settings-nav-chevron">&rsaquo;</span>
                         </button>
+                    </div>
+                </SettingsCategory>
+
+                <SettingsCategory title="Manual Clean" icon={manualSvg}>
+                    <div class="settings-section">
+                        <div class="settings-section-title">Brush Speed</div>
+                        <div class="settings-tz-select-wrap">
+                            <select
+                                class="settings-tz-select"
+                                value={brushRpm}
+                                onChange={(e) => setBrushRpm(parseInt((e.target as HTMLSelectElement).value, 10))}
+                                disabled={saving}
+                            >
+                                {BRUSH_PRESETS.map((p) => (
+                                    <option key={p.value} value={p.value}>
+                                        {p.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div class="settings-robot-time">Main brush rotation speed during manual clean</div>
+                    </div>
+                    <div class="settings-section">
+                        <div class="settings-section-title">Vacuum Power</div>
+                        <div class="settings-tz-select-wrap">
+                            <select
+                                class="settings-tz-select"
+                                value={vacuumSpeed}
+                                onChange={(e) => setVacuumSpeed(parseInt((e.target as HTMLSelectElement).value, 10))}
+                                disabled={saving}
+                            >
+                                {VACUUM_PRESETS.map((p) => (
+                                    <option key={p.value} value={p.value}>
+                                        {p.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div class="settings-robot-time">Vacuum motor speed during manual clean</div>
+                    </div>
+                    <div class="settings-section">
+                        <div class="settings-section-title">Side Brush Power</div>
+                        <div class="settings-tz-select-wrap">
+                            <select
+                                class="settings-tz-select"
+                                value={sideBrushPower}
+                                onChange={(e) => setSideBrushPower(parseInt((e.target as HTMLSelectElement).value, 10))}
+                                disabled={saving}
+                            >
+                                {SIDE_BRUSH_PRESETS.map((p) => (
+                                    <option key={p.value} value={p.value}>
+                                        {p.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div class="settings-robot-time">
+                            Side brush motor power (D5 and above)
+                        </div>
+                    </div>
+                    <div class="settings-section">
+                        <div class="settings-section-title">Stall Detection</div>
+                        <div class="settings-tz-select-wrap">
+                            <select
+                                class="settings-tz-select"
+                                value={stallThreshold}
+                                onChange={(e) => setStallThreshold(parseInt((e.target as HTMLSelectElement).value, 10))}
+                                disabled={saving}
+                            >
+                                {STALL_PRESETS.map((p) => (
+                                    <option key={p.value} value={p.value}>
+                                        {p.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div class="settings-robot-time">
+                            Wheel load threshold for obstacle detection during manual driving
+                        </div>
                     </div>
                 </SettingsCategory>
 

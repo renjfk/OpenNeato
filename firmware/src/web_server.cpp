@@ -5,15 +5,19 @@
 #include "system_manager.h"
 #include "settings_manager.h"
 #include "firmware_manager.h"
+#include "manual_clean_manager.h"
 #include <SPIFFS.h>
 
+unsigned long WebServer::lastApiActivity = 0;
+
 WebServer::WebServer(AsyncWebServer& server, NeatoSerial& neato, DataLogger& logger, SystemManager& sys,
-                     FirmwareManager& fw, SettingsManager& settings) :
-    server(server), neato(neato), logger(logger), sysMgr(sys), fwMgr(fw), settingsMgr(settings) {}
+                     FirmwareManager& fw, SettingsManager& settings, ManualCleanManager& manual) :
+    server(server), neato(neato), logger(logger), sysMgr(sys), fwMgr(fw), settingsMgr(settings), manualMgr(manual) {}
 
 void WebServer::loggedRoute(const char *path, WebRequestMethodComposite httpMethod, SyncHandler handler) {
     server.on(path, httpMethod, [this, handler](AsyncWebServerRequest *request) {
-        unsigned long startMs = millis();
+        lastApiActivity = millis();
+        unsigned long startMs = lastApiActivity;
         int status = handler(request);
         logger.logRequest(request->method(), request->url().c_str(), status, millis() - startMs);
     });
@@ -23,7 +27,8 @@ void WebServer::loggedBodyRoute(const char *path, WebRequestMethodComposite http
     server.on(
             path, httpMethod, [](AsyncWebServerRequest *request) { /* handled in body callback */ }, nullptr,
             [this, handler](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t, size_t) {
-                unsigned long startMs = millis();
+                lastApiActivity = millis();
+                unsigned long startMs = lastApiActivity;
                 int status = handler(request, data, len);
                 logger.logRequest(request->method(), request->url().c_str(), status, millis() - startMs);
             });
@@ -44,28 +49,6 @@ void WebServer::sendOk(AsyncWebServerRequest *request) {
     request->send(200, "application/json", fieldsToJson({{"ok", "true", FIELD_BOOL}}));
 }
 
-void WebServer::registerActionRoute(const char *path, bool (NeatoSerial::*method)(std::function<void(bool)>)) {
-    server.on(path, HTTP_POST, [this, path, method](AsyncWebServerRequest *request) {
-        unsigned long startMs = millis();
-        auto weak = request->pause();
-        if (!(neato.*method)([this, weak, path, startMs](bool ok) {
-                if (auto request = weak.lock()) {
-                    unsigned long elapsed = millis() - startMs;
-                    if (!ok) {
-                        logger.logRequest(HTTP_POST, path, 504, elapsed);
-                        sendError(request.get(), 504, "timeout");
-                        return;
-                    }
-                    logger.logRequest(HTTP_POST, path, 200, elapsed);
-                    sendOk(request.get());
-                }
-            })) {
-            logger.logRequest(HTTP_POST, path, 503, 0);
-            sendError(request, 503, "unavailable");
-        }
-    });
-}
-
 void WebServer::begin() {
     // Register all embedded frontend assets from the auto-generated registry
     for (size_t i = 0; i < WEB_ASSETS_COUNT; i++) {
@@ -78,6 +61,7 @@ void WebServer::begin() {
     LOG("WEB", "Registered %u embedded assets", WEB_ASSETS_COUNT);
 
     registerApiRoutes();
+    registerManualRoutes();
     registerLogRoutes();
     registerSystemRoutes();
     registerSettingsRoutes();
@@ -89,27 +73,44 @@ void WebServer::begin() {
 void WebServer::registerApiRoutes() {
     // -- Sensor query endpoints ----------------------------------------------
 
-    registerSensorRoute<VersionData>("/api/version", &NeatoSerial::getVersion);
-    registerSensorRoute<ChargerData>("/api/charger", &NeatoSerial::getCharger);
-    registerSensorRoute<AnalogSensorData>("/api/sensors/analog", &NeatoSerial::getAnalogSensors);
-    registerSensorRoute<DigitalSensorData>("/api/sensors/digital", &NeatoSerial::getDigitalSensors);
-    registerSensorRoute<MotorData>("/api/motors", &NeatoSerial::getMotors);
-    registerSensorRoute<RobotState>("/api/state", &NeatoSerial::getState);
-    registerSensorRoute<ErrorData>("/api/error", &NeatoSerial::getErr);
-    registerSensorRoute<AccelData>("/api/accel", &NeatoSerial::getAccel);
-    registerSensorRoute<ButtonData>("/api/buttons", &NeatoSerial::getButtons);
-    registerSensorRoute<LdsScanData>("/api/lidar", &NeatoSerial::getLdsScan);
+    registerSensorRoute<NeatoSerial, VersionData>("/api/version", neato, &NeatoSerial::getVersion);
+    registerSensorRoute<NeatoSerial, ChargerData>("/api/charger", neato, &NeatoSerial::getCharger);
+    registerSensorRoute<NeatoSerial, AnalogSensorData>("/api/sensors/analog", neato, &NeatoSerial::getAnalogSensors);
+    registerSensorRoute<NeatoSerial, DigitalSensorData>("/api/sensors/digital", neato, &NeatoSerial::getDigitalSensors);
+    registerSensorRoute<NeatoSerial, MotorData>("/api/motors", neato, &NeatoSerial::getMotors);
+    registerSensorRoute<NeatoSerial, RobotState>("/api/state", neato, &NeatoSerial::getState);
+    registerSensorRoute<NeatoSerial, ErrorData>("/api/error", neato, &NeatoSerial::getErr);
+    registerSensorRoute<NeatoSerial, AccelData>("/api/accel", neato, &NeatoSerial::getAccel);
+    registerSensorRoute<NeatoSerial, ButtonData>("/api/buttons", neato, &NeatoSerial::getButtons);
+    registerSensorRoute<NeatoSerial, LdsScanData>("/api/lidar", neato, &NeatoSerial::getLdsScan);
 
     // -- Action endpoints ----------------------------------------------------
     // All parameterized actions use query strings: resource URL identifies the
     // command, query params carry arguments (mirrors Neato serial protocol).
 
-    registerActionRoute<const String&>("/api/clean", &NeatoSerial::clean, "action", "house");
-    registerActionRoute<SoundId>("/api/sound", &NeatoSerial::playSound, "id");
-    registerActionRoute<bool>("/api/testmode", &NeatoSerial::testMode, "enable");
-    registerActionRoute<bool>("/api/lidar/rotate", &NeatoSerial::setLdsRotation, "enable");
+    registerActionRoute("/api/clean", neato, &NeatoSerial::clean, "action", "house");
+    registerActionRoute("/api/sound", neato, &NeatoSerial::playSound, "id");
+    registerActionRoute("/api/testmode", neato, &NeatoSerial::testMode, "enable");
+    registerActionRoute("/api/lidar/rotate", neato, &NeatoSerial::setLdsRotation, "enable");
 
     LOG("WEB", "API routes registered");
+}
+
+// -- Manual clean endpoints ---------------------------------------------------
+
+void WebServer::registerManualRoutes() {
+    // Register longer paths first — ESPAsyncWebServer matches routes by prefix,
+    // so /api/manual would swallow /api/manual/move and /api/manual/motors.
+    loggedRoute("/api/manual/status", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        request->send(200, "application/json", manualMgr.getStatusJson());
+        return 200;
+    });
+    registerActionRoute("/api/manual/move", manualMgr, &ManualCleanManager::move, "left", "right", "speed");
+    registerActionRoute("/api/manual/motors", manualMgr, &ManualCleanManager::setMotors, "brush", "vacuum",
+                        "sideBrush");
+    registerActionRoute("/api/manual", manualMgr, &ManualCleanManager::enable, "enable");
+
+    LOG("WEB", "Manual clean routes registered");
 }
 
 // -- Log file endpoints ------------------------------------------------------
@@ -224,6 +225,14 @@ void WebServer::registerSettingsRoutes() {
                         if (result == APPLY_INVALID) {
                             sendError(request, 400, "Invalid settings");
                             return 400;
+                        }
+                        if (result == APPLY_CHANGED) {
+                            // Push manual clean settings to manager (no reboot needed)
+                            const auto& s = settingsMgr.get();
+                            manualMgr.setStallThreshold(s.stallThreshold);
+                            manualMgr.setBrushRpm(s.brushRpm);
+                            manualMgr.setVacuumSpeed(s.vacuumSpeed);
+                            manualMgr.setSideBrushPower(s.sideBrushPower);
                         }
                         request->send(200, "application/json", settingsMgr.get().toJson());
                         return 200;

@@ -346,6 +346,7 @@ body {
 .error-banner-icon {
     flex-shrink: 0;
     margin-top: 1px;
+    color: var(--red);
 }
 
 .error-banner-content {
@@ -398,6 +399,24 @@ body {
 
 .error-banner-stack .error-banner {
     margin: 0;
+}
+
+.error-banner.warning {
+    background: rgba(245, 166, 35, 0.08);
+    border-color: rgba(245, 166, 35, 0.15);
+}
+
+.error-banner.warning .error-banner-title {
+    color: var(--warning, #f5a623);
+}
+
+.error-banner.warning .error-banner-icon {
+    color: var(--warning, #f5a623);
+}
+
+.error-banner.warning .error-banner-dismiss {
+    background: rgba(245, 166, 35, 0.1);
+    color: var(--warning, #f5a623);
 }
 
 /* Bottom action bar */
@@ -1828,26 +1847,30 @@ body {
 
 /* Manual control page */
 
-.manual-status-bar {
+.manual-map-battery {
+    position: absolute;
+    top: 8px;
+    right: 8px;
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 16px;
-    padding: 6px 20px;
+    gap: 4px;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 3px 8px;
+    border-radius: 8px;
     font-size: 12px;
     color: var(--text-dim);
 }
 
-.manual-status-item {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.manual-status-item > span:first-child svg,
-.manual-status-item > span:first-child {
+.manual-map-battery > span:first-child svg,
+.manual-map-battery > span:first-child {
     width: 16px;
     height: 16px;
+}
+
+.manual-map-battery > span:last-of-type + span svg {
+    width: 12px;
+    height: 12px;
+    color: var(--amber);
 }
 
 .manual-page {
@@ -1871,14 +1894,33 @@ body {
     border: 1px solid var(--border);
 }
 
-.manual-map-error {
+.manual-map-warn {
     position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 13px;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.6);
+    color: var(--amber);
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    white-space: nowrap;
+}
+
+.manual-map-warn.manual-map-center {
+    bottom: auto;
+    top: 50%;
+    transform: translate(-50%, -50%);
     color: var(--text-dim);
+}
+
+.manual-map-warn.manual-map-top {
+    bottom: auto;
+    top: 8px;
+}
+
+.manual-map-warn.error {
+    color: var(--red);
 }
 
 .manual-controls {

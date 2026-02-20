@@ -401,24 +401,6 @@ body {
     margin: 0;
 }
 
-.error-banner.warning {
-    background: rgba(245, 166, 35, 0.08);
-    border-color: rgba(245, 166, 35, 0.15);
-}
-
-.error-banner.warning .error-banner-title {
-    color: var(--warning, #f5a623);
-}
-
-.error-banner.warning .error-banner-icon {
-    color: var(--warning, #f5a623);
-}
-
-.error-banner.warning .error-banner-dismiss {
-    background: rgba(245, 166, 35, 0.1);
-    color: var(--warning, #f5a623);
-}
-
 /* Bottom action bar */
 
 .action-bar {

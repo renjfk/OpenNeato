@@ -393,9 +393,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                                 ))}
                             </select>
                         </div>
-                        <div class="settings-robot-time">
-                            Side brush motor power (D5 and above)
-                        </div>
+                        <div class="settings-robot-time">Side brush motor power (D5 and above)</div>
                     </div>
                     <div class="settings-section">
                         <div class="settings-section-title">Stall Detection</div>

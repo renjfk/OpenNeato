@@ -44,7 +44,10 @@ firmware through REST API. Everything runs on the device itself.
 May vary across robot models/firmware versions.
 
 **OTA via GitHub Releases** — Browser-side only (ESP32 makes no outbound connections).
-Browser fetches releases API, downloads .bin, uploads to device.
+Browser fetches `api.github.com` releases list (CORS allowed), displays available
+versions with release notes in settings. User clicks download link which opens the
+`.bin` asset in a new tab (normal navigation, no CORS issue), then uploads via the
+existing firmware upload file picker. Two-click flow, zero infrastructure.
 
 **LIDAR and mapping** — GetLDSScan data, 2D occupancy maps on ESP32, SPIFFS persistence.
 

@@ -2,7 +2,15 @@
     "$schema": "https://biomejs.dev/schemas/2.4.4/schema.json",
 
     "files": {
-        "includes": ["src/**", "mock/*.js", "scripts/**", "vite.config.ts"]
+        "includes": [
+            "src/**",
+            "mock/*.js",
+            "scripts/**",
+            "vite.config.ts",
+            "tsconfig.json",
+            "package.json",
+            "biome.json"
+        ]
     },
     "formatter": {
         "indentStyle": "space",

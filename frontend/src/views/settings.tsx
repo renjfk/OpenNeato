@@ -56,8 +56,8 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
     const {
         tz,
         setTz,
-        debugLog,
-        setDebugLog,
+        debug,
+        setDebug,
         wifiTxPower,
         setWifiTxPower,
         uartTxPin,
@@ -625,15 +625,15 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                         <div class="settings-section-title">Diagnostics</div>
                         <div class="settings-toggle-row">
                             <div class="settings-toggle-label">
-                                <span class="settings-toggle-title">Debug logging</span>
-                                <span class="settings-toggle-desc">Include serial responses in logs</span>
+                                <span class="settings-toggle-title">Debug mode</span>
+                                <span class="settings-toggle-desc">Verbose logging and serial console endpoint</span>
                             </div>
                             <button
                                 type="button"
-                                class={`settings-toggle${debugLog ? " on" : ""}`}
-                                onClick={() => setDebugLog(!debugLog)}
+                                class={`settings-toggle${debug ? " on" : ""}`}
+                                onClick={() => setDebug(!debug)}
                                 disabled={saving}
-                                aria-label="Toggle debug logging"
+                                aria-label="Toggle debug mode"
                             />
                         </div>
                     </div>

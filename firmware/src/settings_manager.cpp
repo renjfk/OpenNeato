@@ -14,8 +14,8 @@ SettingsManager::SettingsManager(Preferences& prefs) : prefs(prefs) {}
 
 void SettingsManager::begin() {
     load();
-    LOG("SETTINGS", "Loaded: hostname=%s tz=%s debugLog=%s txPower=%d (%.1f dBm) uart=TX%d/RX%d sched=%s",
-        current.hostname.c_str(), current.tz.c_str(), current.debugLog ? "true" : "false", current.wifiTxPower,
+    LOG("SETTINGS", "Loaded: hostname=%s tz=%s debug=%s txPower=%d (%.1f dBm) uart=TX%d/RX%d sched=%s",
+        current.hostname.c_str(), current.tz.c_str(), current.debug ? "true" : "false", current.wifiTxPower,
         current.wifiTxPower * 0.25f, current.uartTxPin, current.uartRxPin, current.scheduleEnabled ? "on" : "off");
 }
 
@@ -24,7 +24,7 @@ void SettingsManager::begin() {
 void SettingsManager::load() {
     current.hostname = prefs.getString(NVS_KEY_HOSTNAME, DEFAULT_HOSTNAME);
     current.tz = prefs.getString(NVS_KEY_TIMEZONE, NTP_DEFAULT_TZ);
-    current.debugLog = prefs.getBool(NVS_KEY_DEBUG_LOG, false);
+    current.debug = prefs.getBool(NVS_KEY_DEBUG, false);
     current.wifiTxPower = prefs.getInt(NVS_KEY_WIFI_TX_POWER, WIFI_DEFAULT_TX_POWER);
     current.uartTxPin = prefs.getInt(NVS_KEY_UART_TX_PIN, NEATO_DEFAULT_TX_PIN);
     current.uartRxPin = prefs.getInt(NVS_KEY_UART_RX_PIN, NEATO_DEFAULT_RX_PIN);
@@ -48,7 +48,7 @@ void SettingsManager::load() {
 void SettingsManager::save() {
     prefs.putString(NVS_KEY_HOSTNAME, current.hostname);
     prefs.putString(NVS_KEY_TIMEZONE, current.tz);
-    prefs.putBool(NVS_KEY_DEBUG_LOG, current.debugLog);
+    prefs.putBool(NVS_KEY_DEBUG, current.debug);
     prefs.putInt(NVS_KEY_WIFI_TX_POWER, current.wifiTxPower);
     prefs.putInt(NVS_KEY_UART_TX_PIN, current.uartTxPin);
     prefs.putInt(NVS_KEY_UART_RX_PIN, current.uartRxPin);
@@ -104,10 +104,10 @@ ApplyResult SettingsManager::apply(const String& json) {
         LOG("SETTINGS", "Timezone -> %s", current.tz.c_str());
     }
 
-    if (incoming.debugLog != current.debugLog) {
-        current.debugLog = incoming.debugLog;
+    if (incoming.debug != current.debug) {
+        current.debug = incoming.debug;
         changed = true;
-        LOG("SETTINGS", "Debug log -> %s", current.debugLog ? "on" : "off");
+        LOG("SETTINGS", "Debug -> %s", current.debug ? "on" : "off");
     }
 
     if (incoming.wifiTxPower != current.wifiTxPower) {
@@ -233,7 +233,7 @@ std::vector<Field> Settings::toFields() const {
     std::vector<Field> f = {
             {"hostname", hostname, FIELD_STRING},
             {"tz", tz, FIELD_STRING},
-            {"debugLog", debugLog ? "true" : "false", FIELD_BOOL},
+            {"debug", debug ? "true" : "false", FIELD_BOOL},
             {"wifiTxPower", String(wifiTxPower), FIELD_INT},
             {"uartTxPin", String(uartTxPin), FIELD_INT},
             {"uartRxPin", String(uartRxPin), FIELD_INT},
@@ -269,8 +269,8 @@ bool Settings::fromFields(const std::vector<Field>& fields) {
         tz = f->value;
         applied = true;
     }
-    if ((f = findField(fields, "debugLog")) && f->type == FIELD_BOOL) {
-        debugLog = (f->value == "true");
+    if ((f = findField(fields, "debug")) && f->type == FIELD_BOOL) {
+        debug = (f->value == "true");
         applied = true;
     }
     if ((f = findField(fields, "wifiTxPower")) && f->type == FIELD_INT) {

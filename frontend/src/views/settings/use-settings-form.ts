@@ -8,7 +8,7 @@ import { DEFAULT_SERVER } from "./constants";
 export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: () => void) {
     // Local form state
     const [tz, setTz] = useState<string>("UTC0");
-    const [debugLog, setDebugLog] = useState(false);
+    const [debug, setDebug] = useState(false);
     const [wifiTxPower, setWifiTxPower] = useState(60);
     const [uartTxPin, setUartTxPin] = useState(3);
     const [uartRxPin, setUartRxPin] = useState(4);
@@ -38,7 +38,7 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         if (fetched) {
             server.current = { ...fetched };
             setTz(fetched.tz);
-            setDebugLog(fetched.debugLog);
+            setDebug(fetched.debug);
             setWifiTxPower(fetched.wifiTxPower);
             setUartTxPin(fetched.uartTxPin);
             setUartRxPin(fetched.uartRxPin);
@@ -61,7 +61,7 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
     const isDirty =
         settingsLoaded &&
         (tz !== server.current.tz ||
-            debugLog !== server.current.debugLog ||
+            debug !== server.current.debug ||
             wifiTxPower !== server.current.wifiTxPower ||
             uartTxPin !== server.current.uartTxPin ||
             uartRxPin !== server.current.uartRxPin ||
@@ -104,7 +104,7 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
     const buildPatch = useCallback((): Partial<SettingsData> => {
         const patch: Partial<SettingsData> = {};
         if (tz !== server.current.tz) patch.tz = tz;
-        if (debugLog !== server.current.debugLog) patch.debugLog = debugLog;
+        if (debug !== server.current.debug) patch.debug = debug;
         if (wifiTxPower !== server.current.wifiTxPower) patch.wifiTxPower = wifiTxPower;
         if (uartTxPin !== server.current.uartTxPin) patch.uartTxPin = uartTxPin;
         if (uartRxPin !== server.current.uartRxPin) patch.uartRxPin = uartRxPin;
@@ -121,7 +121,7 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         return patch;
     }, [
         tz,
-        debugLog,
+        debug,
         wifiTxPower,
         uartTxPin,
         uartRxPin,
@@ -174,8 +174,8 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         // Form fields
         tz,
         setTz,
-        debugLog,
-        setDebugLog,
+        debug,
+        setDebug,
         wifiTxPower,
         setWifiTxPower,
         uartTxPin,

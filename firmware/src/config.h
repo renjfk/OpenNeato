@@ -88,7 +88,7 @@ enum CommandStatus {
 
 // NVS keys — Settings
 #define NVS_KEY_HOSTNAME "hostname"
-#define NVS_KEY_DEBUG_LOG "debug_log"
+#define NVS_KEY_DEBUG "debug"
 #define NVS_KEY_WIFI_TX_POWER "wifi_tx_pwr"
 #define NVS_KEY_UART_TX_PIN "uart_tx_pin"
 #define NVS_KEY_UART_RX_PIN "uart_rx_pin"

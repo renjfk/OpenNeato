@@ -49,6 +49,12 @@ async function put<T>(url: string, body: unknown): Promise<T> {
     return res.json();
 }
 
+async function sendSerial(cmd: string): Promise<string> {
+    const res = await fetch(`/api/serial?cmd=${encodeURIComponent(cmd)}`, { method: "POST" });
+    if (!res.ok) throw new Error(await parseError(res));
+    return res.text();
+}
+
 async function fetchLogText(name: string): Promise<string> {
     const res = await fetch(`/api/logs/${name}`);
     if (!res.ok) throw new Error(await parseError(res));
@@ -132,4 +138,5 @@ export const api = {
             [`sched${day}On`]: on,
         }),
     setScheduleEnabled: (on: boolean) => put<SettingsData>("/api/settings", { scheduleEnabled: on }),
+    sendSerial: (cmd: string) => sendSerial(cmd),
 };

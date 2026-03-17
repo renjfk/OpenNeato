@@ -99,7 +99,7 @@ export const SIDE_BRUSH_PRESETS: SideBrushPreset[] = [
 
 export const DEFAULT_SERVER: SettingsData = {
     tz: "UTC0",
-    debugLog: false,
+    debug: false,
     wifiTxPower: 60,
     uartTxPin: 3,
     uartRxPin: 4,

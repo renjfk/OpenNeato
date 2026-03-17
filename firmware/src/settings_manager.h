@@ -18,7 +18,7 @@ struct SchedDay {
 struct Settings : public JsonSerializable {
     String hostname = DEFAULT_HOSTNAME;
     String tz = NTP_DEFAULT_TZ;
-    bool debugLog = false;
+    bool debug = false;
     int wifiTxPower = WIFI_DEFAULT_TX_POWER; // 0.25 dBm units (34 = 8.5 dBm)
     int uartTxPin = NEATO_DEFAULT_TX_PIN; // ESP GPIO -> Robot RX
     int uartRxPin = NEATO_DEFAULT_RX_PIN; // ESP GPIO <- Robot TX

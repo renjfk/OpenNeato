@@ -97,10 +97,17 @@ void WebServer::registerApiRoutes() {
     registerPostRoute("/api/testmode", neato, &NeatoSerial::testMode, {"enable"});
     registerPostRoute("/api/lidar/rotate", neato, &NeatoSerial::setLdsRotation, {"enable"});
 
-    // Temporary debug endpoint — send arbitrary serial command, returns raw response
+    // Debug serial endpoint — send arbitrary serial command, returns raw response.
+    // Only available when debug mode is enabled in settings.
     server.on("/api/serial", HTTP_POST, [this](AsyncWebServerRequest *request) {
         lastApiActivity = millis();
         unsigned long startMs = lastApiActivity;
+
+        if (!settingsMgr.get().debug) {
+            logger.logRequest(HTTP_POST, "/api/serial", 403, millis() - startMs);
+            sendError(request, 403, "debug mode disabled");
+            return;
+        }
 
         if (!request->hasParam("cmd")) {
             logger.logRequest(HTTP_POST, "/api/serial", 400, millis() - startMs);
@@ -115,14 +122,9 @@ void WebServer::registerApiRoutes() {
         }
 
         auto weak = request->pause();
-        bool ok = neato.sendRaw(cmd, [this, weak, startMs](bool success, const String& response) {
+        bool ok = neato.sendRaw(cmd, [this, weak, startMs](bool /*success*/, const String& response) {
             if (auto req = weak.lock()) {
                 unsigned long elapsed = millis() - startMs;
-                if (!success) {
-                    logger.logRequest(HTTP_POST, "/api/serial", 504, elapsed);
-                    sendError(req.get(), 504, "timeout");
-                    return;
-                }
                 logger.logRequest(HTTP_POST, "/api/serial", 200, elapsed);
                 req->send(200, "text/plain", response);
             }

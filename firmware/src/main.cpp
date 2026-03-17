@@ -147,7 +147,7 @@ void setup() {
     // Initialize data logger (SPIFFS, serial command hook)
     // Note: WiFi/OTA events buffered in memory above get flushed once SPIFFS mounts here.
     LOG("BOOT", "Initializing data logger...");
-    dataLogger.setDebugCheck([&]() { return settingsManager.get().debugLog; });
+    dataLogger.setDebugCheck([&]() { return settingsManager.get().debug; });
     dataLogger.begin();
 
     // Fetch robot time as fallback clock

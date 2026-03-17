@@ -205,7 +205,7 @@ const state = {
     lidarLowQuality: false,
     lidarSlowRotation: false,
     tz: "UTC0",
-    debugLog: false,
+    debug: false,
     wifiTxPower: 60, // 15 dBm in 0.25 dBm units
     uartTxPin: 3,
     uartRxPin: 4,
@@ -630,7 +630,7 @@ const routes = {
         const s = {};
         const keys = [
             "tz",
-            "debugLog",
+            "debug",
             "wifiTxPower",
             "uartTxPin",
             "uartRxPin",
@@ -794,7 +794,7 @@ const handleRequest = async (req, res) => {
             const data = JSON.parse(body);
             await new Promise((r) => setTimeout(r, rand(300, 600)));
             if (data.tz !== undefined) state.tz = data.tz;
-            if (data.debugLog !== undefined) state.debugLog = data.debugLog;
+            if (data.debug !== undefined) state.debug = data.debug;
             if (data.wifiTxPower !== undefined) state.wifiTxPower = data.wifiTxPower;
             const pinsChanged =
                 (data.uartTxPin !== undefined && data.uartTxPin !== state.uartTxPin) ||
@@ -827,7 +827,7 @@ const handleRequest = async (req, res) => {
             const s = {};
             const keys = [
                 "tz",
-                "debugLog",
+                "debug",
                 "wifiTxPower",
                 "uartTxPin",
                 "uartRxPin",
@@ -853,6 +853,18 @@ const handleRequest = async (req, res) => {
         } catch {
             return sendError(res, "invalid JSON", 400);
         }
+    }
+
+    // Debug serial endpoint — gated on debug mode
+    if (req.method === "POST" && path === "/api/serial") {
+        if (!state.debug) return sendError(res, "debug mode disabled", 403);
+        const cmd = query.cmd;
+        if (!cmd) return sendError(res, "missing cmd", 400);
+        // Simulate serial response with a delay
+        await new Promise((r) => setTimeout(r, rand(50, 150)));
+        const body = `${cmd}\r\nMock response for: ${cmd}\r\n\x1a`;
+        res.writeHead(200, { "Content-Type": "text/plain", "Content-Length": Buffer.byteLength(body) });
+        return res.end(body);
     }
 
     // Standard route lookup

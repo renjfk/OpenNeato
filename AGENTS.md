@@ -866,7 +866,7 @@ OTA update covers both.
 | GET | `/api/history/{filename}` | Download session JSONL |
 | DELETE | `/api/history/{filename}` | Delete session file |
 | DELETE | `/api/history` | Delete all history |
-| POST | `/api/serial?cmd=<command>` | Temporary debug: send raw serial command, returns plain text response |
+| POST | `/api/serial?cmd=<command>` | Send raw serial command (requires debug mode), returns plain text response |
 
 ## Build Commands
 

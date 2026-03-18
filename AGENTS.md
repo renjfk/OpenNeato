@@ -47,6 +47,10 @@ firmware through REST API. Everything runs on the device itself.
 **Silent pause/resume/stop** — Eliminate alert tones from SetUIError dance and spot resume.
 May vary across robot models/firmware versions.
 
+**Pause/resume validation** — Verify that pause followed by resume performs a true in-place resume on D3-D7 robots (no localization reset, no implicit new clean). Investigate whether the current `Clean Stop` + `SetUIError` workaround perturbs robot state and whether a different command sequence is needed.
+
+**Robot error/alert presentation** — Split normalized robot `UI_ERROR_*` vs `UI_ALERT_*` handling in the frontend so warnings use distinct amber styling and iconography instead of sharing the same red error banner treatment.
+
 **OTA via GitHub Releases** — Browser-side only (ESP32 makes no outbound connections).
 Browser fetches `api.github.com` releases list (CORS allowed), displays available
 versions with release notes in settings. User clicks download link which opens the
@@ -796,6 +800,7 @@ categories are prefixed `notif_*`.
 |--------|------|
 | `app.tsx` | Root shell: theme, polling, routing, global state |
 | `api.ts` | Typed fetch wrappers for all REST endpoints |
+| `robot-error.ts` | Normalizes raw firmware error/alert strings into human-readable messages |
 | `types.ts` | TypeScript interfaces for API data |
 | `history-data.ts` | JSONL parser, coverage map generation, path/bounding-box extraction |
 | `style.css` | Single CSS file, CSS variables for theming, responsive breakpoints |

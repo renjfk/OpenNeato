@@ -91,4 +91,4 @@
 {"x":0.486,"y":0.015,"t":180.4,"ts":4500.2}
 {"x":0.130,"y":0.039,"t":182.1,"ts":4502.6}
 {"x":0.000,"y":0.000,"t":0.0,"ts":4504.1}
-{"type":"summary","time":1771683804,"duration":189,"mode":"spot","recharges":0,"snapshots":92,"distanceTraveled":17.19,"maxDistFromOrigin":2.01,"totalRotation":2920.6,"areaCovered":3.50,"errorsDuringClean":0,"battery":74}
+{"type":"summary","time":1771683804,"duration":189,"mode":"spot","recharges":0,"snapshots":92,"distanceTraveled":17.19,"maxDistFromOrigin":2.01,"totalRotation":2920.6,"areaCovered":3.50,"errorsDuringClean":0,"batteryStart":74,"batteryEnd":68}

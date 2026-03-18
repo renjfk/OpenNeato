@@ -35,4 +35,4 @@
 {"x":0.526,"y":-0.592,"t":271.2,"ts":2045.3}
 {"type":"recharge","x":0.526,"y":-0.592}
 {"x":0.515,"y":-0.778,"t":259.4,"ts":2047.3}
-{"type":"summary","time":1771681355,"duration":81,"mode":"spot","recharges":1,"snapshots":35,"distanceTraveled":5.24,"maxDistFromOrigin":1.25,"totalRotation":935.2,"areaCovered":1.25,"errorsDuringClean":0,"battery":82}
+{"type":"summary","time":1771681355,"duration":81,"mode":"spot","recharges":1,"snapshots":35,"distanceTraveled":5.24,"maxDistFromOrigin":1.25,"totalRotation":935.2,"areaCovered":1.25,"errorsDuringClean":0,"batteryStart":82,"batteryEnd":78}

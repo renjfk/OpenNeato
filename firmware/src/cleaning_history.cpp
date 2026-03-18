@@ -1,4 +1,5 @@
 #include "cleaning_history.h"
+#include "json_fields.h"
 #include "neato_serial.h"
 #include "system_manager.h"
 #include <SPIFFS.h>
@@ -47,7 +48,7 @@ void CleaningHistory::checkState() {
         bool wasCleaning = isCleaningState(prevUiState);
         bool nowCleaning = isCleaningState(state.uiState);
 
-        if (!wasCleaning && nowCleaning) {
+        if (!wasCleaning && nowCleaning && !recoverCollection(state.uiState)) {
             startCollection(state.uiState);
         }
 
@@ -133,7 +134,7 @@ void CleaningHistory::stopCollection() {
     neato.getCharger([this](bool ok, const ChargerData& charger) {
         int batteryEnd = ok ? charger.fuelPercent : -1;
 
-        writeSessionSummary();
+        writeSessionSummary(batteryEnd);
 
         // Close the raw file
         if (activeFile) {
@@ -256,40 +257,36 @@ bool CleaningHistory::compressStep() {
 // -- Session header/summary --------------------------------------------------
 
 void CleaningHistory::writeSessionHeader() {
-    String line = "{\"type\":\"session\",\"mode\":\"" + cleanMode + "\"";
-    if (sessionStartTime > 0) {
-        line += ",\"time\":" + String(static_cast<long>(sessionStartTime));
-    }
-    if (batteryStart >= 0) {
-        line += ",\"battery\":" + String(batteryStart);
-    }
-    line += "}";
-    writeLine(line);
+    std::vector<Field> fields = {{"type", "session", FIELD_STRING}, {"mode", cleanMode, FIELD_STRING}};
+    if (sessionStartTime > 0)
+        fields.push_back({"time", String(static_cast<long>(sessionStartTime)), FIELD_INT});
+    if (batteryStart >= 0)
+        fields.push_back({"battery", String(batteryStart), FIELD_INT});
+    writeLine(fieldsToJson(fields));
 }
 
-void CleaningHistory::writeSessionSummary() {
+void CleaningHistory::writeSessionSummary(int batteryEnd) {
     time_t endTime = systemManager.now();
     long duration =
             (sessionStartTime > 0 && endTime > sessionStartTime) ? static_cast<long>(endTime - sessionStartTime) : 0;
     float areaCovered = static_cast<float>(visitedCells.size()) * HISTORY_AREA_CELL_M * HISTORY_AREA_CELL_M;
-    String line = "{\"type\":\"summary\"";
-    if (endTime > 0) {
-        line += ",\"time\":" + String(static_cast<long>(endTime));
-    }
-    line += ",\"duration\":" + String(duration);
-    line += ",\"mode\":\"" + cleanMode + "\"";
-    line += ",\"recharges\":" + String(rechargeCount);
-    line += ",\"snapshots\":" + String(static_cast<int>(snapshotCount));
-    line += ",\"distanceTraveled\":" + String(totalDistance, 2);
-    line += ",\"maxDistFromOrigin\":" + String(maxDistFromOrigin, 2);
-    line += ",\"totalRotation\":" + String(totalRotation, 1);
-    line += ",\"areaCovered\":" + String(areaCovered, 2);
-    line += ",\"errorsDuringClean\":" + String(errorsDuringClean);
-    if (batteryStart >= 0) {
-        line += ",\"battery\":" + String(batteryStart);
-    }
-    line += "}";
-    writeLine(line);
+    std::vector<Field> fields = {{"type", "summary", FIELD_STRING}};
+    if (endTime > 0)
+        fields.push_back({"time", String(static_cast<long>(endTime)), FIELD_INT});
+    fields.push_back({"duration", String(duration), FIELD_INT});
+    fields.push_back({"mode", cleanMode, FIELD_STRING});
+    fields.push_back({"recharges", String(rechargeCount), FIELD_INT});
+    fields.push_back({"snapshots", String(static_cast<int>(snapshotCount)), FIELD_INT});
+    fields.push_back({"distanceTraveled", String(totalDistance, 2), FIELD_FLOAT});
+    fields.push_back({"maxDistFromOrigin", String(maxDistFromOrigin, 2), FIELD_FLOAT});
+    fields.push_back({"totalRotation", String(totalRotation, 1), FIELD_FLOAT});
+    fields.push_back({"areaCovered", String(areaCovered, 2), FIELD_FLOAT});
+    fields.push_back({"errorsDuringClean", String(errorsDuringClean), FIELD_INT});
+    if (batteryStart >= 0)
+        fields.push_back({"batteryStart", String(batteryStart), FIELD_INT});
+    if (batteryEnd >= 0)
+        fields.push_back({"batteryEnd", String(batteryEnd), FIELD_INT});
+    writeLine(fieldsToJson(fields));
 }
 
 // -- Direct file writing -----------------------------------------------------
@@ -318,6 +315,181 @@ static bool parsePose(const String& raw, float& x, float& y, float& theta, float
     return true;
 }
 
+// Parse a single JSONL line and update session accumulators (header, recharge, pose).
+// Returns true if the line was a session header.
+bool CleaningHistory::replayLine(const String& line) {
+    auto fields = fieldsFromJson(line);
+    if (fields.empty())
+        return false;
+
+    const Field *typeField = findField(fields, "type");
+    if (typeField && typeField->value == "session") {
+        const Field *modeField = findField(fields, "mode");
+        if (modeField && !modeField->value.isEmpty())
+            cleanMode = modeField->value;
+
+        const Field *timeField = findField(fields, "time");
+        if (timeField) {
+            long t = timeField->value.toInt();
+            if (t > 0)
+                sessionStartTime = static_cast<time_t>(t);
+        }
+
+        const Field *battField = findField(fields, "battery");
+        if (battField)
+            batteryStart = battField->value.toInt();
+        return true;
+    }
+
+    if (typeField && typeField->value == "recharge") {
+        rechargeCount++;
+        return false;
+    }
+
+    // Pose snapshot line
+    const Field *xf = findField(fields, "x");
+    const Field *yf = findField(fields, "y");
+    const Field *tf = findField(fields, "t");
+    if (xf && yf && tf) {
+        updateAccumulators(xf->value.toFloat(), yf->value.toFloat(), tf->value.toFloat());
+        snapshotCount++;
+    }
+    return false;
+}
+
+bool CleaningHistory::recoverCollection(const String& uiState) {
+    // Only attempt recovery once after boot — avoid scanning SPIFFS on every clean start
+    if (recoveryAttempted)
+        return false;
+    recoveryAttempted = true;
+
+    File root = SPIFFS.open(HISTORY_DIR);
+    if (!root || !root.isDirectory())
+        return false;
+
+    // Collect all history filenames (both .jsonl and .jsonl.hs) and sort descending
+    // (newest first). Then walk from newest to oldest: collect orphan .jsonl files
+    // until we hit a compressed .jsonl.hs — that marks a completed session boundary,
+    // so everything older belongs to previous cleans and should not be touched.
+    // Also clean up any raw .jsonl that has a .jsonl.hs counterpart (stale leftover).
+    std::vector<String> allFiles;
+    File entry = root.openNextFile();
+    while (entry) {
+        String path = String(entry.path());
+        if (path.endsWith(".jsonl") || path.endsWith(".jsonl.hs"))
+            allFiles.push_back(path);
+        entry = root.openNextFile();
+    }
+
+    std::sort(allFiles.begin(), allFiles.end(), [](const String& a, const String& b) { return a > b; });
+
+    std::vector<String> orphans;
+    for (const auto& path: allFiles) {
+        if (path.endsWith(".jsonl.hs")) {
+            // Hit a compressed file — this is the boundary of a completed session.
+            // Stop collecting; everything older is from previous cleans.
+            break;
+        }
+        // Raw .jsonl — check if a compressed copy exists (stale leftover)
+        if (SPIFFS.exists(path + ".hs")) {
+            SPIFFS.remove(path);
+            LOG("HIST", "Removed stale raw file: %s (compressed copy exists)", path.c_str());
+            continue;
+        }
+        // Check if it has a summary (completed but not yet compressed)
+        String firstLine, lastLine;
+        readFirstLastLines(path, false, firstLine, lastLine);
+        if (lastLine.indexOf("\"type\":\"summary\"") >= 0)
+            continue;
+        orphans.push_back(path);
+    }
+
+    if (orphans.empty())
+        return false;
+
+    // orphans are newest-first; reverse to get chronological order (oldest first)
+    std::reverse(orphans.begin(), orphans.end());
+
+    // The oldest orphan becomes the target; newer ones are merged into it then deleted
+    String targetPath = orphans[0];
+
+    if (orphans.size() > 1) {
+        File target = SPIFFS.open(targetPath, FILE_APPEND);
+        if (target) {
+            for (size_t i = 1; i < orphans.size(); i++) {
+                File src = SPIFFS.open(orphans[i], FILE_READ);
+                if (!src)
+                    continue;
+                while (src.available()) {
+                    String line = src.readStringUntil('\n');
+                    line.trim();
+                    if (line.isEmpty())
+                        continue;
+                    // Skip duplicate session headers from newer orphans
+                    if (line.indexOf("\"type\":\"session\"") >= 0)
+                        continue;
+                    target.println(line);
+                }
+                src.close();
+                SPIFFS.remove(orphans[i]);
+                LOG("HIST", "Merged orphan %s into %s", orphans[i].c_str(), targetPath.c_str());
+            }
+            target.flush();
+            target.close();
+        }
+    }
+
+    // Now replay the merged file to rebuild accumulators
+    resetSession();
+    cleanMode = cleanModeFromState(uiState);
+    activeFilePath = targetPath;
+
+    File recoveryFile = SPIFFS.open(targetPath, FILE_READ);
+    if (!recoveryFile)
+        return false;
+
+    bool hasSessionHeader = false;
+    while (recoveryFile.available()) {
+        String line = recoveryFile.readStringUntil('\n');
+        line.trim();
+        if (line.isEmpty())
+            continue;
+        if (replayLine(line))
+            hasSessionHeader = true;
+    }
+    recoveryFile.close();
+
+    // Fall back to extracting start time from the filename
+    if (sessionStartTime <= 0) {
+        String name = targetPath;
+        int slash = name.lastIndexOf('/');
+        if (slash >= 0)
+            name = name.substring(slash + 1);
+        int dot = name.indexOf('.');
+        if (dot > 0)
+            sessionStartTime = static_cast<time_t>(name.substring(0, dot).toInt());
+    }
+
+    activeFile = SPIFFS.open(activeFilePath, FILE_APPEND);
+    if (!activeFile) {
+        activeFilePath = "";
+        resetSession();
+        return false;
+    }
+
+    collecting = true;
+    LOG("HIST", "Recovered session: %s (%u snapshots, %zu orphans merged)", activeFilePath.c_str(), snapshotCount,
+        orphans.size());
+    dataLogger.logGenericEvent("history_recover", {{"path", activeFilePath, FIELD_STRING},
+                                                   {"snapshots", String(snapshotCount), FIELD_INT},
+                                                   {"orphans", String(static_cast<int>(orphans.size())), FIELD_INT}});
+
+    if (!hasSessionHeader) {
+        writeSessionHeader();
+    }
+    return true;
+}
+
 void CleaningHistory::collectSnapshot() {
     fetchPending = true;
 
@@ -337,8 +509,9 @@ void CleaningHistory::collectSnapshot() {
                     dataLogger.logGenericEvent("history_recharge_start", {{"count", String(rechargeCount), FIELD_INT}});
 
                     if (hasPrevPose) {
-                        writeLine("{\"type\":\"recharge\",\"x\":" + String(prevX, 3) + ",\"y\":" + String(prevY, 3) +
-                                  "}");
+                        writeLine(fieldsToJson({{"type", "recharge", FIELD_STRING},
+                                                {"x", String(prevX, 3), FIELD_FLOAT},
+                                                {"y", String(prevY, 3), FIELD_FLOAT}}));
                     }
                 }
                 fetchPending = false;
@@ -593,36 +766,56 @@ std::vector<HistorySessionInfo> CleaningHistory::listSessions() {
                 continue;
             }
 
+            // Skip the actively collecting file during disk enumeration.
+            // We will manually append it at the end to avoid thread-safety /
+            // concurrent modification issues with SPIFFS iterators.
+            if (collecting && fullPath == activeFilePath) {
+                entry = root.openNextFile();
+                continue;
+            }
+
             HistorySessionInfo info;
             info.name = name;
             info.size = entry.size();
             info.compressed = name.endsWith(".hs");
 
-            if (collecting && fullPath == activeFilePath) {
-                // Active recording session — build from in-memory state
-                info.recording = true;
-                String sessionJson = "{\"type\":\"session\",\"mode\":\"" + cleanMode + "\"";
-                if (sessionStartTime > 0)
-                    sessionJson += ",\"time\":" + String(static_cast<long>(sessionStartTime));
-                if (batteryStart >= 0)
-                    sessionJson += ",\"battery\":" + String(batteryStart);
-                sessionJson += "}";
-                info.session = sessionJson;
-                // No summary for active session
-            } else {
-                // Completed file on disk — read first/last lines
-                String firstLine, lastLine;
-                readFirstLastLines(fullPath, info.compressed, firstLine, lastLine);
-                info.session = firstLine;
-                // Only set summary if last line is actually a summary
-                if (lastLine.indexOf("\"type\":\"summary\"") >= 0) {
-                    info.summary = lastLine;
-                }
+            // Completed file on disk — read first/last lines
+            String firstLine, lastLine;
+            readFirstLastLines(fullPath, info.compressed, firstLine, lastLine);
+            info.session = firstLine;
+            // Only set summary if last line is actually a summary
+            if (lastLine.indexOf("\"type\":\"summary\"") >= 0) {
+                info.summary = lastLine;
             }
 
             result.push_back(info);
         }
         entry = root.openNextFile();
+    }
+
+    // Always append the active session from memory to ensure exactly one entry
+    if (collecting && !activeFilePath.isEmpty()) {
+        String name = activeFilePath;
+        int lastSlash = name.lastIndexOf('/');
+        if (lastSlash >= 0)
+            name = name.substring(lastSlash + 1);
+
+        HistorySessionInfo info;
+        info.name = name;
+        info.size = activeFile ? activeFile.size() : 0;
+        info.compressed = false;
+        info.recording = true;
+
+        String sessionJson = "{\"type\":\"session\",\"mode\":\"" + cleanMode + "\"";
+        if (sessionStartTime > 0)
+            sessionJson += ",\"time\":" + String(static_cast<long>(sessionStartTime));
+        if (batteryStart >= 0)
+            sessionJson += ",\"battery\":" + String(batteryStart);
+        sessionJson += "}";
+        info.session = sessionJson;
+        // No summary for active session
+
+        result.push_back(info);
     }
 
     return result;

@@ -56,6 +56,7 @@ private:
     bool collecting = false;
     bool recharging = false;
     bool fetchPending = false;
+    bool recoveryAttempted = false; // Only try orphan recovery once after boot
     size_t snapshotCount = 0;
 
     // Active session file (open during collection, closed at end)
@@ -104,10 +105,12 @@ private:
     void collectSnapshot();
     void writeLine(const String& line);
     void writeSessionHeader();
-    void writeSessionSummary();
+    void writeSessionSummary(int batteryEnd);
     void writeSnapshot(float x, float y, float theta, float time);
     void updateAccumulators(float x, float y, float theta);
     void resetSession();
+    bool replayLine(const String& line);
+    bool recoverCollection(const String& uiState);
 
     // Storage enforcement — delete oldest sessions when budget exceeded
     void enforceLimits();

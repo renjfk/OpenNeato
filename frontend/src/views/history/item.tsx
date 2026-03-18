@@ -50,7 +50,8 @@ export function HistoryItemView({ file, map, recording }: HistoryItemViewProps) 
                     <div class="history-stat">
                         <span class="history-stat-label">Battery</span>
                         <span class="history-stat-value">
-                            {file.session?.battery ?? "?"}% &rarr; {file.summary.battery}%
+                            {file.session?.battery ?? "?"}% &rarr;{" "}
+                            {file.summary.batteryEnd ?? file.summary.battery ?? "?"}%
                         </span>
                     </div>
                     {file.summary.recharges > 0 && (

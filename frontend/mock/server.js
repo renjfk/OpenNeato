@@ -115,8 +115,9 @@ const SCENARIOS = {
     ded: { fuelPercent: 0 },
     err: {
         hasError: true,
-        errorCode: 234,
-        errorMessage: "My Brush is stuck. Please free it from debris",
+        errorCode: 265,
+        errorMessage:
+            "(UI_ERROR_BRUSH_STUCK)\r\nAlert\r\n205 -  (UI_ALERT_DUST_BIN_FULL)\r\nUSB state \r\n NOT connected",
     },
     // Manual clean scenarios
     man: { manualClean: true },

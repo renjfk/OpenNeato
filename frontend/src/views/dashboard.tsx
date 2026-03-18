@@ -25,6 +25,7 @@ import { Icon } from "../components/icon";
 import { useNavigate } from "../components/router";
 import type { PollResult } from "../hooks/use-polling";
 import { usePolling } from "../hooks/use-polling";
+import { normalizeRobotError } from "../robot-error";
 import type { ChargerData, ErrorData, FirmwareVersion, StateData, SystemData } from "../types";
 
 // -- Helpers --
@@ -179,6 +180,7 @@ export function DashboardView({ firmware, state, isManual }: DashboardViewProps)
     const charging = charger.data?.chargingActive ?? false;
     const docked = charger.data?.extPwrPresent ?? false;
     const pct = charger.data?.fuelPercent ?? 0;
+    const robotError = normalizeRobotError(error.data);
     const bc = charger.data ? battColor(pct) : charger.error ? "red" : "amber";
     const modeErr = (!state.data && state.error) || (!charger.data && charger.error);
     const mi = modeErr
@@ -247,7 +249,7 @@ export function DashboardView({ firmware, state, isManual }: DashboardViewProps)
             )}
 
             {/* Robot error — fixed, clears automatically when robot resolves it */}
-            {error.data?.hasError && <ErrorBanner message={error.data.errorMessage} />}
+            {robotError && <ErrorBanner title={robotError.title} message={robotError.message} />}
             {!error.data && error.error && <ErrorBanner title="Warning" message={error.error} />}
 
             {/* Action errors — dismissible, stackable */}

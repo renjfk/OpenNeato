@@ -136,7 +136,9 @@ export interface MapSummary {
     totalRotation: number;
     areaCovered: number;
     errorsDuringClean: number;
-    battery: number;
+    battery?: number; // Legacy: same as batteryStart (pre-fix firmware)
+    batteryStart?: number;
+    batteryEnd?: number;
 }
 
 export interface MapPathPoint {

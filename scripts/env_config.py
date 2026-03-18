@@ -45,7 +45,7 @@ if not version:
             cwd=env["PROJECT_DIR"],
             capture_output=True,
             text=True,
-            check=True
+            check=True,
         )
         commit_hash = result.stdout.strip()
         version = f"0.0.0+{commit_hash}"
@@ -61,6 +61,8 @@ if version:
 host = os.environ.get("OTA_HOST")
 if host:
     env.Replace(UPLOAD_PORT=host)
-elif env["PIOENV"] == "OTA":
-    sys.exit("Error: OTA_HOST is required for OTA uploads. "
-             "Usage: OTA_HOST=<ip> pio run -e OTA -t upload")
+elif env["PIOENV"] == "OTA" and "upload" in COMMAND_LINE_TARGETS:
+    sys.exit(
+        "Error: OTA_HOST is required for OTA uploads. "
+        "Usage: OTA_HOST=<ip> pio run -e OTA -t upload"
+    )

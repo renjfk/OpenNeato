@@ -148,10 +148,12 @@ enum CommandStatus {
 #define NTP_DEFAULT_TZ "UTC0" // POSIX TZ string, stored in NVS
 #define ROBOT_TIME_SYNC_INTERVAL_MS 14400000 // Push NTP to robot every 4 hours
 
-// Logging
-#define ENABLE_LOGGING
+// Logging — enabled by default, disable with -DENABLE_LOGGING=0
+#ifndef ENABLE_LOGGING
+#define ENABLE_LOGGING 1
+#endif
 
-#ifdef ENABLE_LOGGING
+#if ENABLE_LOGGING
 #define LOG(tag, fmt, ...) Serial.printf("[%s] " fmt "\n", tag, ##__VA_ARGS__)
 #else
 #define LOG(tag, fmt, ...)

@@ -100,7 +100,8 @@ void NotificationManager::checkTransitions() {
 }
 
 bool NotificationManager::isActiveState(const String& uiState) {
-    return uiState.indexOf("CLEANINGRUNNING") >= 0 || uiState.indexOf("DOCKING") >= 0;
+    return uiState.indexOf("CLEANINGRUNNING") >= 0 || uiState.indexOf("CLEANINGPAUSED") >= 0 ||
+           uiState.indexOf("DOCKING") >= 0;
 }
 
 void NotificationManager::sendNotification(const String& topic, const String& tags, const String& message) {

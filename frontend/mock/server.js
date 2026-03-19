@@ -66,7 +66,8 @@ const _randf = (min, max, decimals = 2) => parseFloat((Math.random() * (max - mi
 //   "man|llq"     — Manual clean + low LIDAR quality
 //
 // Robot state:
-//   ok   — Idle, battery 85%          off — Device unreachable
+//   ok   — Idle, battery 85%          off  — Device unreachable
+//   unsup — Unsupported robot model
 //   cls  — House cleaning             spt — Spot cleaning
 //   chg  — Charging, 62%              ch2 — Charging, 25%
 //   ful  — Full, on dock              mid — Battery 45%
@@ -98,7 +99,7 @@ const _randf = (min, max, decimals = 2) => parseFloat((Math.random() * (max - mi
 //   fp   — All polling faults (state + charger + error)
 //   fhc  — History corruption (inject corrupted pose lines in session data)
 //   fal  — All faults combined
-const SCENARIO = "ok";
+const SCENARIO = "unsup";
 
 // --- Robot state ---
 
@@ -135,6 +136,8 @@ const SCENARIOS = {
     mbs: { manualClean: true, manualBumperSideRight: true },
     msf: { manualClean: true, manualStallFront: true },
     msr: { manualClean: true, manualStallRear: true },
+    // Robot model
+    unsup: { unsupported: true }, // Unsupported robot model (no SKey)
     // LIDAR quality scenarios
     llq: { lidarLowQuality: true }, // Few valid points (<90)
     lsl: { lidarSlowRotation: true }, // Slow LDS rotation (<4 Hz)
@@ -217,6 +220,8 @@ const state = {
     manualBumperSideRight: false,
     manualStallFront: false,
     manualStallRear: false,
+    // Robot model
+    unsupported: false,
     // LIDAR quality overrides
     lidarLowQuality: false,
     lidarSlowRotation: false,
@@ -679,7 +684,7 @@ const routes = {
     },
 
     "GET /api/firmware/version": (_req, res) => {
-        jsonResponse(res, { version: getVersion(), chip: "ESP32-C3" });
+        jsonResponse(res, { version: getVersion(), chip: "ESP32-C3", supported: !state.unsupported });
     },
 };
 

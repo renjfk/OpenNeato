@@ -309,11 +309,12 @@ void WebServer::registerSettingsRoutes() {
 // -- Firmware endpoints -------------------------------------------------------
 
 void WebServer::registerFirmwareRoutes() {
-    // GET /api/firmware/version — current ESP32 firmware version + chip model
+    // GET /api/firmware/version — current ESP32 firmware version + chip model + robot support status
     loggedRoute("/api/firmware/version", HTTP_GET, [this](AsyncWebServerRequest *request) -> int {
         std::vector<Field> fields = {
                 {"version", fwMgr.getFirmwareVersion(), FIELD_STRING},
                 {"chip", fwMgr.getChipModel(), FIELD_STRING},
+                {"supported", neato.hasSKey() ? "true" : "false", FIELD_BOOL},
         };
         request->send(200, "application/json", fieldsToJson(fields));
         return 200;

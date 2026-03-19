@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { api } from "./api";
+import alertSvg from "./assets/icons/alert.svg?raw";
+import robotSvg from "./assets/robot.svg?raw";
+import { Icon } from "./components/icon";
 import { Route, Router } from "./components/router";
 import { usePolling } from "./hooks/use-polling";
 import type { FirmwareVersion, ManualStatus, StateData } from "./types";
@@ -113,6 +116,26 @@ export function App() {
         setVacuum(next);
         setSideBrush(next);
     }, [brush, vacuum, sideBrush]);
+
+    // Block the entire UI if the robot model is unsupported (SKey not computed).
+    // firmware.data?.supported is false when GetVersion returned no usable serial
+    // number (e.g. XV-series, D8/D9/D10, or UART not connected).
+    if (firmware.data && !firmware.data.supported) {
+        return (
+            <div class="unsupported-screen">
+                <div class="unsupported-icon">
+                    <Icon svg={robotSvg} />
+                </div>
+                <Icon svg={alertSvg} />
+                <h2>Unsupported Robot</h2>
+                <p>
+                    OpenNeato requires a Neato Botvac D3, D4, D5, D6, or D7.
+                    <br />
+                    The connected robot could not be identified.
+                </p>
+            </div>
+        );
+    }
 
     return (
         <Router>

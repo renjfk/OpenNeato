@@ -50,6 +50,25 @@ void NeatoSerial::begin(int txPin, int rxPin) {
     LOG("NEATO", "UART initialized (TX=GPIO%d, RX=GPIO%d, baud=%d)", txPin, rxPin, NEATO_BAUD_RATE);
 }
 
+void NeatoSerial::initSKey() {
+    getVersion([this](bool ok, const VersionData& v) {
+        if (!ok || v.serialNumber.length() == 0) {
+            LOG("NEATO", "SKey init failed — GetVersion returned no serial");
+            return;
+        }
+        sKey = computeSKey(v.serialNumber);
+        if (sKey.length() > 0) {
+            LOG("NEATO", "SKey computed (%d chars) from serial %s", sKey.length(), v.serialNumber.c_str());
+        } else {
+            LOG("NEATO", "SKey computation failed for serial: %s", v.serialNumber.c_str());
+        }
+    });
+}
+
+String NeatoSerial::buildSetEvent(const char *event) const {
+    return String(CMD_SET_EVENT_PREFIX) + event + CMD_SET_EVENT_SKEY + sKey;
+}
+
 void NeatoSerial::tick() {
     switch (state) {
         case QUEUE_IDLE:
@@ -439,52 +458,49 @@ void NeatoSerial::invalidateAll() {
 // -- Action command convenience methods --------------------------------------
 
 bool NeatoSerial::clean(const String& action, std::function<void(bool)> callback) {
-    // Determine the correct command based on action AND current robot state.
-    // The Neato serial protocol behaves differently from the physical button:
-    //   - Bare "Clean" = equivalent to pressing Start button (house clean start/resume)
-    //   - "Clean House" = explicitly starts a NEW house clean (triggers "new cleaning" sound)
-    //   - "Clean Spot" = starts or resumes a spot clean
-    //   - "Clean Stop" = pause (first) or stop (second)
-    // To match button behavior, we use bare "Clean" for house start and resume,
-    // and "Clean Spot" for spot start and resume (matches ESPHome community integrations).
+    // All cleaning control uses SetEvent — the authenticated event API that D3-D7
+    // robots use for their cloud/app protocol. This correctly transitions the UI
+    // state machine and preserves map/localization during pause/resume.
+    //
+    // SKey must be computed at boot via initSKey(). If missing, commands will fail
+    // gracefully (callback with false).
+
+    if (!hasSKey()) {
+        LOG("NEATO", "clean(%s) failed — SKey not available", action.c_str());
+        if (callback)
+            callback(false);
+        return false;
+    }
 
     if (action == "dock") {
-        // Experimental: send "Clean MinCharge 99" during an active clean to force
-        // the robot to return to the charging dock.  Setting MinCharge to 99% means
-        // the robot thinks it needs to recharge (battery is almost certainly <99%).
-        // Only meaningful while a clean is in progress.
         invalidateState();
-        return enqueue(CMD_CLEAN_DOCK, wrapAction(callback));
+        return enqueue(buildSetEvent(EVT_SEND_TO_BASE), wrapAction(callback), PRIORITY_HIGH);
     }
 
     if (action == "stop") {
-        // Check cached state BEFORE invalidating — invalidate() clears hasCached().
         bool isRunning = stateCache.hasCached() && stateCache.getCached().uiState.indexOf("CLEANINGRUNNING") >= 0;
         invalidateState();
 
         if (isRunning) {
-            // Pause (RUNNING -> PAUSED): SetUIError dance required.
-            // The D7 (firmware 4.6.0) does not transition its UI state machine to
-            // PAUSED after a bare "Clean Stop" — GetState keeps reporting RUNNING
-            // even though the robot physically stops.  The SetUIError setalert /
-            // clearalert dance nudges the state machine so it reports the correct
-            // CLEANINGPAUSED state on the next GetState poll.
-            // HIGH priority keeps all three commands together — prevents MEDIUM motor
-            // commands from interleaving and breaking the atomic dance.
-            bool ok = enqueue(CMD_CLEAN_STOP, nullptr, PRIORITY_HIGH);
-            ok = ok && enqueue(CMD_SET_UI_ERROR_SET_ALERT, nullptr, PRIORITY_HIGH);
-            ok = ok && enqueue(CMD_SET_UI_ERROR_CLEAR_ALERT, wrapAction(callback), PRIORITY_HIGH);
-            return ok;
+            // Pause (RUNNING -> PAUSED)
+            return enqueue(buildSetEvent(EVT_PAUSE), wrapAction(callback), PRIORITY_HIGH);
         }
-        // Stop (PAUSED -> IDLE): plain Clean Stop, no dance needed.
-        return enqueue(CMD_CLEAN_STOP, wrapAction(callback));
+        // Stop (PAUSED -> IDLE)
+        return enqueue(buildSetEvent(EVT_STOP), wrapAction(callback), PRIORITY_HIGH);
     }
 
-    // House or Spot start/resume: use bare "Clean" for house (matches physical button),
-    // "Clean Spot" for spot.
-    const char *cmd = (action == "spot") ? CMD_CLEAN_SPOT : CMD_CLEAN;
+    bool isPaused = stateCache.hasCached() && stateCache.getCached().uiState.indexOf("CLEANINGPAUSED") >= 0;
+
+    if (isPaused) {
+        // Resume in-place — preserves map and localization
+        invalidateState();
+        return enqueue(buildSetEvent(EVT_RESUME), wrapAction(callback), PRIORITY_HIGH);
+    }
+
+    // New clean from idle
+    const char *evt = (action == "spot") ? EVT_START_SPOT : EVT_START_HOUSE;
     invalidateState();
-    return enqueue(cmd, wrapAction(callback));
+    return enqueue(buildSetEvent(evt), wrapAction(callback), PRIORITY_HIGH);
 }
 
 bool NeatoSerial::testMode(bool enable, std::function<void(bool)> callback) {

@@ -45,6 +45,7 @@ static const ErrorMessage ALERT_MESSAGES[] = {
         {"UI_ALERT_FILTER_CHANGE", "Time to replace the filter"},
         {"UI_ALERT_BUSY_CHARGING", "Busy charging"},
         {"UI_ALERT_RECOVERING_LOCATION", "Recovering location"},
+        {"UI_ALERT_ORIGIN_UNCLEAN", "Could not clean starting area"},
 };
 
 // Look up a human-readable message for a UI_ERROR_* or UI_ALERT_* token.
@@ -528,4 +529,54 @@ bool parseRobotPosData(const String& raw, RobotPosData& out) {
     out.raw = raw;
     out.raw.trim();
     return out.raw.length() > 0;
+}
+
+// -- SKey computation --------------------------------------------------------
+
+String computeSKey(const String& serialNumber) {
+    // Extract 12-char MAC from serial number (format: "XXX,MAC,X")
+    int comma = serialNumber.indexOf(',');
+    if (comma < 0)
+        return "";
+    String mac = serialNumber.substring(comma + 1, comma + 13);
+    if (mac.length() != 12)
+        return "";
+
+    // RC4 key schedule with Neato's fixed seed
+    static const uint8_t seed[] = {0x68, 0x36, 0x43, 0x58, 0x09, 0x09, 0x3A, 0x3C, 0x2A, 0x7B, 0x59};
+    uint8_t s[256];
+    for (int i = 0; i < 256; i++)
+        s[i] = i;
+
+    int j = 0;
+    for (int i = 0; i < 256; i++) {
+        j = (j + s[i] + seed[i % 11]) & 0xFF;
+        uint8_t tmp = s[i];
+        s[i] = s[j];
+        s[j] = tmp;
+    }
+
+    // RC4 PRGA — generate 12 keystream bytes
+    uint8_t ks[12];
+    int ii = 0;
+    j = 0;
+    for (int k = 0; k < 12; k++) {
+        ii = (ii + 1) & 0xFF;
+        j = (j + s[ii]) & 0xFF;
+        uint8_t tmp = s[ii];
+        s[ii] = s[j];
+        s[j] = tmp;
+        ks[k] = s[(s[ii] + s[j]) & 0xFF];
+    }
+
+    // XOR keystream with MAC characters, hex-encode
+    char result[26]; // 12 * 2 + 1 trailing char + null
+    for (int k = 0; k < 12; k++) {
+        snprintf(&result[k * 2], 3, "%02x", ks[k] ^ (uint8_t) mac.charAt(k));
+    }
+    // Brainslug quirk: append result[len/2] at the end
+    result[24] = result[6];
+    result[25] = '\0';
+
+    return String(result);
 }

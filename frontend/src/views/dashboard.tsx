@@ -25,7 +25,6 @@ import { Icon } from "../components/icon";
 import { useNavigate } from "../components/router";
 import type { PollResult } from "../hooks/use-polling";
 import { usePolling } from "../hooks/use-polling";
-import { normalizeRobotError } from "../robot-error";
 import type { ChargerData, ErrorData, FirmwareVersion, StateData, SystemData } from "../types";
 
 // -- Helpers --
@@ -176,7 +175,13 @@ export function DashboardView({ firmware, state, isManual }: DashboardViewProps)
     const isPaused = state.data?.uiState?.includes("CLEANINGPAUSED") ?? false;
     const isCleaning = isRunning || isPaused;
     const isSpot = state.data?.uiState?.includes("SPOT") ?? false;
-    const robotError = normalizeRobotError(error.data);
+    const robotError = error.data?.hasError
+        ? {
+              kind: (error.data.kind === "warning" ? "warning" : "error") as "error" | "warning",
+              title: error.data.kind === "warning" ? "Robot Notice" : "Robot Attention Needed",
+              message: error.data.displayMessage || `Robot reported error ${error.data.errorCode}.`,
+          }
+        : null;
     const hasRobotError = robotError?.kind === "error";
     const charging = charger.data?.chargingActive ?? false;
     const docked = charger.data?.extPwrPresent ?? false;

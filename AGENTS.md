@@ -29,7 +29,7 @@ firmware through REST API. Everything runs on the device itself.
 7. **Async cache** — Generic `AsyncCache<T>` with TTL, deduplication, invalidation
 8. **Error handling UX** — Two-tier error banners (fixed robot errors + dismissible API errors)
 9. **Settings** — Unified settings page, deferred reboot, unsaved changes guards, WiFi reliability
-10. **Pause/Resume/Stop** — State-aware action buttons, SetUIError dance for D7 workaround
+10. **Pause/Resume/Stop** — State-aware action buttons, `SetButton start` for true in-place pause/resume
 11. **Schedule** — ESP32-managed 7-day schedule (robot serial schedule commands not used)
 12. **WiFi modem sleep** — `WIFI_PS_MIN_MODEM` for ~15-20mA idle
 13. **Task Watchdog** — Hardware TWDT resets ESP32 if loop() hangs
@@ -40,15 +40,11 @@ firmware through REST API. Everything runs on the device itself.
 18. **Mock server in-memory history** — Replaced file-based mock history with in-memory Map, rolling-window recording simulation, no runtime file I/O
 19. **View file splitting** — Split monolithic logs and history views into list/item/helpers submodules
 20. **Error/alert presentation** — Firmware-side error normalization (`kind`, `displayMessage`), amber warning banners for alerts vs red for errors, ntfy tag differentiation, boot-time orphan history session finalization
+21. **SetEvent cleaning control** — Replaced `Clean Stop`/`Clean`/`SetButton start` with authenticated `SetEvent` commands (SKey from robot serial via RC4). True in-place pause/resume preserving map/localization, working return-to-base via `UIMGR_EVENT_SMARTAPP_SEND_TO_BASE`
 
 **Note for agents**: When a phase is completed, add a one-line summary to the list above.
 
 ### Planned / in-progress
-
-**Silent pause/resume/stop** — Eliminate alert tones from SetUIError dance and spot resume.
-May vary across robot models/firmware versions.
-
-**Pause/resume validation** — Verify that pause followed by resume performs a true in-place resume on D3-D7 robots (no localization reset, no implicit new clean). Investigate whether the current `Clean Stop` + `SetUIError` workaround perturbs robot state and whether a different command sequence is needed.
 
 **Robot error/alert presentation** — Split normalized robot `UI_ERROR_*` vs `UI_ALERT_*` handling in the frontend so warnings use distinct amber styling and iconography instead of sharing the same red error banner treatment.
 
@@ -57,15 +53,6 @@ Browser fetches `api.github.com` releases list (CORS allowed), displays availabl
 versions with release notes in settings. User clicks download link which opens the
 `.bin` asset in a new tab (normal navigation, no CORS issue), then uploads via the
 existing firmware upload file picker. Two-click flow, zero infrastructure.
-
-**Return to base** — Tested on D7 (firmware 4.6.0): `Clean MinCharge 99`
-does NOT trigger a return-to-base. It just stops the robot and desyncs the
-UI state machine (reports HOUSECLEANINGRUNNING while robot is in ST_C_Standby).
-Worse, MinCharge is sticky (range 5-100, `-1` is rejected) — once set to 99
-the robot refuses to start any clean until battery reaches 99%. The current
-`POST /api/clean?action=dock` implementation is broken and should not be used.
-Needs a completely different approach — possibly no serial command exists for
-this on D3-D7 robots.
 
 ### Neato Serial Protocol
 - **Baud rate**: 115200
@@ -609,19 +596,29 @@ firmware 4.5.3+ (not present in 3.2.0):
 - `ST_T8_TestService` — Service test
 - `ST_X_ManNav` — Manual navigation
 
-### Clean Stop Behavior
-Single `Clean Stop` command transitions:
-- RUNNING → PAUSED (first call)
-- PAUSED → IDLE (second call)
+### SetEvent Cleaning Control (D3-D7)
+All cleaning control uses authenticated `SetEvent` commands — the same protocol
+Neato's cloud app used. Format: `SetEvent event <EVENT> SKey <key>`
 
-**SetUIError dance required for pause**: The D7 (firmware 4.6.0) does not
-transition its UI state machine to `CLEANINGPAUSED` after a bare `Clean Stop` —
-`GetState` keeps reporting `CLEANINGRUNNING` even though the robot physically
-stops. A `SetUIError setalert UI_ALERT_OLD_ERROR` + `SetUIError clearalert
-UI_ALERT_OLD_ERROR` sequence immediately after `Clean Stop` nudges the state
-machine into reporting the correct paused state. The firmware enqueues all three
-commands atomically (50ms inter-command delay handled by the serial queue).
-This workaround was discovered via ESPHome community integrations.
+The SKey is computed at boot from the robot's serial number (MAC portion) via
+RC4 with a fixed seed. Implementation: `computeSKey()` in `neato_commands.cpp`.
+
+**Event table:**
+
+| Action | Event |
+|--------|-------|
+| Start house | `UIMGR_EVENT_SMARTAPP_START_HOUSE_CLEANING` |
+| Start spot | `UIMGR_EVENT_SMARTAPP_START_SPOT_CLEANING` |
+| Pause | `UIMGR_EVENT_SMARTAPP_PAUSE_CLEANING` |
+| Resume | `UIMGR_EVENT_SMARTAPP_RESUME_CLEANING` |
+| Stop | `UIMGR_EVENT_SMARTAPP_STOP_CLEANING` |
+| Return to base | `UIMGR_EVENT_SMARTAPP_SEND_TO_BASE` |
+
+**Why not `Clean Stop`?** On D7 firmware 4.6.0, `Clean Stop` destroys
+localization — position resets to 0,0,0 and the robot starts a new exploration
+on resume. Bare `Clean` for resume also resets position. `SetEvent` correctly
+transitions the UI state machine and preserves map/localization for true
+in-place pause/resume.
 
 ### Supported Robots
 D3, D4, D5, D6, D7 confirmed. D70-D85 likely compatible.
@@ -631,7 +628,7 @@ D8/D9/D10 NOT supported (different board, password-locked serial).
 - LIDAR scan responses are large; line-by-line reading recommended
 - Serial commands must be queued (no overlapping)
 - In TestMode, GetState always returns `UIMGR_STATE_TESTMODE`
-- No dedicated serial command to return to dock (`Clean MinCharge 99` tested: does not dock, just stops robot and sticky MinCharge traps future cleans)
+- Return-to-dock uses `SetEvent UIMGR_EVENT_SMARTAPP_SEND_TO_BASE` (requires SKey)
 - Commands cannot have leading spaces
 - Communication parameters (Baud, start/stop bits, parity) are unimportant for USB
   (they apply only to real COM ports, not USB CDC)

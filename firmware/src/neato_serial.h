@@ -30,6 +30,12 @@ public:
     NeatoSerial();
     void begin(int txPin, int rxPin);
 
+    // Fetch GetVersion, extract serial number, and compute the SetEvent SKey.
+    // Must be called after begin(). The SKey is required for all cleaning
+    // control commands (start, stop, pause, resume, dock).
+    void initSKey();
+    bool hasSKey() const { return sKey.length() > 0; }
+
     // -- Sensor queries (typed callbacks) ------------------------------------
     // These are transparently cached: concurrent requests are coalesced,
     // and results within the TTL window are served from cache.
@@ -96,6 +102,12 @@ private:
     std::vector<CommandEntry> queue;
     QueueState state = QUEUE_IDLE;
     bool manualCleanActive = false;
+
+    // SetEvent security key (computed from robot serial number at boot)
+    String sKey;
+
+    // Build a SetEvent command string: "SetEvent event <evt> SKey <sKey>"
+    String buildSetEvent(const char *event) const;
 
     // Logger hook
     LoggerCallback loggerCallback;

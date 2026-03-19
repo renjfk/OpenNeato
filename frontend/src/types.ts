@@ -97,6 +97,7 @@ export interface LidarScan {
 export interface FirmwareVersion {
     version: string;
     chip: string;
+    supported: boolean;
 }
 
 export interface ManualStatus {

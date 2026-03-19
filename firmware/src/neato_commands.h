@@ -24,15 +24,22 @@
 #define CMD_CLEAN_HOUSE "Clean House"
 #define CMD_CLEAN_SPOT "Clean Spot"
 #define CMD_CLEAN_STOP "Clean Stop"
-#define CMD_CLEAN_DOCK "Clean MinCharge 99"
 #define CMD_TEST_MODE_ON "TestMode On"
 #define CMD_TEST_MODE_OFF "TestMode Off"
 #define CMD_SET_LDS_ROTATION_ON "SetLDSRotation On"
 #define CMD_SET_LDS_ROTATION_OFF "SetLDSRotation Off"
 #define CMD_PLAY_SOUND "PlaySound"
 #define CMD_SET_TIME "SetTime"
-#define CMD_SET_UI_ERROR_SET_ALERT "SetUIError setalert UI_ALERT_OLD_ERROR"
-#define CMD_SET_UI_ERROR_CLEAR_ALERT "SetUIError clearalert UI_ALERT_OLD_ERROR"
+
+// -- SetEvent constants (D3-D7, requires SKey) --------------------------------
+#define CMD_SET_EVENT_PREFIX "SetEvent event "
+#define CMD_SET_EVENT_SKEY " SKey "
+#define EVT_START_HOUSE "UIMGR_EVENT_SMARTAPP_START_HOUSE_CLEANING"
+#define EVT_START_SPOT "UIMGR_EVENT_SMARTAPP_START_SPOT_CLEANING"
+#define EVT_PAUSE "UIMGR_EVENT_SMARTAPP_PAUSE_CLEANING"
+#define EVT_RESUME "UIMGR_EVENT_SMARTAPP_RESUME_CLEANING"
+#define EVT_STOP "UIMGR_EVENT_SMARTAPP_STOP_CLEANING"
+#define EVT_SEND_TO_BASE "UIMGR_EVENT_SMARTAPP_SEND_TO_BASE"
 #define CMD_SET_MOTOR "SetMotor"
 #define CMD_GET_ROBOT_POS_RAW "GetRobotPos Raw"
 #define CMD_GET_ROBOT_POS_SMOOTH "GetRobotPos Smooth"
@@ -191,5 +198,12 @@ bool parseErrorData(const String& raw, ErrorData& out);
 bool parseLdsScanData(const String& raw, LdsScanData& out);
 bool parseTimeData(const String& raw, TimeData& out);
 bool parseRobotPosData(const String& raw, RobotPosData& out);
+
+// -- SKey computation --------------------------------------------------------
+// Computes the SetEvent security key from the robot's serial number (which
+// contains a 12-char MAC address after the first comma). Uses RC4 with a
+// fixed seed derived from Neato's cloud protocol.
+
+String computeSKey(const String& serialNumber);
 
 #endif // NEATO_COMMANDS_H

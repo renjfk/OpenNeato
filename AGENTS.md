@@ -46,6 +46,18 @@ firmware through REST API. Everything runs on the device itself.
 
 ### Planned / in-progress
 
+**Notification alert/error split** — Currently `ntfyOnError` fires for both alerts
+(UI_ALERT_*, kind=warning, tag=information_source) and errors (UI_ERROR_*, kind=error,
+tag=warning). Settings UI only says "Robot error". Need separate toggles or relabel
+so users can control alert vs error notifications independently.
+
+**Mid-clean recharge continuity** — Verify the firmware correctly handles the
+autonomous mid-clean recharge cycle (robot docks to charge, then resumes cleaning).
+The cleaning history session must stay open during recharge so map collection
+continues seamlessly. The notification manager should detect this as a recharge
+pause (not cleaning completion) via the `ST_M1_Charging_Cleaning` robot state.
+Needs live testing with a partially-charged battery to trigger the recharge cycle.
+
 **Robot error/alert presentation** — Split normalized robot `UI_ERROR_*` vs `UI_ALERT_*` handling in the frontend so warnings use distinct amber styling and iconography instead of sharing the same red error banner treatment.
 
 **OTA via GitHub Releases** — Browser-side only (ESP32 makes no outbound connections).

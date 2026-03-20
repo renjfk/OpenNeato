@@ -6,6 +6,7 @@ import { Icon } from "./components/icon";
 import { Route, Router } from "./components/router";
 import { usePolling } from "./hooks/use-polling";
 import type { FirmwareVersion, ManualStatus, StateData } from "./types";
+import { checkForUpdate, getAvailableUpdate, type UpdateInfo } from "./update";
 import { DashboardView } from "./views/dashboard";
 import { HistoryView } from "./views/history";
 import { LogsView } from "./views/logs";
@@ -65,6 +66,24 @@ export function App() {
 
     const state = usePolling<StateData>(api.getState, 2000);
     const firmware = usePolling<FirmwareVersion>(api.getFirmwareVersion, 60000);
+
+    // --- Update check (browser-side, GitHub releases API) ---
+    const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+    const updateChecked = useRef(false);
+
+    useEffect(() => {
+        const version = firmware.data?.version;
+        if (!version || updateChecked.current) return;
+        updateChecked.current = true;
+
+        // Read any previously stored result immediately
+        setUpdateInfo(getAvailableUpdate(version));
+
+        // Fire-and-forget check (respects 6h interval internally)
+        checkForUpdate(version).then(() => {
+            setUpdateInfo(getAvailableUpdate(version));
+        });
+    }, [firmware.data?.version]);
 
     // Derive manual mode from polled state — single source of truth
     const isManual = state.data?.uiState?.includes("MANUALCLEANING") ?? false;
@@ -140,7 +159,7 @@ export function App() {
     return (
         <Router>
             <Route path="/">
-                <DashboardView firmware={firmware} state={state} isManual={isManual} />
+                <DashboardView firmware={firmware} state={state} isManual={isManual} updateInfo={updateInfo} />
             </Route>
             <Route path="/settings">
                 <SettingsView theme={theme} onThemeChange={setTheme} firmware={firmware.data} />

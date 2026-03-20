@@ -43,6 +43,7 @@ firmware through REST API. Everything runs on the device itself.
 21. **SetEvent cleaning control** — Replaced `Clean Stop`/`Clean`/`SetButton start` with authenticated `SetEvent` commands (SKey from robot serial via RC4). True in-place pause/resume preserving map/localization, working return-to-base via `UIMGR_EVENT_SMARTAPP_SEND_TO_BASE`
 22. **Notification alert/error split** — Separate `ntfyOnError` (UI_ERROR_*, code 243+) and `ntfyOnAlert` (UI_ALERT_*, code 201-242) toggles in settings, independent notification control for errors vs alerts
 23. **Dock & cleaning control UI** — 3-button action bar with state-aware layout (idle: House/Spot/Manual, cleaning: Pause/Dock/Stop, docking: House/Spot/Stop), separate `pause` and `stop` API actions mapped directly to SetEvent commands
+24. **Update notification** — Browser-side GitHub releases check (6h interval, localStorage state), X.Y version comparison, dashboard banner linking to release page
 
 **Note for agents**: When a phase is completed, add a one-line summary to the list above.
 
@@ -56,10 +57,9 @@ pause (not cleaning completion) via the `ST_M1_Charging_Cleaning` robot state.
 Needs live testing with a partially-charged battery to trigger the recharge cycle.
 
 **OTA via GitHub Releases** — Browser-side only (ESP32 makes no outbound connections).
-Browser fetches `api.github.com` releases list (CORS allowed), displays available
-versions with release notes in settings. User clicks download link which opens the
-`.bin` asset in a new tab (normal navigation, no CORS issue), then uploads via the
-existing firmware upload file picker. Two-click flow, zero infrastructure.
+User downloads `.bin` from GitHub releases, then uploads via the existing firmware
+upload file picker in settings. The update notification banner on the dashboard
+links to the release page when a newer version is available.
 
 ### Neato Serial Protocol
 - **Baud rate**: 115200
@@ -805,6 +805,7 @@ categories are prefixed `notif_*`.
 |--------|------|
 | `app.tsx` | Root shell: theme, polling, routing, global state, unsupported robot screen |
 | `api.ts` | Typed fetch wrappers for all REST endpoints |
+| `update.ts` | Browser-side GitHub releases update checker (localStorage state, 6h interval, X.Y version comparison) |
 | `types.ts` | TypeScript interfaces for API data |
 | `history-data.ts` | JSONL parser, coverage map generation, path/bounding-box extraction |
 | `style.css` | Single CSS file, CSS variables for theming, responsive breakpoints |
@@ -830,8 +831,10 @@ state switching (e.g. `"ok"`, `"err"`, `"chg"`, fault injection codes).
 Supports pipe-separated compound scenarios (e.g. `"err|fa"`, `"man|llq"`).
 Includes LIDAR quality scenarios (`llq`, `lsl`, `lno`), manual clean scenarios
 (`man`, `mlf`, `mbf`, `mbs`, `msf`, `msr`), docking scenarios (`dock`, `rchg`),
-and in-memory history simulation with mapdata JSONL fixtures. Reset to `"ok"`
-before committing.
+update notification scenario (`upd`), and in-memory history simulation with
+mapdata JSONL fixtures. The mock intercepts GitHub releases API requests
+(`/repos/renjfk/OpenNeato/releases/latest`) via `__GITHUB_API_BASE__` build-time
+define that redirects to the dev server host. Reset to `"ok"` before committing.
 
 ### Frontend build pipeline
 
@@ -883,8 +886,8 @@ OTA update covers both.
 ### Firmware
 
 ```bash
-pio run -e Debug                        # Build (auto version: 0.0.0+<git-hash>)
-FIRMWARE_VERSION=1.0.0 pio run -e Debug # Build with specific version
+pio run -e Debug                        # Build (auto version: 0.0-<git-hash>)
+FIRMWARE_VERSION=1.0 pio run -e Debug   # Build with specific version
 BUILD_FRONTEND=1 pio run -e Debug       # Build frontend + firmware in one step
 pio run -e Debug -t upload              # Build and upload via USB serial
 pio run -e Debug -t upload -t monitor   # Upload and open serial monitor

@@ -12,9 +12,9 @@ const { join } = require("node:path");
 const getVersion = () => {
     try {
         const hash = execSync("git rev-parse --short=7 HEAD", { encoding: "utf8" }).trim();
-        return `0.0.0+${hash}`;
+        return `0.0-${hash}`;
     } catch {
-        return "0.0.0";
+        return "0.0";
     }
 };
 
@@ -67,7 +67,7 @@ const _randf = (min, max, decimals = 2) => parseFloat((Math.random() * (max - mi
 //
 // Robot state:
 //   ok   — Idle, battery 85%          off  — Device unreachable
-//   unsup — Unsupported robot model
+//   unsup — Unsupported robot model   upd  — Firmware v0.9 (triggers update banner)
 //   cls  — House cleaning             spt  — Spot cleaning
 //   dock — Docking (return to base)   rchg — Mid-clean recharge (on dock, charging)
 //   chg  — Charging, 62%              ch2  — Charging, 25%
@@ -146,6 +146,7 @@ const SCENARIOS = {
     msf: { manualClean: true, manualStallFront: true },
     msr: { manualClean: true, manualStallRear: true },
     unsup: { unsupported: true },
+    upd: { firmwareVersion: "0.9" },
     llq: { lidarLowQuality: true },
     lsl: { lidarSlowRotation: true },
     lno: { lidarUnavailable: true },
@@ -230,6 +231,8 @@ const state = {
     midCleanRecharge: false,
     // Robot model
     unsupported: false,
+    // Firmware version override (null = auto from git hash)
+    firmwareVersion: null,
     // LIDAR quality overrides
     lidarLowQuality: false,
     lidarSlowRotation: false,
@@ -693,8 +696,16 @@ const routes = {
         sendOk(res);
     },
 
+    "GET /repos/renjfk/OpenNeato/releases/latest": (_req, res) => {
+        jsonResponse(res, { tag_name: "v1.0" });
+    },
+
     "GET /api/firmware/version": (_req, res) => {
-        jsonResponse(res, { version: getVersion(), chip: "ESP32-C3", supported: !state.unsupported });
+        jsonResponse(res, {
+            version: state.firmwareVersion ?? getVersion(),
+            chip: "ESP32-C3",
+            supported: !state.unsupported,
+        });
     },
 };
 
@@ -946,8 +957,8 @@ function mockApiPlugin() {
         configureServer(server) {
             viteLogger = server.config.logger;
             server.middlewares.use(async (req, res, next) => {
-                // Only intercept /api/* requests
-                if (!req.url.startsWith("/api")) return next();
+                // Only intercept /api/* and /repos/* (GitHub API mock) requests
+                if (!req.url.startsWith("/api") && !req.url.startsWith("/repos")) return next();
 
                 logRequest(req, res);
 

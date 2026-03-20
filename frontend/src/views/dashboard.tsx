@@ -27,6 +27,7 @@ import { useNavigate } from "../components/router";
 import type { PollResult } from "../hooks/use-polling";
 import { usePolling } from "../hooks/use-polling";
 import type { ChargerData, ErrorData, FirmwareVersion, StateData, SystemData } from "../types";
+import type { UpdateInfo } from "../update";
 
 // -- Helpers --
 
@@ -108,9 +109,10 @@ interface DashboardViewProps {
     firmware: PollResult<FirmwareVersion>;
     state: PollResult<StateData>;
     isManual: boolean;
+    updateInfo: UpdateInfo | null;
 }
 
-export function DashboardView({ firmware, state, isManual }: DashboardViewProps) {
+export function DashboardView({ firmware, state, isManual, updateInfo }: DashboardViewProps) {
     const navigate = useNavigate();
     const charger = usePolling<ChargerData>(api.getCharger, 5000);
     const error = usePolling<ErrorData>(api.getError, 2000);
@@ -253,6 +255,14 @@ export function DashboardView({ firmware, state, isManual }: DashboardViewProps)
                         </div>
                     )}
                 </div>
+            )}
+
+            {/* Update notification */}
+            {updateInfo && (
+                <a class="update-banner" href={updateInfo.url} target="_blank" rel="noopener noreferrer">
+                    <Icon svg={tagSvg} />
+                    Update available: v{updateInfo.version}
+                </a>
             )}
 
             {/* Robot error/warning — fixed, clears automatically when robot resolves it */}

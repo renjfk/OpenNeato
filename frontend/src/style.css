@@ -421,6 +421,34 @@ body {
     margin: 0;
 }
 
+/* Update notification */
+
+.update-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 20px 10px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: var(--card-bg);
+    border: 1px solid var(--green);
+    color: var(--green);
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: opacity 0.15s;
+}
+
+.update-banner:active {
+    opacity: 0.7;
+}
+
+.update-banner svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
 /* Bottom action bar */
 
 .action-bar {

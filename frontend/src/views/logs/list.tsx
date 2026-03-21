@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { api } from "../../api";
-import alertSvg from "../../assets/icons/alert.svg?raw";
 import databaseSvg from "../../assets/icons/database.svg?raw";
+import downloadSvg from "../../assets/icons/download.svg?raw";
+import trashSvg from "../../assets/icons/trash.svg?raw";
 import { ConfirmDialog } from "../../components/confirm-dialog";
 import { Icon } from "../../components/icon";
 import { useNavigate } from "../../components/router";
@@ -111,6 +112,14 @@ export function LogsListView({ onError }: LogsListViewProps) {
                                     {f.compressed && <> &middot; compressed</>}
                                 </div>
                             </button>
+                            <a
+                                class="logs-file-download"
+                                href={`/api/logs/${f.name}`}
+                                download={f.name.replace(/\.hs$/, "")}
+                                aria-label={`Download ${f.name}`}
+                            >
+                                <Icon svg={downloadSvg} />
+                            </a>
                             <button
                                 type="button"
                                 class={`logs-file-delete${deleting === f.name ? " pending" : ""}`}
@@ -118,7 +127,7 @@ export function LogsListView({ onError }: LogsListViewProps) {
                                 disabled={deleting === f.name}
                                 aria-label={`Delete ${f.name}`}
                             >
-                                <Icon svg={alertSvg} />
+                                <Icon svg={trashSvg} />
                             </button>
                         </div>
                     ))}

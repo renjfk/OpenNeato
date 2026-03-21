@@ -1,23 +1,28 @@
-import { useCallback, useEffect, useState } from "preact/hooks";
+import { useCallback, useEffect, useMemo, useState } from "preact/hooks";
 import { api } from "../api";
 import backSvg from "../assets/icons/back.svg?raw";
 import { ErrorBannerStack, useErrorStack } from "../components/error-banner";
 import { Icon } from "../components/icon";
-import { useNavigate } from "../components/router";
+import { useNavigate, usePath } from "../components/router";
 import type { HistoryFileInfo, MapData } from "../types";
 import { HistoryItemView } from "./history/item";
 import { HistoryListView } from "./history/list";
 
 export function HistoryView() {
     const navigate = useNavigate();
+    const path = usePath();
     const [errors, errorStack] = useErrorStack();
     const [files, setFiles] = useState<HistoryFileInfo[]>([]);
     const [loading, setLoading] = useState(true);
-    const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
     const [selectedMap, setSelectedMap] = useState<MapData | null>(null);
     const [deleting, setDeleting] = useState(false);
 
-    const selectedFile = selectedIdx !== null ? (files[selectedIdx] ?? null) : null;
+    // Derive selected filename from URL: /history = list, /history/<name> = detail
+    const selectedName = path.startsWith("/history/") ? decodeURIComponent(path.slice(9)) : null;
+    const selectedFile = useMemo(
+        () => (selectedName ? (files.find((f) => f.name === selectedName) ?? null) : null),
+        [selectedName, files],
+    );
     const selectedRecording = selectedFile?.recording === true;
     const hasRecording = files.some((f) => f.recording);
 
@@ -45,8 +50,8 @@ export function HistoryView() {
                 setFiles(sortByDateDesc(fileList));
 
                 // If the detail view shows the recording session, refresh its map
-                if (selectedIdx !== null) {
-                    const file = fileList[selectedIdx];
+                if (selectedName) {
+                    const file = fileList.find((f) => f.name === selectedName);
                     if (file?.recording) {
                         const maps = await api.getHistorySession(file.name);
                         if (maps.length > 0) setSelectedMap(maps[0]);
@@ -57,33 +62,41 @@ export function HistoryView() {
             }
         }, 5000);
         return () => clearInterval(interval);
-    }, [hasRecording, selectedIdx]);
+    }, [hasRecording, selectedName]);
 
-    // Fetch full session data when selecting a card
-    const handleSelect = useCallback(
-        async (idx: number) => {
-            setSelectedIdx(idx);
+    // Fetch full session data when URL points to a file
+    useEffect(() => {
+        if (!selectedName) {
             setSelectedMap(null);
+            return;
+        }
+        setSelectedMap(null);
+        api.getHistorySession(selectedName)
+            .then((maps) => {
+                if (maps.length > 0) setSelectedMap(maps[0]);
+            })
+            .catch((e: unknown) => {
+                errorStack.push(e instanceof Error ? e.message : "Failed to load session");
+            });
+    }, [selectedName, errorStack]);
+
+    const handleSelect = useCallback(
+        (idx: number) => {
             const file = files[idx];
             if (!file) return;
-            try {
-                const maps = await api.getHistorySession(file.name);
-                if (maps.length > 0) setSelectedMap(maps[0]);
-            } catch (e: unknown) {
-                errorStack.push(e instanceof Error ? e.message : "Failed to load session");
-            }
+            navigate(`/history/${file.name}`);
         },
-        [files, errorStack],
+        [files, navigate],
     );
 
     const handleBack = useCallback(() => {
-        if (selectedIdx !== null) {
-            setSelectedIdx(null);
-            setSelectedMap(null);
+        if (selectedName) {
+            navigate("/history");
+            errorStack.clear();
         } else {
             navigate("/");
         }
-    }, [selectedIdx, navigate]);
+    }, [selectedName, navigate, errorStack]);
 
     const handleDeleteSession = useCallback(
         (idx: number) => {
@@ -94,15 +107,14 @@ export function HistoryView() {
                 .then(() => api.getHistoryList())
                 .then((fileList) => {
                     setFiles(sortByDateDesc(fileList));
-                    setSelectedIdx(null);
-                    setSelectedMap(null);
+                    if (selectedName === file.name) navigate("/history");
                 })
                 .catch((e: unknown) => {
                     errorStack.push(e instanceof Error ? e.message : "Failed to delete");
                 })
                 .finally(() => setDeleting(false));
         },
-        [files, errorStack],
+        [files, selectedName, navigate, errorStack],
     );
 
     const handleDeleteAll = useCallback(() => {
@@ -110,16 +122,15 @@ export function HistoryView() {
         api.deleteAllHistory()
             .then(() => {
                 setFiles([]);
-                setSelectedIdx(null);
-                setSelectedMap(null);
+                if (selectedName) navigate("/history");
             })
             .catch((e: unknown) => {
                 errorStack.push(e instanceof Error ? e.message : "Failed to delete");
             })
             .finally(() => setDeleting(false));
-    }, [errorStack]);
+    }, [selectedName, navigate, errorStack]);
 
-    const showDetail = selectedIdx !== null && selectedFile !== null;
+    const showDetail = selectedName !== null && selectedFile !== null;
 
     return (
         <>
@@ -136,7 +147,9 @@ export function HistoryView() {
             <div class="history-page">
                 {loading && <div class="history-empty">Loading...</div>}
 
-                {!loading && files.length === 0 && <div class="history-empty">No cleaning history yet</div>}
+                {!loading && files.length === 0 && !showDetail && (
+                    <div class="history-empty">No cleaning history yet</div>
+                )}
 
                 {!loading && files.length > 0 && !showDetail && (
                     <HistoryListView

@@ -1,7 +1,8 @@
 import { useCallback, useState } from "preact/hooks";
-import alertSvg from "../../assets/icons/alert.svg?raw";
 import boltSvg from "../../assets/icons/bolt.svg?raw";
 import clockSvg from "../../assets/icons/clock.svg?raw";
+import downloadSvg from "../../assets/icons/download.svg?raw";
+import trashSvg from "../../assets/icons/trash.svg?raw";
 import { ConfirmDialog } from "../../components/confirm-dialog";
 import { Icon } from "../../components/icon";
 import type { HistoryFileInfo, MapSession, MapSummary } from "../../types";
@@ -11,13 +12,14 @@ import { formatDate, formatDuration, modeInfo } from "./helpers";
 interface SessionCardProps {
     session: MapSession | null;
     summary: MapSummary | null;
+    filename: string;
     index: number;
     active?: boolean;
     onSelect: (i: number) => void;
     onDelete: (i: number) => void;
 }
 
-function SessionCard({ session, summary, index, active, onSelect, onDelete }: SessionCardProps) {
+function SessionCard({ session, summary, filename, index, active, onSelect, onDelete }: SessionCardProps) {
     const info = modeInfo(session?.mode ?? "");
     return (
         <div class={`history-session-row${active ? " running" : ""}`}>
@@ -59,13 +61,23 @@ function SessionCard({ session, summary, index, active, onSelect, onDelete }: Se
                 <span class="history-session-chevron">&rsaquo;</span>
             </button>
             {!active && (
+                <a
+                    class="history-session-download"
+                    href={`/api/history/${filename}`}
+                    download={filename.replace(/\.hs$/, "")}
+                    aria-label="Download session"
+                >
+                    <Icon svg={downloadSvg} />
+                </a>
+            )}
+            {!active && (
                 <button
                     type="button"
                     class="history-session-delete"
                     onClick={() => onDelete(index)}
                     aria-label="Delete session"
                 >
-                    <Icon svg={alertSvg} />
+                    <Icon svg={trashSvg} />
                 </button>
             )}
         </div>
@@ -126,6 +138,7 @@ export function HistoryListView({
                     key={f.session?.time ?? i}
                     session={f.session}
                     summary={f.summary}
+                    filename={f.name}
                     index={i}
                     active={f.recording}
                     onSelect={onSelect}

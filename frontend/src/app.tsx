@@ -185,7 +185,7 @@ export function App() {
             <Route path="/logs" prefix>
                 <LogsView />
             </Route>
-            <Route path="/history">
+            <Route path="/history" prefix>
                 <HistoryView />
             </Route>
         </Router>

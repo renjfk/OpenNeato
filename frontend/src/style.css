@@ -1538,6 +1538,37 @@ body {
     margin-top: 2px;
 }
 
+.logs-file-download {
+    flex-shrink: 0;
+    width: 40px;
+    height: 100%;
+    min-height: 44px;
+    border: none;
+    border-left: 1px solid var(--border);
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.5;
+    -webkit-tap-highlight-color: transparent;
+    text-decoration: none;
+}
+
+.logs-file-download:active {
+    opacity: 1;
+}
+
+.logs-file-download span {
+    display: flex;
+}
+
+.logs-file-download svg {
+    width: 16px;
+    height: 16px;
+}
+
 .logs-file-delete {
     flex-shrink: 0;
     width: 40px;
@@ -1893,6 +1924,37 @@ body {
 
 .history-session-card:active {
     opacity: 0.7;
+}
+
+.history-session-download {
+    flex-shrink: 0;
+    width: 40px;
+    height: 100%;
+    min-height: 44px;
+    border: none;
+    border-left: 1px solid var(--border);
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.5;
+    -webkit-tap-highlight-color: transparent;
+    text-decoration: none;
+}
+
+.history-session-download:active {
+    opacity: 1;
+}
+
+.history-session-download span {
+    display: flex;
+}
+
+.history-session-download svg {
+    width: 16px;
+    height: 16px;
 }
 
 .history-session-delete {

@@ -157,6 +157,13 @@ void WebServer::registerManualRoutes() {
 
 // -- Log file endpoints ------------------------------------------------------
 
+// Strip .hs extension so browser saves a plain .jsonl file
+static String downloadName(const String& filename) {
+    if (filename.endsWith(".hs"))
+        return filename.substring(0, filename.length() - 3);
+    return filename;
+}
+
 static String logListJson(const std::vector<LogFileInfo>& files) {
     String json = "[";
     for (size_t i = 0; i < files.size(); i++) {
@@ -199,6 +206,9 @@ void WebServer::registerLogRoutes() {
         AsyncWebServerResponse *response = request->beginChunkedResponse(
                 "application/x-ndjson",
                 [reader](uint8_t *buffer, size_t maxLen, size_t) -> size_t { return reader->read(buffer, maxLen); });
+
+        response->addHeader("Content-Disposition", "attachment; filename=\"" + downloadName(filename) + "\"");
+
         request->send(response);
     });
 
@@ -425,6 +435,9 @@ void WebServer::registerMapRoutes() {
         AsyncWebServerResponse *response = request->beginChunkedResponse(
                 "application/x-ndjson",
                 [reader](uint8_t *buffer, size_t maxLen, size_t) -> size_t { return reader->read(buffer, maxLen); });
+
+        response->addHeader("Content-Disposition", "attachment; filename=\"" + downloadName(suffix) + "\"");
+
         request->send(response);
     });
 

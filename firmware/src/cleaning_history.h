@@ -103,7 +103,11 @@ private:
     void startCollection(const String& uiState);
     void stopCollection();
     void collectSnapshot();
-    void writeLine(const String& line);
+    void writeLine(const String& line); // Immediate write + flush (headers, summaries)
+    void bufferLine(const String& line); // Buffer for deferred flush (pose snapshots)
+    void flushWriteBuffer(); // Flush buffered lines to disk
+    std::vector<String> writeBuffer;
+    unsigned long lastFlushMs = 0;
     void writeSessionHeader();
     void writeSessionSummary(int batteryEnd);
     void writeSnapshot(float x, float y, float theta, float time);

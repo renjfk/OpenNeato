@@ -242,7 +242,7 @@ export function DashboardView({ firmware, state, isManual, updateInfo }: Dashboa
                         <div class="status-bar-label">Storage</div>
                         <div class="status-bar-value">
                             <Icon svg={databaseSvg} />
-                            {Math.round((system.data.spiffsUsed / system.data.spiffsTotal) * 100)}%
+                            {Math.round((system.data.fsUsed / system.data.fsTotal) * 100)}%
                         </div>
                     </div>
                     {firmware.data && (

@@ -15,8 +15,8 @@ struct SystemHealth : public JsonSerializable {
     size_t heapTotal = 0;
     unsigned long uptime = 0;
     int rssi = 0;
-    size_t spiffsUsed = 0;
-    size_t spiffsTotal = 0;
+    size_t fsUsed = 0;
+    size_t fsTotal = 0;
     bool ntpSynced = false;
     time_t time = 0;
     String timeSource;
@@ -48,7 +48,7 @@ public:
     // Apply a timezone string (reconfigures NTP, does NOT store to NVS)
     void applyTimezone(const String& tz);
 
-    // System health snapshot (heap, uptime, RSSI, SPIFFS, NTP, time)
+    // System health snapshot (heap, uptime, RSSI, storage, NTP, time)
     // Caller must supply tz string (owned by SettingsManager, not SystemManager)
     SystemHealth getSystemHealth(const String& tz) const;
 
@@ -58,8 +58,8 @@ public:
     // Deferred factory reset — clears NVS + WiFi, then restarts
     void factoryReset();
 
-    // Deferred SPIFFS format — erases all logs/map data, then restarts
-    void formatSpiffs();
+    // Deferred filesystem format — erases all logs/map data, then restarts
+    void formatFs();
 
     // True if a deferred reboot is pending (restart or factory reset)
     bool isRebootPending() const { return pendingRebootAt > 0; }
@@ -83,7 +83,7 @@ private:
     // Deferred reboot state
     unsigned long pendingRebootAt = 0;
     bool pendingFactoryReset = false;
-    bool pendingFormatSpiffs = false;
+    bool pendingFormatFs = false;
 
     // Heap watchdog state
     unsigned long heapLowSince = 0; // millis() when heap first dropped below threshold (0 = healthy)

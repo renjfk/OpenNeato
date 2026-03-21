@@ -36,6 +36,22 @@ success and failure outcomes.
 `event` type entries use `category` as the frontend discriminator with prefixes:
 `scheduler_*`, `history_*`, `notif_*`.
 
+### Filesystem and Flash Wear
+
+LittleFS (not SPIFFS) — mounted via `LittleFS.begin(true, "/littlefs", 10, "spiffs")`
+using the `"spiffs"` partition label for OTA compatibility (no partition table change
+needed). Directories `/log` and `/history` are created after mount.
+
+Flash wear mitigation:
+- **DataLogger** buffers log lines in RAM, flushes every 30s or 128 lines. Cache-hit
+  serial commands are not logged (only real UART fetches).
+- **CleaningHistory** buffers pose snapshots in RAM via `bufferLine()`, flushes every
+  30s or on session end. Session headers/summaries use immediate `writeLine()`.
+- **Debug mode** auto-expires after 10 minutes (`DEBUG_AUTO_OFF_MS`) to prevent
+  forgotten verbose logging from inflating log files with raw serial responses.
+- **NVS** writes are user-triggered only (settings save, WiFi provisioning) — no
+  periodic or loop-driven NVS writes.
+
 ## Build Commands
 
 ### Firmware
@@ -95,7 +111,7 @@ CSS frameworks, routing, or HTTP wrapper libraries.
 ## Hardware
 
 - **Board**: ESP32-C3-DevKitM-1 (RISC-V, 160MHz, 320KB RAM, 4MB flash)
-- **Flash layout**: Dual OTA slots (1600KB each), 768KB SPIFFS, 20KB NVS
+- **Flash layout**: Dual OTA slots (1600KB each), 768KB LittleFS, 20KB NVS
 - **NVS**: Single `"neato"` namespace, opened once, passed by reference
 - **Reset**: GPIO9, hold 5s for factory reset
 
@@ -117,6 +133,13 @@ feature list, quick start guide, and links to installation docs and releases.
 **Installation guide** — Write `docs/installation.md` covering required materials
 (ESP32-C3 board, jumper wires, debug port pinout), hardware assembly with photos,
 flashing with the flash tool, and first-time WiFi configuration walkthrough.
+
+**Clean up "spiffs" partition label** — Once the device is physically re-flashed
+(not OTA), change partition subtype from `spiffs` to `littlefs` in
+`firmware/partition.csv` and simplify the mount call from
+`LittleFS.begin(true, "/littlefs", 10, "spiffs")` to `LittleFS.begin(true)`.
+The `"spiffs"` label is only kept for OTA compatibility with the old partition
+table — a full flash makes it unnecessary.
 
 **Mid-clean recharge continuity** — Verify the firmware correctly handles the
 autonomous mid-clean recharge cycle (robot docks to charge, then resumes cleaning).

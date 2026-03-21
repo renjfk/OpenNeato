@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include <functional>
 #include <memory>
 #include <vector>
@@ -35,7 +35,7 @@ struct LogReader {
     virtual size_t read(uint8_t *buffer, size_t maxLen) = 0;
 };
 
-// Plain text log reader — thin wrapper around SPIFFS File
+// Plain text log reader — thin wrapper around filesystem File
 struct PlainLogReader : public LogReader {
     File file;
     explicit PlainLogReader(File f) : file(std::move(f)) {}
@@ -46,7 +46,7 @@ struct PlainLogReader : public LogReader {
     size_t read(uint8_t *buffer, size_t maxLen) override { return file.read(buffer, maxLen); }
 };
 
-// Buffered log reader — serves SPIFFS file content followed by unflushed
+// Buffered log reader — serves file content followed by unflushed
 // in-memory buffer lines. Used for current.jsonl so the API always returns
 // complete data even between flush intervals.
 struct BufferedLogReader : public LogReader {
@@ -88,8 +88,8 @@ public:
 
     // -- Public logging methods (called by other modules) --------------------
     // These are safe to call from any context (request handlers, callbacks,
-    // event handlers). They only append to an in-memory buffer; actual SPIFFS
-    // I/O is deferred to loop().
+    // event handlers). They only append to an in-memory buffer; actual
+    // filesystem I/O is deferred to loop().
 
     void logRequest(WebRequestMethodComposite method, const String& path, int status, unsigned long ms);
     void logWifi(const String& event, const std::vector<Field>& extra = {});
@@ -119,14 +119,14 @@ private:
 
     void logEvent(const String& type, const std::vector<Field>& fields);
 
-    // SPIFFS state
-    bool spiffsReady = false;
+    // Filesystem state
+    bool fsReady = false;
 
     // -- Write buffer (non-blocking log writes) ------------------------------
-    // Log lines accumulate in memory; loop() flushes them to SPIFFS.
+    // Log lines accumulate in memory; loop() flushes them to filesystem.
     std::vector<String> writeBuffer;
     unsigned long lastFlushMs = 0;
-    size_t currentFileSize = 0; // Tracked in memory to avoid SPIFFS stat on every write
+    size_t currentFileSize = 0; // Tracked in memory to avoid filesystem stat on every write
 
     void bufferLine(const String& jsonLine);
     void flushBuffer();

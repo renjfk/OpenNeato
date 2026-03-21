@@ -120,7 +120,7 @@ export const api = {
     testNotification: (topic: string) => post(`/api/notifications/test?topic=${encodeURIComponent(topic)}`),
     playSound: (id: number) => post(`/api/sound?id=${id}`),
     restart: () => post("/api/system/restart"),
-    formatSpiffs: () => post("/api/system/format-spiffs"),
+    formatFs: () => post("/api/system/format-fs"),
     factoryReset: () => post("/api/system/reset"),
     getLogs: () => get<LogFileInfo[]>("/api/logs"),
     getLogContent: (name: string) => fetchLogText(name),

@@ -64,7 +64,7 @@ size_t CompressedLogReader::read(uint8_t *buffer, size_t maxLen) {
 size_t BufferedLogReader::read(uint8_t *buffer, size_t maxLen) {
     size_t total = 0;
 
-    // Phase 1: drain the SPIFFS file
+    // Phase 1: drain the file
     if (file) {
         size_t n = file.read(buffer, maxLen);
         if (n > 0) {
@@ -105,23 +105,26 @@ DataLogger::DataLogger(NeatoSerial& neato, SystemManager& sys) : LoopTask(50), n
 // -- Lifecycle ---------------------------------------------------------------
 
 void DataLogger::begin() {
-    // Mount SPIFFS (format on first use)
-    if (!SPIFFS.begin(true)) {
-        LOG("DLOG", "SPIFFS mount failed");
+    // Mount LittleFS using the existing "spiffs" partition label for OTA compatibility
+    // (partition table subtype stays as "spiffs" so OTA updates work without re-flash)
+    if (!LittleFS.begin(true, "/littlefs", 10, "spiffs")) {
+        LOG("DLOG", "LittleFS mount failed");
         return;
     }
-    spiffsReady = true;
-    LOG("DLOG", "SPIFFS mounted: %u / %u bytes used", SPIFFS.usedBytes(), SPIFFS.totalBytes());
+    fsReady = true;
+    LOG("DLOG", "LittleFS mounted: %u / %u bytes used", LittleFS.usedBytes(), LittleFS.totalBytes());
 
-    // SPIFFS is flat — mkdir is a no-op, directory paths are just file prefixes
+    // LittleFS requires real directories (unlike SPIFFS's flat namespace)
+    LittleFS.mkdir(LOG_DIR);
+    LittleFS.mkdir(HISTORY_DIR);
 
     // Continue logging into existing current.jsonl across reboots — no need to
     // archive on boot. The file rotates naturally at LOG_MAX_FILE_SIZE and gets
     // a proper epoch-based name once NTP is synced.
 
     // Seed currentFileSize from existing file (if any)
-    if (SPIFFS.exists(LOG_CURRENT_FILE)) {
-        File f = SPIFFS.open(LOG_CURRENT_FILE, FILE_READ);
+    if (LittleFS.exists(LOG_CURRENT_FILE)) {
+        File f = LittleFS.open(LOG_CURRENT_FILE, FILE_READ);
         if (f) {
             currentFileSize = f.size();
             f.close();
@@ -141,7 +144,7 @@ void DataLogger::begin() {
 }
 
 void DataLogger::tick() {
-    // Flush write buffer to SPIFFS when interval elapsed or buffer full
+    // Flush write buffer to filesystem when interval elapsed or buffer full
     if (!writeBuffer.empty()) {
         bool intervalElapsed = millis() - lastFlushMs >= LOG_FLUSH_INTERVAL_MS;
         bool bufferFull = writeBuffer.size() >= LOG_FLUSH_MAX_LINES;
@@ -162,7 +165,7 @@ void DataLogger::tick() {
                         ? (100.0f * static_cast<float>(compressTotalOut) / static_cast<float>(compressTotalIn))
                         : 0.0f);
 
-            SPIFFS.remove(pendingSrcPath);
+            LittleFS.remove(pendingSrcPath);
             compressing = false;
         }
     }
@@ -182,7 +185,7 @@ void DataLogger::tick() {
     if (bulkDeletePending && !bulkDeletePaths.empty()) {
         String path = bulkDeletePaths.back();
         bulkDeletePaths.pop_back();
-        SPIFFS.remove(path);
+        LittleFS.remove(path);
         LOG("DLOG", "Bulk delete: %s", path.c_str());
 
         if (bulkDeletePaths.empty()) {
@@ -194,10 +197,10 @@ void DataLogger::tick() {
 // -- Write buffer (non-blocking log writes) ----------------------------------
 
 void DataLogger::bufferLine(const String& jsonLine) {
-    // Accept entries even before SPIFFS is ready — they accumulate in memory
-    // and get flushed once begin() mounts SPIFFS. This allows early-boot
+    // Accept entries even before filesystem is ready — they accumulate in memory
+    // and get flushed once begin() mounts LittleFS. This allows early-boot
     // events (WiFi connect, NTP) to be captured before dataLogger.begin().
-    // Cap the buffer to prevent unbounded heap growth if SPIFFS init is delayed.
+    // Cap the buffer to prevent unbounded heap growth if filesystem init is delayed.
     if (writeBuffer.size() >= LOG_FLUSH_MAX_LINES * 4)
         return;
     writeBuffer.push_back(jsonLine);
@@ -222,10 +225,10 @@ String DataLogger::snapshotBuffer() const {
 }
 
 void DataLogger::flushBuffer() {
-    if (writeBuffer.empty() || !spiffsReady)
+    if (writeBuffer.empty() || !fsReady)
         return;
 
-    File f = SPIFFS.open(LOG_CURRENT_FILE, FILE_APPEND);
+    File f = LittleFS.open(LOG_CURRENT_FILE, FILE_APPEND);
     if (!f) {
         LOG("DLOG", "Failed to open log file for writing");
         writeBuffer.clear();
@@ -248,7 +251,7 @@ void DataLogger::flushBuffer() {
         LOG("DLOG", "Rotating log -> %s (%u bytes)", pendingDstPath.c_str(), currentFileSize);
 
         // Rename current log to uncompressed archive (fast, ~5ms)
-        SPIFFS.rename(LOG_CURRENT_FILE, pendingSrcPath);
+        LittleFS.rename(LOG_CURRENT_FILE, pendingSrcPath);
         currentFileSize = 0;
         rotationPending = true;
     }
@@ -257,13 +260,13 @@ void DataLogger::flushBuffer() {
 // -- Incremental compression -------------------------------------------------
 
 void DataLogger::startCompression() {
-    compressSrc = SPIFFS.open(pendingSrcPath, FILE_READ);
+    compressSrc = LittleFS.open(pendingSrcPath, FILE_READ);
     if (!compressSrc) {
         LOG("DLOG", "Compression failed: cannot open source %s", pendingSrcPath.c_str());
         return;
     }
 
-    compressDst = SPIFFS.open(pendingDstPath, FILE_WRITE);
+    compressDst = LittleFS.open(pendingDstPath, FILE_WRITE);
     if (!compressDst) {
         LOG("DLOG", "Compression failed: cannot open dest %s", pendingDstPath.c_str());
         compressSrc.close();
@@ -278,7 +281,7 @@ void DataLogger::startCompression() {
 }
 
 bool DataLogger::compressStep() {
-    // Process one chunk of input per call (~5ms of SPIFFS I/O)
+    // Process one chunk of input per call (~5ms of filesystem I/O)
     static const size_t CHUNK_SIZE = 512;
     uint8_t inBuf[CHUNK_SIZE];
     uint8_t outBuf[CHUNK_SIZE];
@@ -299,7 +302,7 @@ bool DataLogger::compressStep() {
                     LOG("DLOG", "Heatshrink sink error");
                     compressSrc.close();
                     compressDst.close();
-                    SPIFFS.remove(pendingDstPath);
+                    LittleFS.remove(pendingDstPath);
                     compressing = false;
                     // Fall back to uncompressed archive (source already renamed)
                     return true;
@@ -316,7 +319,7 @@ bool DataLogger::compressStep() {
                         LOG("DLOG", "Heatshrink poll error");
                         compressSrc.close();
                         compressDst.close();
-                        SPIFFS.remove(pendingDstPath);
+                        LittleFS.remove(pendingDstPath);
                         compressing = false;
                         return true;
                     }
@@ -336,7 +339,7 @@ bool DataLogger::compressStep() {
         LOG("DLOG", "Heatshrink finish error");
         compressSrc.close();
         compressDst.close();
-        SPIFFS.remove(pendingDstPath);
+        LittleFS.remove(pendingDstPath);
         compressing = false;
         return true;
     }
@@ -350,7 +353,7 @@ bool DataLogger::compressStep() {
             LOG("DLOG", "Heatshrink poll error during finish");
             compressSrc.close();
             compressDst.close();
-            SPIFFS.remove(pendingDstPath);
+            LittleFS.remove(pendingDstPath);
             compressing = false;
             return true;
         }
@@ -369,7 +372,7 @@ void DataLogger::enforceLimits() {
     int archiveCount = 0;
     size_t logDirBytes = 0;
     String oldest;
-    File root = SPIFFS.open(LOG_DIR);
+    File root = LittleFS.open(LOG_DIR);
     if (!root || !root.isDirectory())
         return;
 
@@ -389,19 +392,19 @@ void DataLogger::enforceLimits() {
     if (oldest.isEmpty())
         return;
 
-    // Log budget: total SPIFFS cap minus what non-log data uses, but always at least 10% of SPIFFS
-    size_t total = SPIFFS.totalBytes();
-    size_t globalCap = (total * LOG_MAX_SPIFFS_PERCENT) / 100;
-    size_t nonLogBytes = SPIFFS.usedBytes() > logDirBytes ? SPIFFS.usedBytes() - logDirBytes : 0;
+    // Log budget: total filesystem cap minus what non-log data uses, but always at least 10%
+    size_t total = LittleFS.totalBytes();
+    size_t globalCap = (total * LOG_MAX_FS_PERCENT) / 100;
+    size_t nonLogBytes = LittleFS.usedBytes() > logDirBytes ? LittleFS.usedBytes() - logDirBytes : 0;
     size_t available = globalCap > nonLogBytes ? globalCap - nonLogBytes : 0;
-    size_t minReserved = (total * LOG_MIN_SPIFFS_PERCENT) / 100;
+    size_t minReserved = (total * LOG_MIN_FS_PERCENT) / 100;
     size_t logBudget = available > minReserved ? available : minReserved;
 
     if (logDirBytes > logBudget || archiveCount > LOG_MAX_FILES) {
         String fullPath = String(LOG_DIR) + "/" + oldest;
         LOG("DLOG", "Limit: deleting %s (files=%d, logBytes=%u/%u)", fullPath.c_str(), archiveCount, logDirBytes,
             logBudget);
-        SPIFFS.remove(fullPath);
+        LittleFS.remove(fullPath);
     }
 }
 
@@ -508,6 +511,12 @@ void DataLogger::logBootEvent() {
 
 void DataLogger::onCommand(const String& cmd, CommandStatus status, unsigned long ms, const String& raw, int queueDepth,
                            size_t respBytes, unsigned long cacheAgeMs) {
+    // Skip cache hits — they are memory lookups, not real serial I/O.
+    // Logging every cache hit is the dominant source of buffer churn during
+    // normal dashboard polling (GetState/GetErr every 2s from multiple consumers).
+    if (cacheAgeMs > 0)
+        return;
+
     // Convert status enum to string for JSON
     const char *statusStr;
     switch (status) {
@@ -535,14 +544,11 @@ void DataLogger::onCommand(const String& cmd, CommandStatus status, unsigned lon
     }
 
     // Log command metadata; include raw response only when debug logging is enabled
-    // cache_age presence is implicit: 0 = fresh fetch (omitted), >0 = served from cache
     std::vector<Field> fields = {{"cmd", cmd, FIELD_STRING},
                                  {"status", statusStr, FIELD_STRING},
                                  {"ms", String(ms), FIELD_INT},
                                  {"q", String(queueDepth), FIELD_INT},
                                  {"bytes", String(respBytes), FIELD_INT}};
-    if (cacheAgeMs > 0)
-        fields.push_back({"age", String(cacheAgeMs), FIELD_INT});
     if (debugCheck && debugCheck())
         fields.push_back({"resp", raw, FIELD_STRING});
     logEvent("command", fields);
@@ -552,18 +558,18 @@ void DataLogger::onCommand(const String& cmd, CommandStatus status, unsigned lon
 
 std::vector<LogFileInfo> DataLogger::listLogs() {
     std::vector<LogFileInfo> files;
-    if (!spiffsReady)
+    if (!fsReady)
         return files;
 
     // Add current log — always present when logging is active.
-    // Size from tracked flushed bytes + unflushed buffer estimate (no SPIFFS I/O).
+    // Size from tracked flushed bytes + unflushed buffer estimate (no filesystem I/O).
     LogFileInfo current;
     current.name = "current.jsonl";
     current.size = currentFileSize + bufferBytes();
     files.push_back(current);
 
     // List archived logs
-    File root = SPIFFS.open(LOG_DIR);
+    File root = LittleFS.open(LOG_DIR);
     if (!root || !root.isDirectory())
         return files;
 
@@ -584,7 +590,7 @@ std::vector<LogFileInfo> DataLogger::listLogs() {
 }
 
 std::shared_ptr<LogReader> DataLogger::readLog(const String& filename) {
-    if (!spiffsReady)
+    if (!fsReady)
         return nullptr;
 
     String path;
@@ -599,17 +605,17 @@ std::shared_ptr<LogReader> DataLogger::readLog(const String& filename) {
     if (filename == "current.jsonl") {
         String tail = snapshotBuffer();
         File f;
-        if (SPIFFS.exists(path))
-            f = SPIFFS.open(path, FILE_READ);
+        if (LittleFS.exists(path))
+            f = LittleFS.open(path, FILE_READ);
         if (!f && tail.isEmpty())
             return nullptr;
         return std::make_shared<BufferedLogReader>(std::move(f), std::move(tail));
     }
 
-    if (!SPIFFS.exists(path))
+    if (!LittleFS.exists(path))
         return nullptr;
 
-    File f = SPIFFS.open(path, FILE_READ);
+    File f = LittleFS.open(path, FILE_READ);
     if (!f)
         return nullptr;
 
@@ -620,7 +626,7 @@ std::shared_ptr<LogReader> DataLogger::readLog(const String& filename) {
 }
 
 bool DataLogger::deleteLog(const String& filename) {
-    if (!spiffsReady)
+    if (!fsReady)
         return false;
 
     String path;
@@ -630,24 +636,24 @@ bool DataLogger::deleteLog(const String& filename) {
         path = String(LOG_DIR) + "/" + filename;
     }
 
-    return SPIFFS.remove(path);
+    return LittleFS.remove(path);
 }
 
 void DataLogger::deleteAllLogs() {
-    if (!spiffsReady)
+    if (!fsReady)
         return;
 
     // Collect all paths — actual deletion is deferred to loop() (one per iteration)
     bulkDeletePaths.clear();
 
     // Current log
-    if (SPIFFS.exists(LOG_CURRENT_FILE)) {
+    if (LittleFS.exists(LOG_CURRENT_FILE)) {
         bulkDeletePaths.push_back(LOG_CURRENT_FILE);
         currentFileSize = 0;
     }
 
     // Archived logs
-    File root = SPIFFS.open(LOG_DIR);
+    File root = LittleFS.open(LOG_DIR);
     if (root && root.isDirectory()) {
         File entry = root.openNextFile();
         while (entry) {

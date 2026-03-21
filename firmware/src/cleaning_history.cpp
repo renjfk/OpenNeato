@@ -2,7 +2,7 @@
 #include "json_fields.h"
 #include "neato_serial.h"
 #include "system_manager.h"
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include <cmath>
 
 CleaningHistory::CleaningHistory(NeatoSerial& neato, DataLogger& logger, SystemManager& sysMgr) :
@@ -17,7 +17,7 @@ void CleaningHistory::tick() {
             // Compression done — remove raw source
             compressSrc.close();
             compressDst.close();
-            SPIFFS.remove(compressSrcPath);
+            LittleFS.remove(compressSrcPath);
             LOG("HIST", "Compression done: %s", compressDstPath.c_str());
             compressing = false;
             setInterval(HISTORY_INTERVAL_MS);
@@ -29,6 +29,10 @@ void CleaningHistory::tick() {
         return;
 
     if (collecting) {
+        // Periodically flush buffered pose snapshots to disk
+        if (!writeBuffer.empty() && millis() - lastFlushMs >= HISTORY_FLUSH_INTERVAL_MS) {
+            flushWriteBuffer();
+        }
         collectSnapshot();
     } else {
         checkState();
@@ -117,7 +121,7 @@ void CleaningHistory::startCollection(const String& uiState) {
 
     // Create session file: /history/<epoch>.jsonl
     activeFilePath = String(HISTORY_DIR) + "/" + String(static_cast<long>(sessionStartTime)) + ".jsonl";
-    activeFile = SPIFFS.open(activeFilePath, FILE_WRITE);
+    activeFile = LittleFS.open(activeFilePath, FILE_WRITE);
     if (!activeFile) {
         LOG("HIST", "Failed to create session file: %s", activeFilePath.c_str());
         collecting = false;
@@ -137,6 +141,9 @@ void CleaningHistory::startCollection(const String& uiState) {
 }
 
 void CleaningHistory::stopCollection() {
+    // Flush any buffered snapshots before writing summary
+    flushWriteBuffer();
+
     // Fetch final battery level for summary
     neato.getCharger([this](bool ok, const ChargerData& charger) {
         int batteryEnd = ok ? charger.fuelPercent : -1;
@@ -163,8 +170,8 @@ void CleaningHistory::stopCollection() {
         // Start non-blocking compression: raw .jsonl -> .jsonl.hs
         compressSrcPath = activeFilePath;
         compressDstPath = activeFilePath + ".hs";
-        compressSrc = SPIFFS.open(compressSrcPath, FILE_READ);
-        compressDst = SPIFFS.open(compressDstPath, FILE_WRITE);
+        compressSrc = LittleFS.open(compressSrcPath, FILE_READ);
+        compressDst = LittleFS.open(compressDstPath, FILE_WRITE);
         if (compressSrc && compressDst) {
             heatshrink_encoder_reset(&compressEncoder);
             compressInputDone = false;
@@ -203,7 +210,7 @@ bool CleaningHistory::compressStep() {
                     LOG("HIST", "Heatshrink sink error");
                     compressSrc.close();
                     compressDst.close();
-                    SPIFFS.remove(compressDstPath);
+                    LittleFS.remove(compressDstPath);
                     compressing = false;
                     return true;
                 }
@@ -217,7 +224,7 @@ bool CleaningHistory::compressStep() {
                         LOG("HIST", "Heatshrink poll error");
                         compressSrc.close();
                         compressDst.close();
-                        SPIFFS.remove(compressDstPath);
+                        LittleFS.remove(compressDstPath);
                         compressing = false;
                         return true;
                     }
@@ -236,7 +243,7 @@ bool CleaningHistory::compressStep() {
         LOG("HIST", "Heatshrink finish error");
         compressSrc.close();
         compressDst.close();
-        SPIFFS.remove(compressDstPath);
+        LittleFS.remove(compressDstPath);
         compressing = false;
         return true;
     }
@@ -249,7 +256,7 @@ bool CleaningHistory::compressStep() {
             LOG("HIST", "Heatshrink poll error during finish");
             compressSrc.close();
             compressDst.close();
-            SPIFFS.remove(compressDstPath);
+            LittleFS.remove(compressDstPath);
             compressing = false;
             return true;
         }
@@ -296,13 +303,35 @@ void CleaningHistory::writeSessionSummary(int batteryEnd) {
     writeLine(fieldsToJson(fields));
 }
 
-// -- Direct file writing -----------------------------------------------------
+// -- Buffered file writing ---------------------------------------------------
+// Pose snapshots accumulate in writeBuffer; flushed every HISTORY_FLUSH_INTERVAL_MS
+// or when the session ends (stopCollection / recovery). This reduces flash wear
+// from one write every 2s to one write every 30s during a cleaning session.
+// Session header, summary, and recharge markers flush immediately since they
+// are rare one-shot writes where crash safety matters.
 
 void CleaningHistory::writeLine(const String& line) {
     if (!activeFile)
         return;
     activeFile.println(line);
     activeFile.flush();
+}
+
+void CleaningHistory::bufferLine(const String& line) {
+    if (!activeFile)
+        return;
+    writeBuffer.push_back(line);
+}
+
+void CleaningHistory::flushWriteBuffer() {
+    if (writeBuffer.empty() || !activeFile)
+        return;
+    for (const auto& line: writeBuffer) {
+        activeFile.println(line);
+    }
+    activeFile.flush();
+    writeBuffer.clear();
+    lastFlushMs = millis();
 }
 
 // -- Snapshot collection (active mode) ---------------------------------------
@@ -365,12 +394,12 @@ bool CleaningHistory::replayLine(const String& line) {
 }
 
 bool CleaningHistory::recoverCollection(const String& uiState) {
-    // Only attempt recovery once after boot — avoid scanning SPIFFS on every clean start
+    // Only attempt recovery once after boot — avoid scanning filesystem on every clean start
     if (recoveryAttempted)
         return false;
     recoveryAttempted = true;
 
-    File root = SPIFFS.open(HISTORY_DIR);
+    File root = LittleFS.open(HISTORY_DIR);
     if (!root || !root.isDirectory())
         return false;
 
@@ -398,8 +427,8 @@ bool CleaningHistory::recoverCollection(const String& uiState) {
             break;
         }
         // Raw .jsonl — check if a compressed copy exists (stale leftover)
-        if (SPIFFS.exists(path + ".hs")) {
-            SPIFFS.remove(path);
+        if (LittleFS.exists(path + ".hs")) {
+            LittleFS.remove(path);
             LOG("HIST", "Removed stale raw file: %s (compressed copy exists)", path.c_str());
             continue;
         }
@@ -421,10 +450,10 @@ bool CleaningHistory::recoverCollection(const String& uiState) {
     String targetPath = orphans[0];
 
     if (orphans.size() > 1) {
-        File target = SPIFFS.open(targetPath, FILE_APPEND);
+        File target = LittleFS.open(targetPath, FILE_APPEND);
         if (target) {
             for (size_t i = 1; i < orphans.size(); i++) {
-                File src = SPIFFS.open(orphans[i], FILE_READ);
+                File src = LittleFS.open(orphans[i], FILE_READ);
                 if (!src)
                     continue;
                 while (src.available()) {
@@ -438,7 +467,7 @@ bool CleaningHistory::recoverCollection(const String& uiState) {
                     target.println(line);
                 }
                 src.close();
-                SPIFFS.remove(orphans[i]);
+                LittleFS.remove(orphans[i]);
                 LOG("HIST", "Merged orphan %s into %s", orphans[i].c_str(), targetPath.c_str());
             }
             target.flush();
@@ -451,7 +480,7 @@ bool CleaningHistory::recoverCollection(const String& uiState) {
     cleanMode = cleanModeFromState(uiState);
     activeFilePath = targetPath;
 
-    File recoveryFile = SPIFFS.open(targetPath, FILE_READ);
+    File recoveryFile = LittleFS.open(targetPath, FILE_READ);
     if (!recoveryFile)
         return false;
 
@@ -477,7 +506,7 @@ bool CleaningHistory::recoverCollection(const String& uiState) {
             sessionStartTime = static_cast<time_t>(name.substring(0, dot).toInt());
     }
 
-    activeFile = SPIFFS.open(activeFilePath, FILE_APPEND);
+    activeFile = LittleFS.open(activeFilePath, FILE_APPEND);
     if (!activeFile) {
         activeFilePath = "";
         resetSession();
@@ -501,7 +530,7 @@ void CleaningHistory::finalizeOrphanSessions() {
     // Called once at boot when the robot is idle. Finds orphan .jsonl files
     // (no summary line, no compressed counterpart) and finalizes them: replay
     // to compute summary stats, append summary line, then start compression.
-    File root = SPIFFS.open(HISTORY_DIR);
+    File root = LittleFS.open(HISTORY_DIR);
     if (!root || !root.isDirectory())
         return;
 
@@ -520,8 +549,8 @@ void CleaningHistory::finalizeOrphanSessions() {
     for (const auto& path: allFiles) {
         if (path.endsWith(".jsonl.hs"))
             break; // Completed session boundary
-        if (SPIFFS.exists(path + ".hs")) {
-            SPIFFS.remove(path);
+        if (LittleFS.exists(path + ".hs")) {
+            LittleFS.remove(path);
             continue;
         }
         String firstLine, lastLine;
@@ -539,7 +568,7 @@ void CleaningHistory::finalizeOrphanSessions() {
         resetSession();
 
         // Replay to rebuild accumulators
-        File f = SPIFFS.open(orphanPath, FILE_READ);
+        File f = LittleFS.open(orphanPath, FILE_READ);
         if (!f)
             continue;
         while (f.available()) {
@@ -564,7 +593,7 @@ void CleaningHistory::finalizeOrphanSessions() {
 
         // Open for append and write summary
         activeFilePath = orphanPath;
-        activeFile = SPIFFS.open(orphanPath, FILE_APPEND);
+        activeFile = LittleFS.open(orphanPath, FILE_APPEND);
         if (!activeFile)
             continue;
 
@@ -580,8 +609,8 @@ void CleaningHistory::finalizeOrphanSessions() {
         if (!compressing) {
             compressSrcPath = orphanPath;
             compressDstPath = orphanPath + ".hs";
-            compressSrc = SPIFFS.open(compressSrcPath, FILE_READ);
-            compressDst = SPIFFS.open(compressDstPath, FILE_WRITE);
+            compressSrc = LittleFS.open(compressSrcPath, FILE_READ);
+            compressDst = LittleFS.open(compressDstPath, FILE_WRITE);
             if (compressSrc && compressDst) {
                 heatshrink_encoder_reset(&compressEncoder);
                 compressInputDone = false;
@@ -729,7 +758,7 @@ void CleaningHistory::writeSnapshot(float x, float y, float theta, float time) {
                   ",\"ts\":" + String(time, 1) + "}";
 
     updateAccumulators(x, y, theta);
-    writeLine(line);
+    bufferLine(line);
     snapshotCount++;
 
     if (snapshotCount % 10 == 0) {
@@ -744,7 +773,7 @@ void CleaningHistory::enforceLimits() {
     int fileCount = 0;
     size_t histDirBytes = 0;
     String oldest;
-    File root = SPIFFS.open(HISTORY_DIR);
+    File root = LittleFS.open(HISTORY_DIR);
     if (!root || !root.isDirectory())
         return;
 
@@ -764,19 +793,19 @@ void CleaningHistory::enforceLimits() {
     if (oldest.isEmpty())
         return;
 
-    // History budget: total SPIFFS cap minus non-history data, floored at minimum reserve
-    size_t total = SPIFFS.totalBytes();
-    size_t globalCap = (total * HISTORY_MAX_SPIFFS_PERCENT) / 100;
-    size_t nonHistBytes = SPIFFS.usedBytes() > histDirBytes ? SPIFFS.usedBytes() - histDirBytes : 0;
+    // History budget: total filesystem cap minus non-history data, floored at minimum reserve
+    size_t total = LittleFS.totalBytes();
+    size_t globalCap = (total * HISTORY_MAX_FS_PERCENT) / 100;
+    size_t nonHistBytes = LittleFS.usedBytes() > histDirBytes ? LittleFS.usedBytes() - histDirBytes : 0;
     size_t available = globalCap > nonHistBytes ? globalCap - nonHistBytes : 0;
-    size_t minReserved = (total * HISTORY_MIN_SPIFFS_PERCENT) / 100;
+    size_t minReserved = (total * HISTORY_MIN_FS_PERCENT) / 100;
     size_t histBudget = available > minReserved ? available : minReserved;
 
     if (histDirBytes > histBudget || fileCount > HISTORY_MAX_FILES) {
         String fullPath = String(HISTORY_DIR) + "/" + oldest;
         LOG("HIST", "Limit: deleting %s (files=%d, histBytes=%u/%u)", fullPath.c_str(), fileCount, histDirBytes,
             histBudget);
-        SPIFFS.remove(fullPath);
+        LittleFS.remove(fullPath);
     }
 }
 
@@ -788,7 +817,7 @@ void CleaningHistory::readFirstLastLines(const String& path, bool compressed, St
 
     if (compressed) {
         // Decompress fully into a String (history files are tiny, 2-5KB)
-        File f = SPIFFS.open(path, FILE_READ);
+        File f = LittleFS.open(path, FILE_READ);
         if (!f)
             return;
         CompressedLogReader reader(std::move(f));
@@ -820,7 +849,7 @@ void CleaningHistory::readFirstLastLines(const String& path, bool compressed, St
         lastLine.trim();
     } else {
         // Plain .jsonl — read first line directly, seek backward for last line
-        File f = SPIFFS.open(path, FILE_READ);
+        File f = LittleFS.open(path, FILE_READ);
         if (!f)
             return;
         // Read first line
@@ -856,7 +885,7 @@ void CleaningHistory::readFirstLastLines(const String& path, bool compressed, St
 std::vector<HistorySessionInfo> CleaningHistory::listSessions() {
     std::vector<HistorySessionInfo> result;
 
-    File root = SPIFFS.open(HISTORY_DIR);
+    File root = LittleFS.open(HISTORY_DIR);
     if (!root || !root.isDirectory())
         return result;
 
@@ -878,7 +907,7 @@ std::vector<HistorySessionInfo> CleaningHistory::listSessions() {
 
             // Skip the actively collecting file during disk enumeration.
             // We will manually append it at the end to avoid thread-safety /
-            // concurrent modification issues with SPIFFS iterators.
+            // concurrent modification issues with filesystem iterators.
             if (collecting && fullPath == activeFilePath) {
                 entry = root.openNextFile();
                 continue;
@@ -938,10 +967,10 @@ std::shared_ptr<LogReader> CleaningHistory::readSession(const String& filename) 
     if (compressing && (path == compressSrcPath || path == compressDstPath))
         return nullptr;
 
-    if (!SPIFFS.exists(path))
+    if (!LittleFS.exists(path))
         return nullptr;
 
-    File f = SPIFFS.open(path, FILE_READ);
+    File f = LittleFS.open(path, FILE_READ);
     if (!f)
         return nullptr;
 
@@ -953,13 +982,13 @@ std::shared_ptr<LogReader> CleaningHistory::readSession(const String& filename) 
 
 bool CleaningHistory::deleteSession(const String& filename) {
     String path = String(HISTORY_DIR) + "/" + filename;
-    if (!SPIFFS.exists(path))
+    if (!LittleFS.exists(path))
         return false;
-    return SPIFFS.remove(path);
+    return LittleFS.remove(path);
 }
 
 void CleaningHistory::deleteAllSessions() {
-    File root = SPIFFS.open(HISTORY_DIR);
+    File root = LittleFS.open(HISTORY_DIR);
     if (!root || !root.isDirectory())
         return;
 
@@ -971,7 +1000,7 @@ void CleaningHistory::deleteAllSessions() {
     }
 
     for (const auto& p: paths) {
-        SPIFFS.remove(p);
+        LittleFS.remove(p);
     }
     LOG("HIST", "Deleted %u session files", paths.size());
 }

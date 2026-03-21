@@ -25,6 +25,8 @@ void SettingsManager::load() {
     current.hostname = prefs.getString(NVS_KEY_HOSTNAME, DEFAULT_HOSTNAME);
     current.tz = prefs.getString(NVS_KEY_TIMEZONE, NTP_DEFAULT_TZ);
     current.debug = prefs.getBool(NVS_KEY_DEBUG, false);
+    if (current.debug)
+        debugEnabledAt = millis(); // Start auto-expire timer for persisted debug state
     current.wifiTxPower = prefs.getInt(NVS_KEY_WIFI_TX_POWER, WIFI_DEFAULT_TX_POWER);
     current.uartTxPin = prefs.getInt(NVS_KEY_UART_TX_PIN, NEATO_DEFAULT_TX_PIN);
     current.uartRxPin = prefs.getInt(NVS_KEY_UART_RX_PIN, NEATO_DEFAULT_RX_PIN);
@@ -71,6 +73,20 @@ void SettingsManager::save() {
     }
 }
 
+// -- Debug auto-expire -------------------------------------------------------
+
+const Settings& SettingsManager::get() {
+    // Auto-disable debug mode after timeout to prevent forgotten verbose logging
+    // that inflates log files (raw serial responses can be kilobytes per entry)
+    if (current.debug && debugEnabledAt > 0 && millis() - debugEnabledAt >= DEBUG_AUTO_OFF_MS) {
+        current.debug = false;
+        debugEnabledAt = 0;
+        save();
+        LOG("SETTINGS", "Debug auto-disabled after timeout");
+    }
+    return current;
+}
+
 // -- Partial update ----------------------------------------------------------
 
 ApplyResult SettingsManager::apply(const String& json) {
@@ -109,7 +125,8 @@ ApplyResult SettingsManager::apply(const String& json) {
     if (incoming.debug != current.debug) {
         current.debug = incoming.debug;
         changed = true;
-        LOG("SETTINGS", "Debug -> %s", current.debug ? "on" : "off");
+        debugEnabledAt = current.debug ? millis() : 0;
+        LOG("SETTINGS", "Debug -> %s%s", current.debug ? "on" : "off", current.debug ? " (auto-off in 10 min)" : "");
     }
 
     if (incoming.wifiTxPower != current.wifiTxPower) {

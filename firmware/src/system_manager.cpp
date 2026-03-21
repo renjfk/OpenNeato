@@ -1,5 +1,5 @@
 #include "system_manager.h"
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include <WiFi.h>
 #include <ctime>
 
@@ -108,9 +108,9 @@ void SystemManager::factoryReset() {
     pendingRebootAt = millis();
 }
 
-void SystemManager::formatSpiffs() {
-    LOG("SYS", "SPIFFS format scheduled");
-    pendingFormatSpiffs = true;
+void SystemManager::formatFs() {
+    LOG("SYS", "Filesystem format scheduled");
+    pendingFormatFs = true;
     pendingRebootAt = millis();
 }
 
@@ -119,14 +119,14 @@ void SystemManager::checkPendingReboot() {
         return;
 
     if (pendingFactoryReset) {
-        LOG("SYS", "Factory reset: clearing NVS, WiFi credentials, and SPIFFS...");
+        LOG("SYS", "Factory reset: clearing NVS, WiFi credentials, and filesystem...");
         prefs.clear();
         WiFi.disconnect(true, true);
-        SPIFFS.format();
+        LittleFS.format();
         delay(500);
-    } else if (pendingFormatSpiffs) {
-        LOG("SYS", "Formatting SPIFFS...");
-        SPIFFS.format();
+    } else if (pendingFormatFs) {
+        LOG("SYS", "Formatting filesystem...");
+        LittleFS.format();
         delay(500);
     }
     LOG("SYS", "Rebooting...");
@@ -141,8 +141,8 @@ std::vector<Field> SystemHealth::toFields() const {
             {"heapTotal", String(heapTotal), FIELD_INT},
             {"uptime", String(uptime), FIELD_INT},
             {"rssi", String(rssi), FIELD_INT},
-            {"spiffsUsed", String(spiffsUsed), FIELD_INT},
-            {"spiffsTotal", String(spiffsTotal), FIELD_INT},
+            {"fsUsed", String(fsUsed), FIELD_INT},
+            {"fsTotal", String(fsTotal), FIELD_INT},
             {"ntpSynced", ntpSynced ? "true" : "false", FIELD_BOOL},
             {"time", String(static_cast<long>(time)), FIELD_INT},
             {"timeSource", timeSource, FIELD_STRING},
@@ -156,8 +156,8 @@ SystemHealth SystemManager::getSystemHealth(const String& tz) const {
     h.heapTotal = ESP.getHeapSize();
     h.uptime = millis();
     h.rssi = WiFi.RSSI();
-    h.spiffsUsed = SPIFFS.usedBytes();
-    h.spiffsTotal = SPIFFS.totalBytes();
+    h.fsUsed = LittleFS.usedBytes();
+    h.fsTotal = LittleFS.totalBytes();
     h.ntpSynced = ntpSynced;
     h.time = now();
     h.timeSource = ntpSynced ? "ntp" : (fallbackSet ? "fallback" : "millis");

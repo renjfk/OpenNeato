@@ -52,8 +52,8 @@ public:
 
     void begin();
 
-    // Read current settings
-    const Settings& get() const { return current; }
+    // Read current settings (auto-expires debug mode if timed out)
+    const Settings& get();
 
     // Apply a partial update — only fields present in the JSON body are written.
     ApplyResult apply(const String& json);
@@ -76,6 +76,7 @@ private:
     TzChangeCallback tzChangeCb;
     TxPowerChangeCallback txPowerChangeCb;
     RebootCallback rebootCb;
+    unsigned long debugEnabledAt = 0; // millis() when debug was turned on (0 = off)
 
     void load();
     void save();

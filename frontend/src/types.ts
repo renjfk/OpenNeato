@@ -32,8 +32,8 @@ export interface SystemData {
     heapTotal: number;
     uptime: number;
     rssi: number;
-    spiffsUsed: number;
-    spiffsTotal: number;
+    fsUsed: number;
+    fsTotal: number;
     ntpSynced: boolean;
     time: number;
     timeSource: string;

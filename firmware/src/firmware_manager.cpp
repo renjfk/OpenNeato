@@ -29,6 +29,14 @@ bool FirmwareManager::beginUpdate(const String& md5Hash) {
     chipValidated = false;
     updateError = "";
 
+    // Abort any stale Update from a previous failed attempt — the ESP32
+    // Update singleton keeps _size > 0 after a failed upload, which causes
+    // subsequent begin() calls to silently fail with "already running".
+    if (Update.isRunning()) {
+        Update.abort();
+        LOG("FW", "Aborted stale update from previous attempt");
+    }
+
     if (!md5Hash.isEmpty()) {
         if (!Update.setMD5(md5Hash.c_str())) {
             updateError = "MD5 parameter invalid";

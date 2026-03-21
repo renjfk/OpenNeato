@@ -180,9 +180,9 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
             .finally(() => setRestarting(false));
     }, [startRebootFlow, errorStack]);
 
-    const handleFormatSpiffs = useCallback(() => {
+    const handleFormatFs = useCallback(() => {
         setRestarting(true);
-        api.formatSpiffs()
+        api.formatFs()
             .then(() => {
                 setShowFormatConfirm(false);
                 startRebootFlow();
@@ -738,7 +738,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                     message="This will erase all logs and map data. Settings are preserved. Device will reboot."
                     confirmLabel="Format"
                     disabled={restarting}
-                    onConfirm={handleFormatSpiffs}
+                    onConfirm={handleFormatFs}
                     onCancel={() => setShowFormatConfirm(false)}
                 />
             )}

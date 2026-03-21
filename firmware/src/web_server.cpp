@@ -8,7 +8,7 @@
 #include "manual_clean_manager.h"
 #include "notification_manager.h"
 #include "cleaning_history.h"
-#include <SPIFFS.h>
+#include <LittleFS.h>
 
 unsigned long WebServer::lastApiActivity = 0;
 
@@ -227,7 +227,7 @@ void WebServer::registerLogRoutes() {
 // -- System health endpoint ---------------------------------------------------
 
 void WebServer::registerSystemRoutes() {
-    // GET /api/system — live system health (heap, uptime, RSSI, SPIFFS, NTP)
+    // GET /api/system — live system health (heap, uptime, RSSI, storage, NTP)
     loggedRoute("/api/system", HTTP_GET, [this](AsyncWebServerRequest *request) -> int {
         request->send(200, "application/json", sysMgr.getSystemHealth(settingsMgr.get().tz).toJson());
         return 200;
@@ -247,10 +247,10 @@ void WebServer::registerSystemRoutes() {
         return 200;
     });
 
-    // POST /api/system/format-spiffs — format SPIFFS (erases logs + map data, then restarts)
-    loggedRoute("/api/system/format-spiffs", HTTP_POST, [this](AsyncWebServerRequest *request) -> int {
+    // POST /api/system/format-fs — format filesystem (erases logs + map data, then restarts)
+    loggedRoute("/api/system/format-fs", HTTP_POST, [this](AsyncWebServerRequest *request) -> int {
         sendOk(request);
-        sysMgr.formatSpiffs();
+        sysMgr.formatFs();
         return 200;
     });
 

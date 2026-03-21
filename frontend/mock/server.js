@@ -631,8 +631,8 @@ const routes = {
             heapTotal: 327680,
             uptime: Date.now() - bootTime,
             rssi: rand(-65, -40),
-            spiffsUsed: rand(10000, 50000),
-            spiffsTotal: 262144,
+            fsUsed: rand(10000, 50000),
+            fsTotal: 262144,
             ntpSynced: true,
             time: Math.floor(Date.now() / 1000),
             timeSource: "ntp",
@@ -647,7 +647,7 @@ const routes = {
         }, 2000);
     },
 
-    "POST /api/system/format-spiffs": (_req, res) => {
+    "POST /api/system/format-fs": (_req, res) => {
         sendOk(res);
         setTimeout(() => {
             bootTime = Date.now();

@@ -73,13 +73,13 @@ enum CommandStatus {
 
 // Data logger
 #define LOG_MAX_FILE_SIZE 32768 // 32 KB per file before rotation
-#define LOG_MAX_SPIFFS_PERCENT 60 // Delete oldest logs when log dir exceeds this share of SPIFFS
-#define LOG_MIN_SPIFFS_PERCENT 10 // Logs always get at least this % of SPIFFS, even if other data fills the rest
+#define LOG_MAX_FS_PERCENT 60 // Delete oldest logs when log dir exceeds this share of filesystem
+#define LOG_MIN_FS_PERCENT 10 // Logs always get at least this % of filesystem, even if other data fills the rest
 #define LOG_MAX_FILES 50 // Maximum number of archived log files to keep
 #define LOG_DIR "/log"
 #define LOG_CURRENT_FILE "/log/current.jsonl"
-#define LOG_FLUSH_INTERVAL_MS 10000 // Flush write buffer to SPIFFS every 10 seconds (reduces SPIFFS wear)
-#define LOG_FLUSH_MAX_LINES 64 // Also flush when buffer reaches this many lines
+#define LOG_FLUSH_INTERVAL_MS 30000 // Flush write buffer to filesystem every 30 seconds (reduces flash wear)
+#define LOG_FLUSH_MAX_LINES 128 // Also flush when buffer reaches this many lines
 
 // NVS (Non-Volatile Storage) — single shared namespace for all settings
 #define NVS_NAMESPACE "neato"
@@ -94,6 +94,7 @@ enum CommandStatus {
 // NVS keys — Settings
 #define NVS_KEY_HOSTNAME "hostname"
 #define NVS_KEY_DEBUG "debug"
+#define DEBUG_AUTO_OFF_MS 600000 // Auto-disable debug mode after 10 minutes to prevent forgotten verbose logging
 #define NVS_KEY_WIFI_TX_POWER "wifi_tx_pwr"
 #define NVS_KEY_UART_TX_PIN "uart_tx_pin"
 #define NVS_KEY_UART_RX_PIN "uart_rx_pin"
@@ -125,10 +126,11 @@ enum CommandStatus {
 
 // Cleaning history
 #define HISTORY_INTERVAL_MS 2000 // Poll interval for state watching and pose collection
+#define HISTORY_FLUSH_INTERVAL_MS 30000 // Flush buffered pose snapshots to disk every 30 seconds
 #define HISTORY_COMPRESS_INTERVAL_MS 50 // Fast tick during post-session compression (512B/tick)
-#define HISTORY_DIR "/history" // SPIFFS directory for session files
-#define HISTORY_MAX_SPIFFS_PERCENT 50 // Delete oldest sessions when history dir exceeds this share of SPIFFS
-#define HISTORY_MIN_SPIFFS_PERCENT 10 // History always gets at least this % of SPIFFS
+#define HISTORY_DIR "/history" // LittleFS directory for session files
+#define HISTORY_MAX_FS_PERCENT 50 // Delete oldest sessions when history dir exceeds this share of filesystem
+#define HISTORY_MIN_FS_PERCENT 10 // History always gets at least this % of filesystem
 #define HISTORY_MAX_FILES 20 // Maximum number of archived session files to keep
 #define HISTORY_AREA_CELL_M 0.5f // Coarse grid cell size in meters for visited-area estimation
 
@@ -139,7 +141,7 @@ enum CommandStatus {
 // which only catches memory exhaustion (and requires loop() to keep running).
 #define TASK_WDT_TIMEOUT_S                                                                                             \
     15 // Seconds before TWDT triggers reset (generous
-       // to accommodate slow SPIFFS operations and
+       // to accommodate slow filesystem operations and
        // LIDAR scans that can take several seconds)
 
 // Heap watchdog — restart if free heap stays below threshold for this duration.

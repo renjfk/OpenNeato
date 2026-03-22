@@ -824,6 +824,8 @@ const handleRequest = async (req, res) => {
 
     // POST /api/firmware/update?hash=<md5> — validate chip ID + MD5, simulate flash write, reboot
     if (req.method === "POST" && path === "/api/firmware/update") {
+        const expectedMd5 = query.hash || "";
+        if (!expectedMd5) return sendError(res, "MD5 hash required", 400);
         const MOCK_CHIP_ID = 5; // ESP32-C3
         const chunks = [];
         await new Promise((resolve) => {
@@ -846,13 +848,10 @@ const handleRequest = async (req, res) => {
                 }
             }
             // MD5 verification — mirrors ESP32 Update.setMD5 / Update.end(true) behavior
-            const expectedMd5 = query.hash || "";
-            if (expectedMd5) {
-                const fileBytes = body.subarray(fileStart, fileEnd);
-                const actualMd5 = createHash("md5").update(fileBytes).digest("hex");
-                if (actualMd5 !== expectedMd5.toLowerCase()) {
-                    return sendError(res, "MD5 mismatch: firmware integrity check failed", 400);
-                }
+            const fileBytes = body.subarray(fileStart, fileEnd);
+            const actualMd5 = createHash("md5").update(fileBytes).digest("hex");
+            if (actualMd5 !== expectedMd5.toLowerCase()) {
+                return sendError(res, "MD5 mismatch: firmware integrity check failed", 400);
             }
         }
         // Simulate flash write: 3-5s delay

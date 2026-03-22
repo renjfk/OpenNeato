@@ -97,10 +97,11 @@ golangci-lint run ./...          # Lint
 
 OTA firmware upload uses two separate hash checks:
 
-- **Transfer integrity (MD5):** Browser computes MD5 of the firmware file via
-  `md5.ts` (pure-JS RFC 1321 — `crypto.subtle` dropped MD5 support in most
-  browsers) and sends it as `?hash=<md5>`. The ESP32 `Update` library computes
-  MD5 incrementally over received chunks and verifies at `Update.end(true)`.
+- **Transfer integrity (MD5, mandatory):** Browser computes MD5 of the firmware
+  file via `md5.ts` (pure-JS RFC 1321 — `crypto.subtle` dropped MD5 support in
+  most browsers) and sends it as `?hash=<md5>`. The firmware rejects uploads
+  without a hash. The ESP32 `Update` library computes MD5 incrementally over
+  received chunks and verifies at `Update.end(true)`.
 - **Download integrity (SHA-256):** User optionally provides the `checksums.txt`
   from the GitHub Release (GoReleaser-generated, SHA-256). The browser computes
   SHA-256 of the firmware file via `sha256.ts` (pure-JS FIPS 180-4 —
@@ -158,9 +159,9 @@ CSS frameworks, routing, or HTTP wrapper libraries.
 
 ## Planned / In-Progress
 
-**Installation guide** — Write `docs/installation.md` covering required materials
-(ESP32-C3 board, jumper wires, debug port pinout), hardware assembly with photos,
-flashing with the flash tool, and first-time WiFi configuration walkthrough.
+**User guide** — `docs/user-guide.md` covering required materials (ESP32-C3 board,
+jumper wires, debug port pinout), hardware assembly with photos, flashing with the
+flash tool, first-time WiFi configuration walkthrough, troubleshooting, and more.
 
 **Clean up "spiffs" partition label** — Once the device is physically re-flashed
 (not OTA), change partition subtype from `spiffs` to `littlefs` in

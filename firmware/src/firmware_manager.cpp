@@ -37,14 +37,17 @@ bool FirmwareManager::beginUpdate(const String& md5Hash) {
         LOG("FW", "Aborted stale update from previous attempt");
     }
 
-    if (!md5Hash.isEmpty()) {
-        if (!Update.setMD5(md5Hash.c_str())) {
-            updateError = "MD5 parameter invalid";
-            LOG("FW", "%s", updateError.c_str());
-            return false;
-        }
-        LOG("FW", "MD5 hash set: %s", md5Hash.c_str());
+    if (md5Hash.isEmpty()) {
+        updateError = "MD5 hash required";
+        LOG("FW", "%s", updateError.c_str());
+        return false;
     }
+    if (!Update.setMD5(md5Hash.c_str())) {
+        updateError = "MD5 parameter invalid";
+        LOG("FW", "%s", updateError.c_str());
+        return false;
+    }
+    LOG("FW", "MD5 hash set: %s", md5Hash.c_str());
 
     LOG("FW", "Update started");
     updateInProgress = true;

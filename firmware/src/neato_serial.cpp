@@ -56,6 +56,9 @@ void NeatoSerial::initSKey() {
             LOG("NEATO", "SKey init failed — GetVersion returned no serial");
             return;
         }
+        robotModelName = v.modelName;
+        LOG("NEATO", "Model: %s (supported=%s)", robotModelName.c_str(),
+            isSupportedModel(robotModelName) ? "yes" : "no");
         sKey = computeSKey(v.serialNumber);
         if (sKey.length() > 0) {
             LOG("NEATO", "SKey computed (%d chars) from serial %s", sKey.length(), v.serialNumber.c_str());

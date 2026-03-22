@@ -36,6 +36,9 @@ public:
     void initSKey();
     bool hasSKey() const { return sKey.length() > 0; }
 
+    // Model name extracted from GetVersion at boot (e.g. "Botvac D7")
+    const String& getModelName() const { return robotModelName; }
+
     // -- Sensor queries (typed callbacks) ------------------------------------
     // These are transparently cached: concurrent requests are coalesced,
     // and results within the TTL window are served from cache.
@@ -105,6 +108,9 @@ private:
 
     // SetEvent security key (computed from robot serial number at boot)
     String sKey;
+
+    // Robot model name extracted from GetVersion at boot
+    String robotModelName;
 
     // Build a SetEvent command string: "SetEvent event <evt> SKey <sKey>"
     String buildSetEvent(const char *event) const;

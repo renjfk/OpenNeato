@@ -324,7 +324,8 @@ void WebServer::registerFirmwareRoutes() {
         std::vector<Field> fields = {
                 {"version", fwMgr.getFirmwareVersion(), FIELD_STRING},
                 {"chip", fwMgr.getChipModel(), FIELD_STRING},
-                {"supported", neato.hasSKey() ? "true" : "false", FIELD_BOOL},
+                {"model", neato.getModelName(), FIELD_STRING},
+                {"supported", isSupportedModel(neato.getModelName()) ? "true" : "false", FIELD_BOOL},
         };
         request->send(200, "application/json", fieldsToJson(fields));
         return 200;

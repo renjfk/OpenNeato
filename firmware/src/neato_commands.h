@@ -199,6 +199,11 @@ bool parseLdsScanData(const String& raw, LdsScanData& out);
 bool parseTimeData(const String& raw, TimeData& out);
 bool parseRobotPosData(const String& raw, RobotPosData& out);
 
+// -- Model support -----------------------------------------------------------
+// Checks if the parsed model name matches a supported Botvac (D3-D7).
+
+bool isSupportedModel(const String& modelName);
+
 // -- SKey computation --------------------------------------------------------
 // Computes the SetEvent security key from the robot's serial number (which
 // contains a 12-char MAC address after the first comma). Uses RC4 with a

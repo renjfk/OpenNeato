@@ -205,18 +205,32 @@ String LdsScanData::toJson() const {
 
 bool parseVersionData(const String& raw, VersionData& out) {
     String val;
-    if (findCsvValue(raw, "Product Model", val) || findCsvValue(raw, "ModelID", val)) {
-        // ModelID format: "0,XV11," — extract model name
+    // Try labels in order: "Model" (D3-D7), "Product Model" (older), "ModelID" (XV-series)
+    if (findCsvValue(raw, "Model", val) || findCsvValue(raw, "Product Model", val) ||
+        findCsvValue(raw, "ModelID", val)) {
+        // Value may have a trailing part number: "BotVacD7Connected,905-0415"
+        // or a leading index: "0,XV11"
         int comma = val.indexOf(',');
         if (comma > 0) {
-            out.modelName = val.substring(comma + 1);
-            out.modelName.trim();
-            if (out.modelName.endsWith(",")) {
-                out.modelName = out.modelName.substring(0, out.modelName.length() - 1);
+            // Check if prefix is numeric (ModelID format: "0,XV11")
+            String prefix = val.substring(0, comma);
+            bool numericPrefix = true;
+            for (unsigned int i = 0; i < prefix.length(); i++) {
+                if (!isDigit(prefix.charAt(i))) {
+                    numericPrefix = false;
+                    break;
+                }
             }
-        } else {
-            out.modelName = val;
+            if (numericPrefix) {
+                val = val.substring(comma + 1);
+            } else {
+                val = prefix;
+            }
+            val.trim();
+            if (val.endsWith(","))
+                val = val.substring(0, val.length() - 1);
         }
+        out.modelName = val;
     }
     if (findCsvValue(raw, "Serial Number", val)) {
         out.serialNumber = val;
@@ -529,6 +543,20 @@ bool parseRobotPosData(const String& raw, RobotPosData& out) {
     out.raw = raw;
     out.raw.trim();
     return out.raw.length() > 0;
+}
+
+// -- Model support -----------------------------------------------------------
+
+bool isSupportedModel(const String& modelName) {
+    // Supported: Botvac D3-D7 only (and Connected variants)
+    // Raw values from robot: "BotVacD7Connected", "BotVacD5", etc.
+    String lower = modelName;
+    lower.toLowerCase();
+    if (lower.startsWith("botvacd")) {
+        char digit = lower.charAt(7);
+        return digit >= '3' && digit <= '7';
+    }
+    return false;
 }
 
 // -- SKey computation --------------------------------------------------------

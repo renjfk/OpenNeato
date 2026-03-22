@@ -145,6 +145,7 @@ jobs:
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
+          distribution: goreleaser-cross
           version: "~> v2"
           args: >-
             release --clean

@@ -24,18 +24,27 @@ port, giving you a local web interface that works without any external dependenc
 
 - **Dashboard** with live robot status, battery level, cleaning state, WiFi signal, and storage usage
 - **House and spot cleaning** with pause/resume/stop/dock controls that adapt to the current state
-- **Manual driving mode** with a virtual joystick, live LIDAR map visualization, motor toggles (brush, vacuum, side brush), bumper/wheel-lift/stall safety warnings
-- **Live cleaning map** — watch the robot's path during an active cleaning session in the History view, rendered on a canvas with coverage overlay
+- **Manual driving mode** with a virtual joystick, live LIDAR map visualization, motor toggles (brush, vacuum, side
+  brush), bumper/wheel-lift/stall safety warnings
+- **Live cleaning map** — watch the robot's path during an active cleaning session in the History view, rendered on a
+  canvas with coverage overlay
 - **7-day cleaning scheduler** managed entirely on the ESP32 (doesn't use the robot's built-in schedule commands)
-- **Cleaning history** with recorded robot paths rendered as coverage maps, session stats like duration, distance, area covered, and battery usage
-- **Push notifications** via [ntfy.sh](https://ntfy.sh); get notified when cleaning is done, an error occurs, a maintenance alert triggers, or the robot docks; fully optional, configurable per event
-- **OTA firmware updates** from the browser with SHA-256 download verification (against published `checksums.txt`), MD5 transfer integrity, dual-partition layout with auto-rollback, and automatic new version notifications when a release is available on GitHub
-- **Settings page** for hostname, timezone, motor presets, notification topics, UART pins, theme (dark/light/auto), and more
+- **Cleaning history** with recorded robot paths rendered as coverage maps, session stats like duration, distance, area
+  covered, and battery usage
+- **Push notifications** via [ntfy.sh](https://ntfy.sh); get notified when cleaning is done, an error occurs, a
+  maintenance alert triggers, or the robot docks; fully optional, configurable per event
+- **OTA firmware updates** from the browser with SHA-256 download verification (against published `checksums.txt`), MD5
+  transfer integrity, dual-partition layout with auto-rollback, and automatic new version notifications when a release
+  is available on GitHub
+- **Settings page** for hostname, timezone, motor presets, notification topics, UART pins, theme (dark/light/auto), and
+  more
 - **Event logging** with compressed JSONL files on LittleFS, browsable and downloadable from the UI
 - **Factory reset** via 5-second button hold on the ESP32 or from the settings page
 - **Robot clock sync** — pushes NTP time to the robot automatically, re-syncs every 4 hours
-- **Flash tool** — standalone CLI that auto-detects the USB port, downloads the correct firmware from GitHub Releases, and flashes with zero prerequisites
-- **Safety watchdog** — auto-stops wheels in manual mode if the browser disconnects; task and heap watchdogs restart the ESP32 on hangs
+- **Flash tool** — standalone CLI that auto-detects the USB port, downloads the correct firmware from GitHub Releases,
+  and flashes with zero prerequisites
+- **Safety watchdog** — auto-stops wheels in manual mode if the browser disconnects; task and heap watchdogs restart the
+  ESP32 on hangs
 - **Crash recovery** — orphaned cleaning sessions after unexpected reboots are automatically recovered with full stats
 
 The frontend is a lightweight SPA that gets gzipped and embedded directly into the firmware binary, so a single
@@ -51,6 +60,11 @@ Neato Botvac D3 through D7. D8/D9/D10 are NOT supported (different board, passwo
 
 - ESP32-C3 board (any variant — Super Mini, DevKitM-1, etc.)
 
+> [!NOTE]
+> Only the ESP32-C3 is supported in the current release. The build system, flash tool, and
+> release pipeline are chip-agnostic though, so adding other ESP32 variants is straightforward
+> if there's community interest.
+
 ### Quick Start
 
 1. Download the latest release from the [Releases](https://github.com/renjfk/OpenNeato/releases) page
@@ -62,7 +76,7 @@ Neato Botvac D3 through D7. D8/D9/D10 are NOT supported (different board, passwo
 4. Wire the ESP32-C3 to your robot's debug port
 5. Open the web UI at the device's IP address
 
-For detailed instructions and troubleshooting, see the [Installation Guide](docs/installation.md).
+For detailed instructions and troubleshooting, see the [User Guide](docs/user-guide.md).
 
 ### Building from Source
 
@@ -87,6 +101,11 @@ cd flash && go build -o openneato-flash . && cd ..
 
 OpenNeato is open to contributions and ideas! Whether you're a developer wanting to add features or a user with
 suggestions, your input is valuable.
+
+> [!TIP]
+> Before opening an issue, consider starting a
+> [Discussion](https://github.com/renjfk/OpenNeato/discussions) first — many questions,
+> setup troubles, and ideas are easier to resolve through conversation.
 
 ### Issue Conventions
 

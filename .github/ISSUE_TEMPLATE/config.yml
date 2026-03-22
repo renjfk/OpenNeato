@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Discussions
+    url: https://github.com/renjfk/OpenNeato/discussions
+    about: Ask questions, share ideas, or get help with setup before opening an issue.

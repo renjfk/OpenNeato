@@ -1,0 +1,73 @@
+name: Bug Report
+description: "Report a bug or unexpected behavior. For setup help or questions, please start a Discussion first."
+title: "fix: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce this?
+      placeholder: |
+        1. Go to ...
+        2. Click on ...
+        3. See error
+    validations:
+      required: true
+
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware version
+      description: Visible on the Dashboard or Settings -> Firmware.
+      placeholder: "v0.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: robot
+    attributes:
+      label: Robot model
+      options:
+        - D3
+        - D4
+        - D5
+        - D6
+        - D7
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Enable debug mode (Settings -> Diagnostics), reproduce the issue, then
+        download the logs (Settings -> Diagnostics -> Logs) and attach them here.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: If applicable, add screenshots to help explain the problem.
+    validations:
+      required: false

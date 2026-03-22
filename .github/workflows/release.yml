@@ -75,7 +75,7 @@ jobs:
 
   release:
     name: Build and Release
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     needs: prepare
 
     steps:
@@ -145,7 +145,6 @@ jobs:
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
-          distribution: goreleaser-cross
           version: "~> v2"
           args: >-
             release --clean

@@ -21,8 +21,13 @@ BUILD_DIR="${2:?Usage: $0 <chip> <pio-build-dir>}"
 IDEDATA="$BUILD_DIR/idedata.json"
 RELEASE_DIR="release"
 
+if [ ! -f "$BUILD_DIR/firmware.bin" ]; then
+    echo "Error: $BUILD_DIR/firmware.bin not found. Run pio build first." >&2
+    exit 1
+fi
+
 if [ ! -f "$IDEDATA" ]; then
-    echo "Error: $IDEDATA not found. Run pio build first." >&2
+    echo "Error: $IDEDATA not found. Run: pio project metadata -e $(basename "$BUILD_DIR") --json-output | jq '.\"'$(basename "$BUILD_DIR")'\"' > $IDEDATA" >&2
     exit 1
 fi
 

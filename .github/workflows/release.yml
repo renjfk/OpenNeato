@@ -123,6 +123,9 @@ jobs:
       - name: Build firmware (release)
         run: pio run -e c3-release
 
+      - name: Export idedata.json
+        run: pio project metadata -e c3-release --json-output | jq '."c3-release"' > .pio/build/c3-release/idedata.json
+
       # --- Flash tool + GitHub Release ---
 
       - name: Set up Go

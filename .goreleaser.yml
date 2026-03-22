@@ -3,12 +3,7 @@ version: 2
 project_name: openneato
 
 env:
-  - PIO_BUILD_DIR={{ if index .Env "PIO_BUILD_DIR" }}{{ .Env.PIO_BUILD_DIR }}{{ else }}.pio/build/c3-release{{ end }}
   - ESPTOOL_VERSION=v5.2.0
-
-before:
-  hooks:
-    - scripts/prepare_flash_embed.sh esp32-c3 {{ .Env.PIO_BUILD_DIR }}
 
 builds:
   - id: openneato-flash
@@ -28,14 +23,11 @@ builds:
     goarch:
       - amd64
       - arm64
-
 archives:
   - id: flash-tool
     ids:
       - openneato-flash
-    format_overrides:
-      - goos: windows
-        formats: [zip]
+    formats: [binary]
     name_template: "openneato-flash-{{ .Os }}-{{ .Arch }}"
 
 release:
@@ -43,14 +35,14 @@ release:
     owner: renjfk
     name: OpenNeato
   extra_files:
-    - glob: ./release/*-firmware.bin
-    - glob: ./release/*-full.tar.gz
+    - glob: .pio/build/*-release/*-firmware.bin
+    - glob: .pio/build/*-release/*-full.tar.gz
 
 checksum:
   name_template: checksums.txt
   extra_files:
-    - glob: ./release/*-firmware.bin
-    - glob: ./release/*-full.tar.gz
+    - glob: .pio/build/*-release/*-firmware.bin
+    - glob: .pio/build/*-release/*-full.tar.gz
 
 changelog:
   sort: asc

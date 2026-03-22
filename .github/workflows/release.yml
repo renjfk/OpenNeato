@@ -120,11 +120,14 @@ jobs:
       - name: Install PlatformIO
         run: pip install platformio
 
-      - name: Build firmware (release)
-        run: pio run -e c3-release
-
-      - name: Export idedata.json
-        run: pio project metadata -e c3-release --json-output | jq '."c3-release"' > .pio/build/c3-release/idedata.json
+      - name: Build firmware and package release artifacts
+        run: |
+          # Build all *-release environments; post-build hook packages
+          # firmware artifacts into each env's build dir for GoReleaser
+          for env in $(grep -oE '^\[env:([a-zA-Z0-9_-]+-release)\]' platformio.ini | sed 's/\[env:\(.*\)\]/\1/'); do
+            echo "Building $env..."
+            pio run -e "$env"
+          done
 
       # --- Flash tool + GitHub Release ---
 

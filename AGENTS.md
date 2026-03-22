@@ -24,6 +24,9 @@ Three top-level components: `firmware/` (ESP32 C/C++), `frontend/` (Preact SPA),
 - Mock server: `frontend/mock/server.js` Vite plugin, `SCENARIO` constant for state switching. Reset to `"ok"` before
   committing.
 - Build pipeline: `npm run build` -> lint -> tsc -> vite -> `embed_frontend.js` generates `web_assets.h`
+- Release packaging: PIO post-build hook in `scripts/env_config.py` auto-generates
+  firmware release artifacts (`*-firmware.bin`, `*-full.tar.gz`) for `*-release` envs.
+  Chip name is read from `CHIP_MODEL` build flag. No separate shell script needed.
 
 ### Data Logging
 
@@ -108,8 +111,19 @@ OTA firmware upload uses two separate hash checks:
 The mock server (`frontend/mock/server.js`) mirrors the MD5 verification using
 Node's `crypto.createHash("md5")`.
 
-GoReleaser config (`.goreleaser.yml`) includes firmware `.bin` and full tarball
-in `checksum.extra_files` so they appear in the published `checksums.txt`.
+GoReleaser config (`.goreleaser.yml`) picks up firmware artifacts from the PIO
+build directory via `extra_files` globs and includes them in `checksums.txt`.
+
+### Flash Tool Download Integrity
+
+The flash tool verifies SHA-256 checksums when downloading or loading firmware:
+
+- **Download path:** Downloads `checksums.txt` from the same GitHub release,
+  saves the archive to a temp file, computes SHA-256, and compares before
+  extracting. Fails on mismatch or missing checksums.
+- **Local path (`-firmware` flag):** Expects `checksums.txt` in the same
+  directory as the archive. Verifies SHA-256 before extraction. Fails if
+  the checksums file is missing or the hash doesn't match.
 
 ## Zero-Dependency Policy
 

@@ -4,6 +4,8 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -154,37 +156,89 @@ func detectChip(esptoolPath, portName string) (string, error) {
 	return "", fmt.Errorf("could not detect chip type from esptool output:\n%s", out)
 }
 
-// --- Firmware download ---
+// --- Checksum verification ---
 
-// downloadFirmwarePack downloads the board-specific firmware tarball from
-// the latest GitHub release and extracts it into a temp directory.
-// Returns the path to the temp directory containing the extracted files.
-func downloadFirmwarePack(chip string) (string, error) {
-	var url string
-	if version == "dev" {
-		url = fmt.Sprintf("https://github.com/renjfk/OpenNeato/releases/latest/download/openneato-%s-full.tar.gz", chip)
-	} else {
-		url = fmt.Sprintf("https://github.com/renjfk/OpenNeato/releases/download/v%s/openneato-%s-full.tar.gz", version, chip)
+// parseChecksums parses a GoReleaser-format checksums.txt file and returns
+// a map of filename -> lowercase hex SHA-256 hash.
+// Each line has the format: "<sha256>  <filename>"
+func parseChecksums(data string) map[string]string {
+	result := make(map[string]string)
+	for _, line := range strings.Split(data, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		// GoReleaser uses "hash  filename" (two spaces)
+		parts := strings.SplitN(line, "  ", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		hash := strings.TrimSpace(parts[0])
+		name := strings.TrimSpace(parts[1])
+		if hash != "" && name != "" {
+			result[name] = strings.ToLower(hash)
+		}
 	}
+	return result
+}
 
-	fmt.Printf("Downloading firmware %s for %s...\n", version, chip)
-
-	tmp, err := os.MkdirTemp("", "openneato-firmware-*")
+// sha256File computes the SHA-256 hash of a file and returns it as a lowercase hex string.
+func sha256File(path string) (string, error) {
+	f, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
+	defer func() { _ = f.Close() }()
 
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// verifyChecksum looks up the expected hash for filename in the checksums map
+// and compares it against the actual file on disk.
+func verifyChecksum(checksums map[string]string, filename, filePath string) error {
+	expected, ok := checksums[filename]
+	if !ok {
+		return fmt.Errorf("checksums.txt does not contain an entry for %s", filename)
+	}
+
+	fmt.Printf("Verifying SHA-256 checksum of %s...\n", filename)
+	actual, err := sha256File(filePath)
+	if err != nil {
+		return fmt.Errorf("compute checksum: %w", err)
+	}
+
+	if actual != expected {
+		return fmt.Errorf("checksum mismatch for %s:\n  expected: %s\n  got:      %s", filename, expected, actual)
+	}
+
+	fmt.Println("Checksum OK.")
+	return nil
+}
+
+// --- Download helper ---
+
+// downloadToFile downloads a URL to a local file, showing a progress bar.
+// Returns an error on non-200 status or network failure.
+func downloadToFile(url, dest string) error {
 	resp, err := http.Get(url) //nolint:gosec
 	if err != nil {
-		_ = os.RemoveAll(tmp)
-		return "", fmt.Errorf("download firmware: %w", err)
+		return fmt.Errorf("download %s: %w", url, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		_ = os.RemoveAll(tmp)
-		return "", fmt.Errorf("download firmware: HTTP %d (is there a release for chip '%s'?)", resp.StatusCode, chip)
+		return fmt.Errorf("download %s: HTTP %d", url, resp.StatusCode)
 	}
+
+	f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
 
 	body := io.Reader(resp.Body)
 	if resp.ContentLength > 0 {
@@ -192,13 +246,101 @@ func downloadFirmwarePack(chip string) (string, error) {
 		body = &progressReader{r: resp.Body, total: resp.ContentLength}
 	}
 
-	if err := extractAllTarGz(body, tmp); err != nil {
+	if _, err := io.Copy(f, body); err != nil {
+		return err
+	}
+	fmt.Printf("\r  [%-50s] 100%%\n", strings.Repeat("#", 50))
+	return nil
+}
+
+// --- Firmware download ---
+
+// downloadFirmwarePack downloads the board-specific firmware tarball from
+// the latest GitHub release and extracts it into a temp directory.
+// It also downloads checksums.txt and verifies the archive integrity.
+// Returns the path to the temp directory containing the extracted files.
+func downloadFirmwarePack(chip string) (string, error) {
+	var baseURL, archiveName string
+	archiveName = fmt.Sprintf("openneato-%s-full.tar.gz", chip)
+	if version == "dev" {
+		baseURL = "https://github.com/renjfk/OpenNeato/releases/latest/download"
+	} else {
+		baseURL = fmt.Sprintf("https://github.com/renjfk/OpenNeato/releases/download/v%s", version)
+	}
+
+	archiveURL := baseURL + "/" + archiveName
+	checksumsURL := baseURL + "/checksums.txt"
+
+	fmt.Printf("Downloading firmware %s for %s...\n", version, chip)
+
+	// Download checksums.txt first
+	checksums, err := downloadChecksums(checksumsURL)
+	if err != nil {
+		return "", fmt.Errorf("download checksums: %w", err)
+	}
+
+	// Download archive to a temp file so we can verify before extracting
+	tmpFile, err := os.CreateTemp("", "openneato-*.tar.gz")
+	if err != nil {
+		return "", err
+	}
+	tmpFilePath := tmpFile.Name()
+	_ = tmpFile.Close()
+	defer func() { _ = os.Remove(tmpFilePath) }()
+
+	if err := downloadToFile(archiveURL, tmpFilePath); err != nil {
+		return "", fmt.Errorf("firmware: %w", err)
+	}
+
+	// Verify checksum
+	if err := verifyChecksum(checksums, archiveName, tmpFilePath); err != nil {
+		return "", err
+	}
+
+	// Extract verified archive
+	tmp, err := os.MkdirTemp("", "openneato-firmware-*")
+	if err != nil {
+		return "", err
+	}
+
+	archiveFile, err := os.Open(tmpFilePath)
+	if err != nil {
+		_ = os.RemoveAll(tmp)
+		return "", err
+	}
+	defer func() { _ = archiveFile.Close() }()
+
+	if err := extractAllTarGz(archiveFile, tmp); err != nil {
 		_ = os.RemoveAll(tmp)
 		return "", fmt.Errorf("extract firmware: %w", err)
 	}
-	fmt.Printf("\r  [%-50s] 100%%\n", strings.Repeat("#", 50))
 
 	return tmp, nil
+}
+
+// downloadChecksums fetches checksums.txt from the given URL and parses it.
+func downloadChecksums(url string) (map[string]string, error) {
+	resp, err := http.Get(url) //nolint:gosec
+	if err != nil {
+		return nil, fmt.Errorf("fetch checksums.txt: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("fetch checksums.txt: HTTP %d", resp.StatusCode)
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read checksums.txt: %w", err)
+	}
+
+	checksums := parseChecksums(string(data))
+	if len(checksums) == 0 {
+		return nil, fmt.Errorf("checksums.txt is empty or has no valid entries")
+	}
+
+	return checksums, nil
 }
 
 // --- Flashing ---
@@ -262,34 +404,32 @@ func flashFirmware(portName, esptoolPath, firmwareDir string) error {
 // --- Archive helpers ---
 
 func downloadAndExtract(url, dest, binaryName string) (string, error) {
-	resp, err := http.Get(url) //nolint:gosec
+	fmt.Printf("Downloading %s...\n", binaryName)
+
+	tmp, err := os.CreateTemp("", "openneato-dl-*")
 	if err != nil {
-		return "", fmt.Errorf("download: %w", err)
+		return "", err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	tmpPath := tmp.Name()
+	_ = tmp.Close()
+	defer func() { _ = os.Remove(tmpPath) }()
 
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("download: HTTP %d", resp.StatusCode)
+	if err := downloadToFile(url, tmpPath); err != nil {
+		return "", err
 	}
 
-	body := io.Reader(resp.Body)
-	if resp.ContentLength > 0 {
-		fmt.Printf("Downloading (%0.1f MB)...\n", float64(resp.ContentLength)/1024/1024)
-		body = &progressReader{r: resp.Body, total: resp.ContentLength}
+	f, err := os.Open(tmpPath)
+	if err != nil {
+		return "", err
 	}
+	defer func() { _ = f.Close() }()
 
 	winName := binaryName + ".exe"
 	if strings.HasSuffix(url, ".zip") {
-		err = extractZipBinary(body, dest, winName)
+		err = extractZipBinary(f, dest, winName)
 	} else {
-		err = extractTarGzBinary(body, dest, binaryName)
+		err = extractTarGzBinary(f, dest, binaryName)
 	}
-	if err == nil {
-		fmt.Printf("\r  [%-50s] 100%%\n", strings.Repeat("#", 50))
-	} else {
-		fmt.Println()
-	}
-
 	if err != nil {
 		return "", err
 	}
@@ -399,7 +539,29 @@ func extractAllTarGz(r io.Reader, destDir string) error {
 }
 
 // extractLocalPack extracts a local .tar.gz firmware pack into a temp directory.
+// It expects checksums.txt to exist in the same directory as the archive and
+// verifies the archive's SHA-256 checksum before extraction.
 func extractLocalPack(path string) (string, error) {
+	// Verify checksum from checksums.txt in the same directory
+	archiveDir := filepath.Dir(path)
+	archiveName := filepath.Base(path)
+	checksumsPath := filepath.Join(archiveDir, "checksums.txt")
+
+	data, err := os.ReadFile(checksumsPath)
+	if err != nil {
+		return "", fmt.Errorf("checksums.txt not found next to %s: %w\nPlace the checksums.txt from the GitHub release in the same directory", archiveName, err)
+	}
+
+	checksums := parseChecksums(string(data))
+	if len(checksums) == 0 {
+		return "", fmt.Errorf("checksums.txt is empty or has no valid entries")
+	}
+
+	if err := verifyChecksum(checksums, archiveName, path); err != nil {
+		return "", err
+	}
+
+	// Extract verified archive
 	f, err := os.Open(path)
 	if err != nil {
 		return "", err

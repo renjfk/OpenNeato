@@ -66,6 +66,9 @@ For detailed instructions and troubleshooting, see the [Installation Guide](docs
 
 ### Building from Source
 
+Requires [Node.js](https://nodejs.org/) 22+, [PlatformIO CLI](https://platformio.org/install/cli),
+and [Go](https://go.dev/) 1.26+.
+
 ```bash
 git clone https://github.com/renjfk/OpenNeato.git
 cd OpenNeato

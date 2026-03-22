@@ -68,6 +68,10 @@ pio check -e c3-debug                      # Static analysis (clang-tidy)
 Verify firmware changes: `pio run -e c3-debug` + `python scripts/check_format.py` +
 `pio check -e c3-debug` with zero defects.
 
+Verify frontend changes: `npm run check` + `npm run build` in `frontend/`.
+
+Verify flash tool changes: `golangci-lint run ./...` + `go build` in `flash/`.
+
 ### Frontend
 
 ```bash
@@ -96,7 +100,8 @@ OTA firmware upload uses two separate hash checks:
   MD5 incrementally over received chunks and verifies at `Update.end(true)`.
 - **Download integrity (SHA-256):** User optionally provides the `checksums.txt`
   from the GitHub Release (GoReleaser-generated, SHA-256). The browser computes
-  SHA-256 of the firmware file via `crypto.subtle` and compares against the
+  SHA-256 of the firmware file via `sha256.ts` (pure-JS FIPS 180-4 —
+  `crypto.subtle` is unavailable over plain HTTP) and compares against the
   checksums file before upload. Mismatch blocks upload; missing checksums file
   triggers a confirmation dialog warning about unverified firmware.
 

@@ -105,9 +105,7 @@ DataLogger::DataLogger(NeatoSerial& neato, SystemManager& sys) : LoopTask(50), n
 // -- Lifecycle ---------------------------------------------------------------
 
 void DataLogger::begin() {
-    // Mount LittleFS using the existing "spiffs" partition label for OTA compatibility
-    // (partition table subtype stays as "spiffs" so OTA updates work without re-flash)
-    if (!LittleFS.begin(true, "/littlefs", 10, "spiffs")) {
+    if (!LittleFS.begin(true)) {
         LOG("DLOG", "LittleFS mount failed");
         return;
     }

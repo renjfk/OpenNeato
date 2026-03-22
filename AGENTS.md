@@ -41,9 +41,10 @@ success and failure outcomes.
 
 ### Filesystem and Flash Wear
 
-LittleFS (not SPIFFS) — mounted via `LittleFS.begin(true, "/littlefs", 10, "spiffs")`
-using the `"spiffs"` partition label for OTA compatibility (no partition table change
-needed). Directories `/log` and `/history` are created after mount.
+LittleFS (not SPIFFS) — mounted via `LittleFS.begin(true)`. Partition name and
+subtype are both `"spiffs"` in `partition.csv` because ESP-IDF has no dedicated
+LittleFS subtype (`0x82`), and the defaults already match. Directories `/log` and
+`/history` are created after mount.
 
 Flash wear mitigation:
 - **DataLogger** buffers log lines in RAM, flushes every 30s or 128 lines. Cache-hit
@@ -157,22 +158,4 @@ CSS frameworks, routing, or HTTP wrapper libraries.
 - **NVS**: Single `"neato"` namespace, opened once, passed by reference
 - **Reset**: GPIO9, hold 5s for factory reset
 
-## Planned / In-Progress
 
-**User guide** — `docs/user-guide.md` covering required materials (ESP32-C3 board,
-jumper wires, debug port pinout), hardware assembly with photos, flashing with the
-flash tool, first-time WiFi configuration walkthrough, troubleshooting, and more.
-
-**Clean up "spiffs" partition label** — Once the device is physically re-flashed
-(not OTA), change partition subtype from `spiffs` to `littlefs` in
-`firmware/partition.csv` and simplify the mount call from
-`LittleFS.begin(true, "/littlefs", 10, "spiffs")` to `LittleFS.begin(true)`.
-The `"spiffs"` label is only kept for OTA compatibility with the old partition
-table — a full flash makes it unnecessary.
-
-**Mid-clean recharge continuity** — Verify the firmware correctly handles the
-autonomous mid-clean recharge cycle (robot docks to charge, then resumes cleaning).
-The cleaning history session must stay open during recharge so map collection
-continues seamlessly. The notification manager should detect this as a recharge
-pause (not cleaning completion) via the `ST_M1_Charging_Cleaning` robot state.
-Needs live testing with a partially-charged battery to trigger the recharge cycle.

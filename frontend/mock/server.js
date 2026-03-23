@@ -68,7 +68,8 @@ const _randf = (min, max, decimals = 2) => parseFloat((Math.random() * (max - mi
 //
 // Robot state:
 //   ok   — Idle, battery 85%          off  — Device unreachable
-//   unsup — Unsupported robot model   upd  — Firmware v0.9 (triggers update banner)
+//   ident — Identifying robot (boot)  unsup — Unsupported robot model
+//   upd  — Firmware v0.9 (triggers update banner)
 //   cls  — House cleaning             spt  — Spot cleaning
 //   dock — Docking (return to base)   rchg — Mid-clean recharge (on dock, charging)
 //   chg  — Charging, 62%              ch2  — Charging, 25%
@@ -146,6 +147,7 @@ const SCENARIOS = {
     mbs: { manualClean: true, manualBumperSideRight: true },
     msf: { manualClean: true, manualStallFront: true },
     msr: { manualClean: true, manualStallRear: true },
+    ident: { identifying: true },
     unsup: { unsupported: true },
     upd: { firmwareVersion: "0.9" },
     llq: { lidarLowQuality: true },
@@ -231,6 +233,7 @@ const state = {
     // Mid-clean recharge (docking to charge, then resume)
     midCleanRecharge: false,
     // Robot model
+    identifying: false,
     unsupported: false,
     // Firmware version override (null = auto from git hash)
     firmwareVersion: null,
@@ -705,7 +708,8 @@ const routes = {
         jsonResponse(res, {
             version: state.firmwareVersion ?? getVersion(),
             chip: "ESP32-C3",
-            supported: !state.unsupported,
+            supported: !state.unsupported && !state.identifying,
+            identifying: state.identifying,
         });
     },
 };

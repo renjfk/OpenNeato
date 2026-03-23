@@ -326,6 +326,7 @@ void WebServer::registerFirmwareRoutes() {
                 {"chip", fwMgr.getChipModel(), FIELD_STRING},
                 {"model", neato.getModelName(), FIELD_STRING},
                 {"supported", isSupportedModel(neato.getModelName()) ? "true" : "false", FIELD_BOOL},
+                {"identifying", neato.isIdentifying() ? "true" : "false", FIELD_BOOL},
         };
         request->send(200, "application/json", fieldsToJson(fields));
         return 200;

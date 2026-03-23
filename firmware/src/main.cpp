@@ -87,10 +87,6 @@ void setup() {
     LOG("BOOT", "Initializing Neato serial...");
     neatoSerial.begin(s.uartTxPin, s.uartRxPin);
 
-    // Compute SetEvent security key from robot serial number (async — runs
-    // once the first GetVersion response arrives from the UART queue).
-    neatoSerial.initSKey();
-
     // Wire WiFi events to data logger BEFORE WiFi connects so boot events are captured.
     // DataLogger buffers entries in memory — they get flushed once LittleFS mounts in begin().
     WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {

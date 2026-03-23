@@ -136,10 +136,23 @@ export function App() {
         setSideBrush(next);
     }, [brush, vacuum, sideBrush]);
 
+    // Show a loading screen while the firmware is still trying to identify the robot
+    // (GetVersion may need multiple retries if the robot is slow to boot).
+    if (!firmware.data || firmware.data.identifying) {
+        return (
+            <div class="unsupported-screen">
+                <div class="unsupported-icon">
+                    <Icon svg={robotSvg} />
+                </div>
+                <p>Connecting to robot...</p>
+            </div>
+        );
+    }
+
     // Block the entire UI if the robot model is unsupported (SKey not computed).
-    // firmware.data?.supported is false when GetVersion returned no usable serial
+    // firmware.data.supported is false when GetVersion returned no usable serial
     // number (e.g. XV-series, D8/D9/D10, or UART not connected).
-    if (firmware.data && !firmware.data.supported) {
+    if (!firmware.data.supported) {
         return (
             <div class="unsupported-screen">
                 <div class="unsupported-icon">

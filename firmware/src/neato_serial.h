@@ -31,13 +31,17 @@ public:
     void begin(int txPin, int rxPin);
 
     // Fetch GetVersion, extract serial number, and compute the SetEvent SKey.
-    // Must be called after begin(). The SKey is required for all cleaning
-    // control commands (start, stop, pause, resume, dock).
+    // Driven automatically by tick() — first attempt fires on the first loop
+    // iteration, with exponential backoff retries on failure (robot may still
+    // be booting). The SKey is required for all cleaning control commands.
     void initSKey();
     bool hasSKey() const { return sKey.length() > 0; }
 
     // Model name extracted from GetVersion at boot (e.g. "Botvac D7")
     const String& getModelName() const { return robotModelName; }
+
+    // True while initSKey is still retrying (robot not yet identified)
+    bool isIdentifying() const { return sKeyPending; }
 
     // -- Sensor queries (typed callbacks) ------------------------------------
     // These are transparently cached: concurrent requests are coalesced,
@@ -111,6 +115,12 @@ private:
 
     // Robot model name extracted from GetVersion at boot
     String robotModelName;
+
+    // initSKey retry state — retries with exponential backoff if GetVersion
+    // fails at boot (e.g. robot still booting, UART not ready yet).
+    bool sKeyPending = true;
+    unsigned long sKeyRetryAt = 0;
+    unsigned long sKeyRetryDelay = SKEY_RETRY_INITIAL_MS;
 
     // Build a SetEvent command string: "SetEvent event <evt> SKey <sKey>"
     String buildSetEvent(const char *event) const;

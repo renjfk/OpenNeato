@@ -38,6 +38,11 @@
 #define NEATO_QUEUE_MAX_SIZE 16
 #define NEATO_RESPONSE_TERMINATOR 0x1A // Ctrl-Z
 
+// initSKey retry — GetVersion can fail at boot if the robot is still powering up.
+// Retry with exponential backoff until the robot responds.
+#define SKEY_RETRY_INITIAL_MS 2000 // First retry after 2s
+#define SKEY_RETRY_MAX_MS 30000 // Cap backoff at 30s
+
 // AsyncCache TTL values (milliseconds) — how long each response is considered fresh.
 // Callers within the TTL window get the cached value instantly; concurrent requests
 // during an in-flight fetch are coalesced (only one serial command dispatched).

@@ -99,6 +99,7 @@ export interface FirmwareVersion {
     version: string;
     chip: string;
     supported: boolean;
+    identifying: boolean;
 }
 
 export interface ManualStatus {

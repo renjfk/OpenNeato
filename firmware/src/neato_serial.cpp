@@ -51,11 +51,16 @@ void NeatoSerial::begin(int txPin, int rxPin) {
 }
 
 void NeatoSerial::initSKey() {
+    sKeyPending = true;
+    versionCache.invalidate(); // Force a fresh fetch (don't serve a stale failure)
     getVersion([this](bool ok, const VersionData& v) {
         if (!ok || v.serialNumber.length() == 0) {
-            LOG("NEATO", "SKey init failed — GetVersion returned no serial");
+            LOG("NEATO", "SKey init failed — GetVersion returned no serial, retrying in %lu ms", sKeyRetryDelay);
+            sKeyRetryAt = millis() + sKeyRetryDelay;
+            sKeyRetryDelay = (sKeyRetryDelay * 2 < SKEY_RETRY_MAX_MS) ? sKeyRetryDelay * 2 : SKEY_RETRY_MAX_MS;
             return;
         }
+        sKeyPending = false;
         robotModelName = v.modelName;
         LOG("NEATO", "Model: %s (supported=%s)", robotModelName.c_str(),
             isSupportedModel(robotModelName) ? "yes" : "no");
@@ -73,6 +78,15 @@ String NeatoSerial::buildSetEvent(const char *event) const {
 }
 
 void NeatoSerial::tick() {
+    // Drive initSKey lifecycle: first attempt + retries on failure.
+    // Runs inside tick() (not setup()) so the UART state machine is already
+    // processing the queue — avoids the race where GetVersion was enqueued
+    // in setup() but tick() hadn't started yet.
+    if (sKeyPending && millis() >= sKeyRetryAt) {
+        sKeyRetryAt = ULONG_MAX; // Prevent re-entry while fetch is in flight
+        initSKey();
+    }
+
     switch (state) {
         case QUEUE_IDLE:
             if (!queue.empty()) {

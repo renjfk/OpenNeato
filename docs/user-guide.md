@@ -53,8 +53,11 @@ Everything you need to set up, configure, and troubleshoot OpenNeato.
 
 > [!TIP]
 > I bought everything from AliExpress for under €16 total. Specific product listings come and
-> go, so search by the descriptions above rather than relying on direct links. Any ESP32-C3
-> board with a USB-C port and exposed GPIO pins will work.
+> go, so search by the descriptions above rather than relying on direct links.
+
+> [!IMPORTANT]
+> The ESP32 board must have **4 MB flash** (the standard for most dev boards). Boards with
+> 2 MB flash are not supported — the dual OTA partition layout requires 4 MB.
 
 Minimal soldering — just 4 wires to the board. If you're comfortable with a soldering iron,
 solder the JST connector wires directly to the board pads for the cleanest result.
@@ -66,7 +69,7 @@ solder the JST connector wires directly to the board pads for the cleanest resul
 > protruding pins also help anchor the board into EPE foam padding when you mount it inside the
 > robot. That's what I did and it works fine.
 
-The ESP32-C3 is powered directly from the robot's 3.3V debug port — no separate USB power
+The ESP32 is powered directly from the robot's 3.3V debug port — no separate USB power
 supply needed during normal operation.
 
 ### Opening the Robot
@@ -87,25 +90,24 @@ connector):
 
 These are the **robot's** RX/TX labels, so you cross-connect to the ESP32:
 
-| Robot Pin | ESP32-C3 Pin    | Notes                        |
-|-----------|-----------------|------------------------------|
-| RX        | GPIO 3 (ESP TX) | Robot receives data from ESP |
-| 3.3V      | 3V3             | Powers the ESP32             |
-| TX        | GPIO 4 (ESP RX) | Robot sends data to ESP      |
-| GND       | GND             | Common ground                |
+| Robot Pin | ESP32 Pin | Notes                        |
+|-----------|-----------|------------------------------|
+| RX        | ESP TX    | Robot receives data from ESP |
+| 3.3V      | 3V3       | Powers the ESP32             |
+| TX        | ESP RX    | Robot sends data to ESP      |
+| GND       | GND       | Common ground                |
 
-> [!NOTE]
-> GPIO 3 (TX) and GPIO 4 (RX) are the firmware defaults. If you wired to different pins,
-> don't worry — you can change them from the web UI in **Settings -> Robot -> UART Pins**
-> without re-flashing. The pins are stored in NVS and take effect after a reboot.
+The default TX/RX GPIOs depend on the chip (ESP32-C3: GPIO 3/4, original ESP32: GPIO 17/16)
+but are fully configurable from the web UI in **Settings -> Robot -> UART Pins** — so wire
+whichever GPIOs are convenient and update the setting to match.
 
 ### Wiring
 
-Connect the four JST XH wires between the robot's debug port and the ESP32-C3.
+Connect the four JST XH wires between the robot's debug port and the ESP32.
 
 > [!WARNING]
 > Double-check the TX/RX crossover — swapping TX and RX is the most common wiring mistake.
-> Robot RX goes to ESP TX (GPIO 3), and Robot TX goes to ESP RX (GPIO 4).
+> Robot RX goes to ESP TX, and Robot TX goes to ESP RX.
 
 |             Wiring — wide angle              |             Wiring — side angle              |
 |:--------------------------------------------:|:--------------------------------------------:|
@@ -156,7 +158,7 @@ These are standalone binaries — no extraction needed. On macOS/Linux you may n
 
 ### Basic Usage
 
-Plug the ESP32-C3 into your computer via USB and run:
+Plug the ESP32 into your computer via USB and run:
 
 ```bash
 openneato-flash
@@ -211,11 +213,12 @@ tool refuses to flash.
 
 ### Troubleshooting Flash Issues
 
-**"No USB serial ports found"** — Make sure the ESP32-C3 is plugged in and your OS recognizes
+**"No USB serial ports found"** — Make sure the ESP32 is plugged in and your OS recognizes
 it. Run `openneato-flash -list` to see what's detected.
 
 **"Failed to detect chip"** — The ESP32 may not be in download mode. Try holding the BOOT
-button while plugging in USB. If the issue persists, use `-chip esp32-c3` to skip detection.
+button while plugging in USB. If the issue persists, use `-chip` to skip detection
+(e.g. `-chip esp32-c3` or `-chip esp32`).
 
 **"Checksum mismatch"** — The downloaded firmware is corrupted. Re-run the tool to download
 again. If using `-firmware`, make sure `checksums.txt` matches the archive.
@@ -352,8 +355,8 @@ area covered, and battery usage.
 Two ways to factory reset:
 
 1. **From the web UI**: Settings -> Device -> Factory Reset. Type `RESET` to confirm.
-2. **Hardware button**: Hold the BOOT button (GPIO9) for 5 seconds. The ESP32 will erase
-   all settings and restart.
+2. **Hardware button**: Hold the BOOT button for 5 seconds (GPIO9 on ESP32-C3, GPIO0 on
+   original ESP32). The ESP32 will erase all settings and restart.
 
 > [!CAUTION]
 > Both methods erase everything — WiFi credentials, settings, logs, and cleaning history.
@@ -384,7 +387,7 @@ Include in your issue:
 
 ## Multiple Robots
 
-If you have more than one Botvac, flash a separate ESP32-C3 for each robot and give them
+If you have more than one Botvac, flash a separate ESP32 for each robot and give them
 unique hostnames via **Settings -> Network -> Hostname** (e.g. `neato-upstairs`,
 `neato-downstairs`). Each device will be reachable at `http://<hostname>.local`.
 

@@ -10,8 +10,12 @@ permissions:
 
 jobs:
   firmware:
-    name: Firmware
+    name: Firmware (${{ matrix.env }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [c3-debug, esp32-debug]
     steps:
       - uses: actions/checkout@v4
 
@@ -35,19 +39,19 @@ jobs:
           path: |
             ~/.platformio/platforms
             ~/.platformio/packages
-          key: platformio-${{ hashFiles('platformio.ini') }}
+          key: platformio-${{ matrix.env }}-${{ hashFiles('platformio.ini') }}
 
       - name: Install PlatformIO
         run: pip install platformio
 
       - name: Build firmware
-        run: pio run -e c3-debug
+        run: pio run -e ${{ matrix.env }}
 
       - name: Format check (clang-format)
         run: python scripts/check_format.py
 
       - name: Static analysis (clang-tidy)
-        run: pio check -e c3-debug --fail-on-defect=low
+        run: pio check -e ${{ matrix.env }} --fail-on-defect=low
 
   frontend:
     name: Frontend

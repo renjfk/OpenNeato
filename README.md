@@ -9,7 +9,7 @@
 
 # OpenNeato
 
-Open-source replacement for Neato's discontinued cloud and mobile app. An ESP32-C3 bridge communicates with
+Open-source replacement for Neato's discontinued cloud and mobile app. An ESP32 bridge communicates with
 Botvac robots (D3-D7) over UART and exposes a local web UI over WiFi — no cloud, no app, no account required.
 
 > [!NOTE]
@@ -28,7 +28,7 @@ Botvac robots (D3-D7) over UART and exposes a local web UI over WiFi — no clou
 ## Motivation
 
 Neato shut down their cloud services and mobile app, leaving perfectly functional robot vacuums without remote
-control or scheduling. OpenNeato brings them back to life with a small ESP32-C3 board wired to the robot's debug
+control or scheduling. OpenNeato brings them back to life with a small ESP32 board wired to the robot's debug
 port, giving you a local web interface that works without any external dependencies.
 
 ## Features
@@ -69,22 +69,17 @@ Neato Botvac D3 through D7. D8/D9/D10 are NOT supported (different board, passwo
 
 ### Requirements
 
-- ESP32-C3 board (any variant — Super Mini, DevKitM-1, etc.)
-
-> [!NOTE]
-> Only the ESP32-C3 is supported in the current release. The build system, flash tool, and
-> release pipeline are chip-agnostic though, so adding other ESP32 variants is straightforward
-> if there's community interest.
+- ESP32-C3 or original ESP32 board with **4 MB flash** (any dev board with USB and exposed GPIOs)
 
 ### Quick Start
 
 1. Download the latest release from the [Releases](https://github.com/renjfk/OpenNeato/releases) page
-2. Flash the ESP32-C3 using the flash tool:
+2. Flash the ESP32 using the flash tool (auto-detects your chip type):
    ```bash
    openneato-flash
    ```
 3. Configure your home WiFi via the serial menu (opens automatically after flashing)
-4. Wire the ESP32-C3 to your robot's debug port
+4. Wire the ESP32 to your robot's debug port
 5. Open the web UI at `http://neato.local` or the IP shown in the serial monitor
 
 For detailed instructions and troubleshooting, see the [User Guide](docs/user-guide.md).

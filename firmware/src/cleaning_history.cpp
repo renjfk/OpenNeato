@@ -6,8 +6,14 @@
 #include <cmath>
 
 CleaningHistory::CleaningHistory(NeatoSerial& neato, DataLogger& logger, SystemManager& sysMgr) :
-    LoopTask(HISTORY_INTERVAL_MS), neato(neato), dataLogger(logger), systemManager(sysMgr) {
+    LoopTask(HISTORY_INTERVAL_IDLE_MS), neato(neato), dataLogger(logger), systemManager(sysMgr) {
     TaskRegistry::add(this);
+}
+
+void CleaningHistory::notifyCleanStart() {
+    if (collecting)
+        return; // Already recording
+    setInterval(HISTORY_INTERVAL_ACTIVE_MS);
 }
 
 void CleaningHistory::tick() {
@@ -20,7 +26,7 @@ void CleaningHistory::tick() {
             LittleFS.remove(compressSrcPath);
             LOG("HIST", "Compression done: %s", compressDstPath.c_str());
             compressing = false;
-            setInterval(HISTORY_INTERVAL_MS);
+            setInterval(HISTORY_INTERVAL_IDLE_MS);
         }
         return;
     }
@@ -136,6 +142,7 @@ void CleaningHistory::startCollection(const String& uiState) {
         writeSessionHeader();
     });
 
+    setInterval(HISTORY_INTERVAL_ACTIVE_MS);
     LOG("HIST", "Collection started (mode: %s, file: %s)", cleanMode.c_str(), activeFilePath.c_str());
     dataLogger.logGenericEvent("history_start", {{"mode", cleanMode, FIELD_STRING}});
 }
@@ -157,6 +164,7 @@ void CleaningHistory::stopCollection() {
 
         collecting = false;
         recharging = false;
+        setInterval(HISTORY_INTERVAL_IDLE_MS);
 
         float areaCovered = static_cast<float>(visitedCells.size()) * HISTORY_AREA_CELL_M * HISTORY_AREA_CELL_M;
 
@@ -514,6 +522,7 @@ bool CleaningHistory::recoverCollection(const String& uiState) {
     }
 
     collecting = true;
+    setInterval(HISTORY_INTERVAL_ACTIVE_MS);
     LOG("HIST", "Recovered session: %s (%u snapshots, %zu orphans merged)", activeFilePath.c_str(), snapshotCount,
         orphans.size());
     dataLogger.logGenericEvent("history_recover", {{"path", activeFilePath, FIELD_STRING},

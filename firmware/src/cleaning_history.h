@@ -43,6 +43,11 @@ public:
     bool deleteSession(const String& filename);
     void deleteAllSessions();
 
+    // Called by WebServer when a clean command is sent via API.
+    // Switches to active polling so collection starts immediately
+    // instead of waiting for the next idle-interval tick.
+    void notifyCleanStart();
+
 
 private:
     void tick() override;

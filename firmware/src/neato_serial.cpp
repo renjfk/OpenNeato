@@ -515,6 +515,8 @@ bool NeatoSerial::clean(const String& action, std::function<void(bool)> callback
     // New clean from idle
     const char *evt = (action == "spot") ? EVT_START_SPOT : EVT_START_HOUSE;
     invalidateState();
+    if (cleanStartCallback)
+        cleanStartCallback();
     return enqueue(buildSetEvent(evt), wrapAction(callback), PRIORITY_HIGH);
 }
 

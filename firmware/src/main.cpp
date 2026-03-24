@@ -87,6 +87,10 @@ void setup() {
     LOG("BOOT", "Initializing Neato serial...");
     neatoSerial.begin(s.uartTxPin, s.uartRxPin);
 
+    // Wire clean start hook so CleaningHistory switches to active polling
+    // immediately when a clean command is sent via API.
+    neatoSerial.onCleanStart([&] { cleaningHistory.notifyCleanStart(); });
+
     // Wire WiFi events to data logger BEFORE WiFi connects so boot events are captured.
     // DataLogger buffers entries in memory — they get flushed once LittleFS mounts in begin().
     WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {

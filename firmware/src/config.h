@@ -141,7 +141,8 @@ enum CommandStatus {
 #define NOTIF_INTERVAL_IDLE_MS 30000 // Check state every 30s when robot is idle
 
 // Cleaning history
-#define HISTORY_INTERVAL_MS 2000 // Poll interval for state watching and pose collection
+#define HISTORY_INTERVAL_IDLE_MS 30000 // Poll state every 30s when idle (detect cleaning start)
+#define HISTORY_INTERVAL_ACTIVE_MS 2000 // Poll state/pose every 2s during active cleaning (~0.6m resolution at 300mm/s)
 #define HISTORY_FLUSH_INTERVAL_MS 30000 // Flush buffered pose snapshots to disk every 30 seconds
 #define HISTORY_COMPRESS_INTERVAL_MS 50 // Fast tick during post-session compression (512B/tick)
 #define HISTORY_DIR "/history" // LittleFS directory for session files

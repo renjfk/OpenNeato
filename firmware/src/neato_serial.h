@@ -97,6 +97,11 @@ public:
             std::function<void(const String&, CommandStatus, unsigned long, const String&, int, size_t, unsigned long)>;
     void setLogger(LoggerCallback logger) { loggerCallback = logger; }
 
+    // -- Clean start hook ----------------------------------------------------
+    // Called from clean() when a new cleaning session starts (house/spot).
+    // Used by CleaningHistory to switch to active polling immediately.
+    void onCleanStart(std::function<void()> cb) { cleanStartCallback = cb; }
+
     // -- Status --------------------------------------------------------------
 
     bool isBusy() const { return state != QUEUE_IDLE || !queue.empty(); }
@@ -127,6 +132,9 @@ private:
 
     // Logger hook
     LoggerCallback loggerCallback;
+
+    // Clean start hook
+    std::function<void()> cleanStartCallback;
 
     // Current command in flight
     String currentCommand;

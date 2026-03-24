@@ -1,6 +1,8 @@
 # AGENTS.md — OpenNeato
 
-Guidelines for AI agents working in this repository.
+Guidelines for AI agents working in this repository. Keep this file concise —
+only document constraints and rules an agent would get wrong without being told.
+Implementation details belong in code comments, not here.
 
 ## Project Overview
 
@@ -24,13 +26,6 @@ Three top-level components: `firmware/` (ESP32 C/C++), `frontend/` (Preact SPA),
 - Mock server: `frontend/mock/server.js` Vite plugin, `SCENARIO` constant for state switching. Reset to `"ok"` before
   committing.
 - Build pipeline: `npm run build` -> lint -> tsc -> vite -> `embed_frontend.js` generates `web_assets.h`
-- Release packaging: PIO post-build hook in `scripts/env_config.py` auto-generates
-  firmware release artifacts (`*-firmware.bin`, `*-full.tar.gz`) for `*-release` envs.
-  Chip name is read from `CHIP_MODEL` build flag. No separate shell script needed.
-- Prerelease: `/prerelease` comment on a PR (collaborators only) or `workflow_dispatch`
-  from the PR branch. Auto-generates tag `v<base>-pr<number>.<sha>` based on the latest
-  release, builds all artifacts via GoReleaser, publishes as GitHub prerelease. Previous
-  prereleases for the same PR are auto-cleaned.
 
 ### Data Logging
 
@@ -40,25 +35,10 @@ All significant events must be logged via `DataLogger` (injected by reference).
 needs logging, add a new typed helper following the existing pattern. Log both
 success and failure outcomes.
 
-`event` type entries use `category` as the frontend discriminator with prefixes:
-`scheduler_*`, `history_*`, `notif_*`.
-
 ### Filesystem and Flash Wear
 
-LittleFS (not SPIFFS) — mounted via `LittleFS.begin(true)`. Partition name and
-subtype are both `"spiffs"` in `partition.csv` because ESP-IDF has no dedicated
-LittleFS subtype (`0x82`), and the defaults already match. Directories `/log` and
-`/history` are created after mount.
-
-Flash wear mitigation:
-- **DataLogger** buffers log lines in RAM, flushes every 30s or 128 lines. Cache-hit
-  serial commands are not logged (only real UART fetches).
-- **CleaningHistory** buffers pose snapshots in RAM via `bufferLine()`, flushes every
-  30s or on session end. Session headers/summaries use immediate `writeLine()`.
-- **Debug mode** auto-expires after 10 minutes (`DEBUG_AUTO_OFF_MS`) to prevent
-  forgotten verbose logging from inflating log files with raw serial responses.
-- **NVS** writes are user-triggered only (settings save, WiFi provisioning) — no
-  periodic or loop-driven NVS writes.
+LittleFS (not SPIFFS). Buffer writes in RAM, never write to flash in a loop.
+NVS writes are user-triggered only (settings save, WiFi provisioning).
 
 ## Build Commands
 
@@ -98,39 +78,6 @@ go build -o openneato-flash .    # Build
 golangci-lint run ./...          # Lint
 ```
 
-### Firmware Upload Integrity
-
-OTA firmware upload uses two separate hash checks:
-
-- **Transfer integrity (MD5, mandatory):** Browser computes MD5 of the firmware
-  file via `md5.ts` (pure-JS RFC 1321 — `crypto.subtle` dropped MD5 support in
-  most browsers) and sends it as `?hash=<md5>`. The firmware rejects uploads
-  without a hash. The ESP32 `Update` library computes MD5 incrementally over
-  received chunks and verifies at `Update.end(true)`.
-- **Download integrity (SHA-256):** User optionally provides the `checksums.txt`
-  from the GitHub Release (GoReleaser-generated, SHA-256). The browser computes
-  SHA-256 of the firmware file via `sha256.ts` (pure-JS FIPS 180-4 —
-  `crypto.subtle` is unavailable over plain HTTP) and compares against the
-  checksums file before upload. Mismatch blocks upload; missing checksums file
-  triggers a confirmation dialog warning about unverified firmware.
-
-The mock server (`frontend/mock/server.js`) mirrors the MD5 verification using
-Node's `crypto.createHash("md5")`.
-
-GoReleaser config (`.goreleaser.yml`) picks up firmware artifacts from the PIO
-build directory via `extra_files` globs and includes them in `checksums.txt`.
-
-### Flash Tool Download Integrity
-
-The flash tool verifies SHA-256 checksums when downloading or loading firmware:
-
-- **Download path:** Downloads `checksums.txt` from the same GitHub release,
-  saves the archive to a temp file, computes SHA-256, and compares before
-  extracting. Fails on mismatch or missing checksums.
-- **Local path (`-firmware` flag):** Expects `checksums.txt` in the same
-  directory as the archive. Verifies SHA-256 before extraction. Fails if
-  the checksums file is missing or the hash doesn't match.
-
 ## Zero-Dependency Policy
 
 The ESP32-C3 has 320KB RAM and 1600KB per OTA slot — every kilobyte counts.
@@ -161,5 +108,3 @@ CSS frameworks, routing, or HTTP wrapper libraries.
 - **Flash layout**: Dual OTA slots (1600KB each), 768KB LittleFS, 20KB NVS
 - **NVS**: Single `"neato"` namespace, opened once, passed by reference
 - **Reset**: GPIO9, hold 5s for factory reset
-
-

@@ -1,9 +1,14 @@
 name: Prerelease
 
 on:
-  issue_comment:
-    types: [ created ]
   workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number (leave empty for branch-only prerelease)"
+        required: false
+      comment_id:
+        description: "Comment ID for reply (set by slash-command dispatcher)"
+        required: false
 
 permissions:
   contents: write
@@ -11,81 +16,51 @@ permissions:
 
 jobs:
   resolve:
-    name: Resolve PR
+    name: Resolve context
     runs-on: ubuntu-latest
-    # For issue_comment: only collaborators (OWNER, MEMBER, COLLABORATOR) can trigger
-    # For workflow_dispatch: already gated by GitHub (requires write access)
-    if: >-
-      (github.event_name == 'workflow_dispatch') ||
-      (github.event_name == 'issue_comment' &&
-       github.event.issue.pull_request &&
-       startsWith(github.event.comment.body, '/prerelease') &&
-       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
     outputs:
-      pr_number: ${{ steps.pr.outputs.number }}
-      head_sha: ${{ steps.pr.outputs.head_sha }}
-      head_ref: ${{ steps.pr.outputs.head_ref }}
-      base_version: ${{ steps.tag.outputs.base_version }}
-      release_tag: ${{ steps.tag.outputs.tag }}
-      version: ${{ steps.tag.outputs.version }}
+      pr_number: ${{ steps.resolve.outputs.pr_number }}
+      head_sha: ${{ steps.resolve.outputs.head_sha }}
+      head_ref: ${{ steps.resolve.outputs.head_ref }}
+      release_tag: ${{ steps.resolve.outputs.tag }}
+      version: ${{ steps.resolve.outputs.version }}
 
     steps:
-      - name: React to comment
-        if: github.event_name == 'issue_comment'
+      - name: Resolve
+        id: resolve
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
-            -f content='rocket' --silent
+          PR_NUMBER="${{ inputs.pr_number }}"
 
-      - name: Resolve PR details
-        id: pr
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if [ "${{ github.event_name }}" = "issue_comment" ]; then
-            PR_NUMBER="${{ github.event.issue.number }}"
-            PR_JSON=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
-              --json headRefOid,headRefName)
+          if [ -n "$PR_NUMBER" ]; then
+            PR_JSON=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid,headRefName)
             HEAD_SHA=$(echo "$PR_JSON" | jq -r '.headRefOid')
             HEAD_REF=$(echo "$PR_JSON" | jq -r '.headRefName')
           else
-            # workflow_dispatch — find PR for the branch
-            PR_NUMBER=$(gh pr list --repo "$GITHUB_REPOSITORY" \
-              --head "$GITHUB_REF_NAME" --state open --json number --jq '.[0].number')
-            if [ -z "$PR_NUMBER" ]; then
-              echo "::error::No open PR found for branch $GITHUB_REF_NAME"
-              exit 1
-            fi
             HEAD_SHA="$GITHUB_SHA"
             HEAD_REF="$GITHUB_REF_NAME"
           fi
 
-          echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
-          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
-          echo "head_ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
-          echo "PR #$PR_NUMBER — $HEAD_REF @ ${HEAD_SHA:0:7}"
-
-      - name: Compute release tag
-        id: tag
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Find the latest non-prerelease tag (e.g. v1.0); fall back to v0.0
           LATEST_TAG=$(gh release list --repo "$GITHUB_REPOSITORY" \
             --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName // empty')
-          BASE_VERSION="${LATEST_TAG:-v0.0}"
-          BASE_VERSION="${BASE_VERSION#v}"
+          BASE="${LATEST_TAG:-v0.0}"
+          BASE="${BASE#v}"
+          SHORT_SHA="${HEAD_SHA:0:7}"
 
-          SHORT_SHA=$(echo "${{ steps.pr.outputs.head_sha }}" | cut -c1-7)
-          TAG="v${BASE_VERSION}-pr${{ steps.pr.outputs.number }}.${SHORT_SHA}"
-          VERSION="${TAG#v}"
+          if [ -n "$PR_NUMBER" ]; then
+            TAG="v${BASE}-pr${PR_NUMBER}.${SHORT_SHA}"
+          else
+            SAFE_REF=$(echo "$HEAD_REF" | sed 's/[^a-zA-Z0-9._-]/-/g')
+            TAG="v${BASE}-${SAFE_REF}.${SHORT_SHA}"
+          fi
 
-          echo "base_version=$BASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "head_ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Base version: $BASE_VERSION"
-          echo "Release tag: $TAG"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "Release: $TAG ($HEAD_REF @ $SHORT_SHA)"
 
   prerelease:
     name: Build and Prerelease
@@ -93,34 +68,18 @@ jobs:
     needs: resolve
 
     steps:
-      - name: Checkout PR head
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.resolve.outputs.head_sha }}
           fetch-depth: 0
 
-      - name: Cleanup previous prereleases for this PR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          PR_NUM="${{ needs.resolve.outputs.pr_number }}"
-
-          # Find all prerelease tags for this PR (any base version)
-          echo "Looking for existing prereleases for PR #$PR_NUM"
-          for tag in $(git tag -l "v*-pr${PR_NUM}.*"); do
-            echo "Deleting release and tag: $tag"
-            gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
-            git tag -d "$tag" 2>/dev/null || true
-            git push origin ":refs/tags/$tag" 2>/dev/null || true
-          done
-
       - name: Create release tag
         run: |
-          TAG="${{ needs.resolve.outputs.release_tag }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "$TAG" -m "Prerelease $TAG"
-          git push origin "$TAG"
+          git tag -a "${{ needs.resolve.outputs.release_tag }}" -m "Prerelease ${{ needs.resolve.outputs.release_tag }}"
+          git push origin "${{ needs.resolve.outputs.release_tag }}"
 
       # --- Frontend ---
 
@@ -157,7 +116,7 @@ jobs:
       - name: Install PlatformIO
         run: pip install platformio
 
-      - name: Build firmware and package release artifacts
+      - name: Build firmware
         env:
           FIRMWARE_VERSION: ${{ needs.resolve.outputs.version }}
         run: |
@@ -185,17 +144,21 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release edit "${{ needs.resolve.outputs.release_tag }}" \
-            --prerelease \
-            --title "Prerelease ${{ needs.resolve.outputs.release_tag }}" \
-            --notes "Pre-release build from PR #${{ needs.resolve.outputs.pr_number }} (branch \`${{ needs.resolve.outputs.head_ref }}\`, commit \`${{ needs.resolve.outputs.head_sha }}\`)."
+          TAG="${{ needs.resolve.outputs.release_tag }}"
+          REF="${{ needs.resolve.outputs.head_ref }}"
+          SHA="${{ needs.resolve.outputs.head_sha }}"
+          PR="${{ needs.resolve.outputs.pr_number }}"
 
-      - name: Comment on PR with release link
-        if: github.event_name == 'issue_comment'
+          NOTES="Pre-release build from branch \`$REF\` (commit \`$SHA\`)."
+          [ -n "$PR" ] && NOTES="Pre-release build from PR #$PR (branch \`$REF\`, commit \`$SHA\`)."
+
+          gh release edit "$TAG" --prerelease --title "Prerelease $TAG" --notes "$NOTES"
+
+      - name: Comment on PR
+        if: needs.resolve.outputs.pr_number != '' && inputs.comment_id != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ needs.resolve.outputs.release_tag }}"
-          gh pr comment "${{ needs.resolve.outputs.pr_number }}" \
-            --repo "$GITHUB_REPOSITORY" \
+          gh pr comment "${{ needs.resolve.outputs.pr_number }}" --repo "$GITHUB_REPOSITORY" \
             --body "Prerelease [\`$TAG\`](https://github.com/${{ github.repository }}/releases/tag/$TAG) is ready."

@@ -1,0 +1,35 @@
+name: Slash Commands
+
+on:
+  issue_comment:
+    types: [ created ]
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: write
+
+jobs:
+  dispatch:
+    name: Dispatch
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+
+    steps:
+      - name: Dispatch /prerelease
+        if: startsWith(github.event.comment.body, '/prerelease')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            -f content='rocket' --silent
+
+          PR_NUMBER="${{ github.event.issue.number }}"
+          HEAD_REF=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefName --jq '.headRefName')
+
+          gh workflow run prerelease.yml --repo "$GITHUB_REPOSITORY" --ref "$HEAD_REF" \
+            -f pr_number="$PR_NUMBER" \
+            -f comment_id="${{ github.event.comment.id }}"

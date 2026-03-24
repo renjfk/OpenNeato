@@ -57,7 +57,7 @@ void setup() {
     delay(1000); // Wait for serial to be ready
     LOG("BOOT", "");
     LOG("BOOT", "========================================");
-    LOG("BOOT", "ESP32-C3 Neato starting...");
+    LOG("BOOT", "%s Neato starting...", CHIP_MODEL);
     LOG("BOOT", "========================================");
 
     // Open shared NVS namespace (stays open for the lifetime of the device)

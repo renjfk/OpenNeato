@@ -22,13 +22,24 @@
        //   68 = 17 dBm,  78 = 19.5 dBm
 #define WIFI_MAX_RECONNECT_BACKOFF 30000 // Max backoff between reconnect attempts (ms)
 
-// Pin Configuration (ESP32-C3 Boot button is GPIO9)
+// Pin Configuration — boot/reset button and default UART pins vary by chip.
+// Original ESP32: BOOT is GPIO0, GPIO1/3 are the USB-UART bridge (U0TXD/U0RXD).
+// ESP32-C3: BOOT is GPIO9, GPIO1/3 are free GPIOs.
+#if CONFIG_IDF_TARGET_ESP32
+#define RESET_BUTTON_PIN 0
+#define NEATO_DEFAULT_TX_PIN 17
+#define NEATO_DEFAULT_RX_PIN 16
+#define MAX_GPIO_PIN 39
+#elif CONFIG_IDF_TARGET_ESP32C3
 #define RESET_BUTTON_PIN 9
-
-// Neato UART pin defaults (ESP32-C3 hardware UART on free GPIOs)
-// Actual pins are stored in NVS and configurable via settings API.
 #define NEATO_DEFAULT_TX_PIN 3
 #define NEATO_DEFAULT_RX_PIN 4
+#define MAX_GPIO_PIN 21
+#else
+#error "Unsupported chip — add pin definitions for this target"
+#endif
+
+// Actual UART pins are stored in NVS and configurable via settings API.
 #define NEATO_BAUD_RATE 115200
 #define NEATO_UART_RX_BUFFER 4096 // Default 256 bytes overflows during GetLDSScan (~5KB response)
 

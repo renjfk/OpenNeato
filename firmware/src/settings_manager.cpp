@@ -153,13 +153,13 @@ ApplyResult SettingsManager::apply(const String& json) {
         return APPLY_INVALID;
     }
 
-    if (incoming.uartTxPin != current.uartTxPin && incoming.uartTxPin >= 0 && incoming.uartTxPin <= 21) {
+    if (incoming.uartTxPin != current.uartTxPin && incoming.uartTxPin >= 0 && incoming.uartTxPin <= MAX_GPIO_PIN) {
         current.uartTxPin = incoming.uartTxPin;
         changed = true;
         needReboot = true;
         LOG("SETTINGS", "UART TX pin -> GPIO%d (reboot required)", current.uartTxPin);
     }
-    if (incoming.uartRxPin != current.uartRxPin && incoming.uartRxPin >= 0 && incoming.uartRxPin <= 21) {
+    if (incoming.uartRxPin != current.uartRxPin && incoming.uartRxPin >= 0 && incoming.uartRxPin <= MAX_GPIO_PIN) {
         current.uartRxPin = incoming.uartRxPin;
         changed = true;
         needReboot = true;
@@ -261,6 +261,7 @@ std::vector<Field> Settings::toFields() const {
             {"wifiTxPower", String(wifiTxPower), FIELD_INT},
             {"uartTxPin", String(uartTxPin), FIELD_INT},
             {"uartRxPin", String(uartRxPin), FIELD_INT},
+            {"maxGpioPin", String(MAX_GPIO_PIN), FIELD_INT},
             {"stallThreshold", String(stallThreshold), FIELD_INT},
             {"brushRpm", String(brushRpm), FIELD_INT},
             {"vacuumSpeed", String(vacuumSpeed), FIELD_INT},

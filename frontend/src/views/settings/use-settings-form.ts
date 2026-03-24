@@ -12,6 +12,7 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
     const [wifiTxPower, setWifiTxPower] = useState(60);
     const [uartTxPin, setUartTxPin] = useState(3);
     const [uartRxPin, setUartRxPin] = useState(4);
+    const [maxGpioPin, setMaxGpioPin] = useState(21);
     const [hostname, setHostname] = useState("neato");
     const [stallThreshold, setStallThreshold] = useState(60);
     const [brushRpm, setBrushRpm] = useState(1200);
@@ -43,6 +44,7 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
             setWifiTxPower(fetched.wifiTxPower);
             setUartTxPin(fetched.uartTxPin);
             setUartRxPin(fetched.uartRxPin);
+            setMaxGpioPin(fetched.maxGpioPin);
             setHostname(fetched.hostname);
             setStallThreshold(fetched.stallThreshold);
             setBrushRpm(fetched.brushRpm);
@@ -87,8 +89,8 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
     const pinError =
         uartTxPin === uartRxPin
             ? "TX and RX cannot be the same pin"
-            : uartTxPin < 0 || uartTxPin > 21 || uartRxPin < 0 || uartRxPin > 21
-              ? "Pin must be 0-21"
+            : uartTxPin < 0 || uartTxPin > maxGpioPin || uartRxPin < 0 || uartRxPin > maxGpioPin
+              ? `Pin must be 0-${maxGpioPin}`
               : null;
 
     const hostnameError =
@@ -187,6 +189,7 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         setUartTxPin,
         uartRxPin,
         setUartRxPin,
+        maxGpioPin,
         hostname,
         setHostname,
         stallThreshold,

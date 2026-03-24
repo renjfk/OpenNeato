@@ -103,6 +103,7 @@ export const DEFAULT_SERVER: SettingsData = {
     wifiTxPower: 60,
     uartTxPin: 3,
     uartRxPin: 4,
+    maxGpioPin: 21,
     hostname: "neato",
     stallThreshold: 60,
     brushRpm: 1200,

@@ -245,6 +245,7 @@ const state = {
     wifiTxPower: 60, // 15 dBm in 0.25 dBm units
     uartTxPin: 3,
     uartRxPin: 4,
+    maxGpioPin: 21,
     hostname: "neato",
     stallThreshold: 60,
     brushRpm: 1200,
@@ -673,6 +674,7 @@ const routes = {
             "wifiTxPower",
             "uartTxPin",
             "uartRxPin",
+            "maxGpioPin",
             "hostname",
             "stallThreshold",
             "brushRpm",
@@ -916,6 +918,7 @@ const handleRequest = async (req, res) => {
                 "wifiTxPower",
                 "uartTxPin",
                 "uartRxPin",
+                "maxGpioPin",
                 "hostname",
                 "stallThreshold",
                 "brushRpm",
@@ -925,6 +928,7 @@ const handleRequest = async (req, res) => {
                 "ntfyEnabled",
                 "ntfyOnDone",
                 "ntfyOnError",
+                "ntfyOnAlert",
                 "ntfyOnDocking",
                 "scheduleEnabled",
             ];

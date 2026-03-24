@@ -64,6 +64,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
         setUartTxPin,
         uartRxPin,
         setUartRxPin,
+        maxGpioPin,
         hostname,
         setHostname,
         stallThreshold,
@@ -358,7 +359,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                                     type="number"
                                     class="settings-pin-input"
                                     min={0}
-                                    max={21}
+                                    max={maxGpioPin}
                                     value={uartTxPin}
                                     onChange={(e) =>
                                         setUartTxPin(parseInt((e.target as HTMLInputElement).value, 10) || 0)
@@ -372,7 +373,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                                     type="number"
                                     class="settings-pin-input"
                                     min={0}
-                                    max={21}
+                                    max={maxGpioPin}
                                     value={uartRxPin}
                                     onChange={(e) =>
                                         setUartRxPin(parseInt((e.target as HTMLInputElement).value, 10) || 0)

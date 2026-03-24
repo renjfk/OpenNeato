@@ -261,6 +261,7 @@ std::vector<Field> Settings::toFields() const {
             {"wifiTxPower", String(wifiTxPower), FIELD_INT},
             {"uartTxPin", String(uartTxPin), FIELD_INT},
             {"uartRxPin", String(uartRxPin), FIELD_INT},
+            {"maxGpioPin", String(MAX_GPIO_PIN), FIELD_INT},
             {"stallThreshold", String(stallThreshold), FIELD_INT},
             {"brushRpm", String(brushRpm), FIELD_INT},
             {"vacuumSpeed", String(vacuumSpeed), FIELD_INT},

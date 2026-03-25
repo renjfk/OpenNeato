@@ -1,7 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"os"
+	"strconv"
+	"strings"
 
 	"go.bug.st/serial/enumerator"
 )
@@ -104,7 +108,36 @@ func findPort(portFlag string) (string, error) {
 	case 1:
 		return espPorts[0].Name, nil
 	default:
-		return "", fmt.Errorf("multiple ESP devices found, use --port to select one:\n%s", formatPorts(espPorts))
+		return promptPortSelection(espPorts)
+	}
+}
+
+// promptPortSelection displays a numbered menu and reads the user's choice from stdin.
+func promptPortSelection(ports []detectedPort) (string, error) {
+	fmt.Println()
+	fmt.Println("Multiple ESP devices found")
+	fmt.Println("----------------------------------------")
+	for i, p := range ports {
+		fmt.Printf("[%d] %s  (%s)\n", i+1, p.Name, p.Description)
+	}
+	fmt.Println("----------------------------------------")
+
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Printf("Select port (1-%d): ", len(ports))
+
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return "", fmt.Errorf("read input: %w", err)
+		}
+
+		line = strings.TrimSpace(line)
+		n, err := strconv.Atoi(line)
+		if err != nil || n < 1 || n > len(ports) {
+			fmt.Println("\nInvalid selection!")
+			continue
+		}
+		return ports[n-1].Name, nil
 	}
 }
 

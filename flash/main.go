@@ -23,6 +23,7 @@ func main() {
 	listPorts := flag.Bool("list", false, "List available serial ports")
 	noMonitor := flag.Bool("no-monitor", false, "Skip serial monitor after flashing")
 	monitorOnly := flag.Bool("monitor", false, "Open serial monitor without flashing")
+	showVersion := flag.Bool("version", false, "Print version and exit")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "openneato-flash - Flash and configure OpenNeato firmware\n\n")
@@ -36,6 +37,11 @@ func main() {
 	}
 
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Printf("openneato-flash %s\n", version)
+		return
+	}
 
 	if *listPorts {
 		ports, err := detectPorts()

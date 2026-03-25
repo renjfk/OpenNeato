@@ -121,6 +121,8 @@ jobs:
         run: pip install platformio
 
       - name: Build firmware and package release artifacts
+        env:
+          FIRMWARE_VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           # Build all *-release environments; post-build hook packages
           # firmware artifacts into each env's build dir for GoReleaser

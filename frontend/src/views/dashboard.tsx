@@ -40,6 +40,7 @@ interface StatusInfo {
 function statusInfo(s: string): StatusInfo {
     if (s.includes("CLEANINGRUNNING")) return { label: "Cleaning", color: "green", icon: "sparkle" };
     if (s.includes("CLEANINGPAUSED")) return { label: "Paused", color: "amber", icon: "alert" };
+    if (s.includes("CLEANINGSUSPENDED")) return { label: "Recharging", color: "amber", icon: "bolt" };
     if (s.includes("MANUALCLEANING")) return { label: "Cleaning", color: "green", icon: "sparkle" };
     if (s.includes("DOCKING")) return { label: "Docking", color: "amber", icon: "bolt" };
     return { label: "Active", color: "green", icon: "check" };
@@ -177,7 +178,8 @@ export function DashboardView({ firmware, state, isManual, updateInfo }: Dashboa
     const isRunning = state.data?.uiState?.includes("CLEANINGRUNNING") ?? false;
     const isPaused = state.data?.uiState?.includes("CLEANINGPAUSED") ?? false;
     const isDocking = state.data?.uiState?.includes("DOCKING") ?? false;
-    const isCleaning = isRunning || isPaused;
+    const isSuspended = state.data?.uiState?.includes("CLEANINGSUSPENDED") ?? false;
+    const isCleaning = isRunning || isPaused || isSuspended;
     const isSpot = state.data?.uiState?.includes("SPOT") ?? false;
     const robotError = error.data?.hasError
         ? {

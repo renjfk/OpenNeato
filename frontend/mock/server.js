@@ -134,8 +134,6 @@ const SCENARIOS = {
     },
     dock: { docking: true, cleaning: false },
     rchg: {
-        docking: true,
-        cleaning: false,
         midCleanRecharge: true,
         fuelPercent: 15,
         chargingActive: true,
@@ -393,9 +391,12 @@ const deriveStates = () => {
     } else if (state.testMode) {
         state.uiState = "UIMGR_STATE_TESTMODE";
         state.robotState = "ST_C_TestMode";
+    } else if (state.midCleanRecharge) {
+        state.uiState = "UIMGR_STATE_CLEANINGSUSPENDED";
+        state.robotState = "ST_M1_Charging_Cleaning";
     } else if (state.docking) {
         state.uiState = "UIMGR_STATE_DOCKINGRUNNING";
-        state.robotState = state.midCleanRecharge ? "ST_M1_Charging_Cleaning" : "ST_C_Docking";
+        state.robotState = "ST_C_Docking";
     } else if (state.cleaning && !state.paused) {
         state.uiState = "UIMGR_STATE_HOUSECLEANINGRUNNING";
         state.robotState = "ST_C_HouseCleaning";

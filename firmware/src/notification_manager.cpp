@@ -51,6 +51,7 @@ void NotificationManager::checkTransitions() {
                     bool wasCleaning = prevUiState.indexOf("CLEANINGRUNNING") >= 0;
                     bool wasDocking = prevUiState.indexOf("DOCKING") >= 0;
                     bool isDocking = ui.indexOf("DOCKING") >= 0;
+                    bool isSuspended = ui.indexOf("CLEANINGSUSPENDED") >= 0;
                     bool isIdle = ui == "UIMGR_STATE_IDLE" || ui == "UIMGR_STATE_STANDBY";
 
                     // Track cleaning context when entering docking
@@ -59,7 +60,8 @@ void NotificationManager::checkTransitions() {
                     }
 
                     // Mid-clean recharge: robot state ST_M1_Charging_Cleaning means
-                    // the robot docked to recharge and will resume cleaning afterwards
+                    // the robot docked to recharge and will resume cleaning afterwards.
+                    // The UI state transitions DOCKING -> CLEANINGSUSPENDED once on the dock.
                     bool isRecharging = rs.indexOf("Charging_Cleaning") >= 0;
 
                     if (isDocking && !wasDocking && isRecharging && cfg.ntfyOnDocking) {
@@ -67,14 +69,17 @@ void NotificationManager::checkTransitions() {
                         sendNotification(topic, "electric_plug", hostname + ": Returning to base to recharge");
                     }
 
-                    // Cleaning completed: cleaning/docking -> idle, but NOT if it's a recharge
+                    // Cleaning completed: cleaning/docking -> idle, but NOT if it's a recharge.
+                    // Also handle suspended -> idle (user stops clean while recharging).
                     bool dockingDone = wasDocking && wasCleaningBeforeDock && !isRecharging;
-                    if ((wasCleaning || dockingDone) && isIdle && cfg.ntfyOnDone) {
+                    bool suspendedDone = (prevUiState.indexOf("CLEANINGSUSPENDED") >= 0) && wasCleaningBeforeDock;
+                    if ((wasCleaning || dockingDone || suspendedDone) && isIdle && cfg.ntfyOnDone) {
                         sendNotification(topic, "white_check_mark", hostname + ": Cleaning done");
                     }
 
-                    // Clear tracking flag when leaving docking
-                    if (wasDocking && !isDocking) {
+                    // Clear tracking flag when leaving docking — but preserve it
+                    // through DOCKING -> CLEANINGSUSPENDED (mid-clean recharge)
+                    if (wasDocking && !isDocking && !isSuspended) {
                         wasCleaningBeforeDock = false;
                     }
                 }
@@ -105,7 +110,7 @@ void NotificationManager::checkTransitions() {
 
 bool NotificationManager::isActiveState(const String& uiState) {
     return uiState.indexOf("CLEANINGRUNNING") >= 0 || uiState.indexOf("CLEANINGPAUSED") >= 0 ||
-           uiState.indexOf("DOCKING") >= 0;
+           uiState.indexOf("CLEANINGSUSPENDED") >= 0 || uiState.indexOf("DOCKING") >= 0;
 }
 
 void NotificationManager::sendNotification(const String& topic, const String& tags, const String& message) {

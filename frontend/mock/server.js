@@ -575,6 +575,21 @@ const routes = {
         setTimeout(() => sendOk(res), 600);
     },
 
+    "POST /api/power": (_req, res, query) => {
+        if (faults.actions) return sendError(res, "UART timeout: robot not responding", 500);
+        const action = query.action;
+        if (action === "restart") {
+            // Simulate robot power cycle — robot recovers in ~1s, ESP32 stays online
+            sendOk(res);
+        } else if (action === "shutdown") {
+            // Simulate real ESP32 power loss — respond then kill the dev server
+            sendOk(res);
+            setTimeout(() => process.exit(0), 500);
+        } else {
+            sendError(res, "unknown action", 400);
+        }
+    },
+
     "POST /api/sound": (_req, res) => {
         // Accept and ignore — just acknowledge
         sendOk(res);

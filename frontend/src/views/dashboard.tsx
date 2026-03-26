@@ -274,7 +274,7 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
             {robotError && (
                 <ErrorBanner title={robotError.title} message={robotError.message} variant={robotError.kind} />
             )}
-            {!error.data && error.error && <ErrorBanner title="Warning" message={error.error} />}
+            {!error.data && error.error && !connErr && <ErrorBanner title="Warning" message={error.error} />}
 
             {/* Action errors — dismissible, stackable */}
             <ErrorBannerStack errors={actionErrors} />

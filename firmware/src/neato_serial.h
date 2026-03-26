@@ -70,6 +70,10 @@ public:
     bool setMotorSideBrush(bool on, int powerMw = 5000, std::function<void(bool)> callback = nullptr);
     bool setTime(int dayOfWeek, int hour, int min, int sec, std::function<void(bool)> callback = nullptr);
 
+    // Power control: sends TestMode On, then SetSystemMode after inter-command delay.
+    // action = "restart" (PowerCycle) or "shutdown" (Shutdown).
+    bool powerControl(const String& action, std::function<void(bool)> callback = nullptr);
+
     // -- Raw command (temporary debug endpoint) --------------------------------
     bool sendRaw(const String& cmd, std::function<void(bool, const String&)> callback);
 

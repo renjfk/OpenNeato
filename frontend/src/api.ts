@@ -119,6 +119,8 @@ export const api = {
     updateSettings: (patch: Partial<SettingsData>) => put<SettingsData>("/api/settings", patch),
     testNotification: (topic: string) => post(`/api/notifications/test?topic=${encodeURIComponent(topic)}`),
     playSound: (id: number) => post(`/api/sound?id=${id}`),
+    robotRestart: () => post("/api/power?action=restart"),
+    robotShutdown: () => post("/api/power?action=shutdown"),
     restart: () => post("/api/system/restart"),
     formatFs: () => post("/api/system/format-fs"),
     factoryReset: () => post("/api/system/reset"),

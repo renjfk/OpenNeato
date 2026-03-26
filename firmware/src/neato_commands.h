@@ -41,6 +41,8 @@
 #define EVT_STOP "UIMGR_EVENT_SMARTAPP_STOP_CLEANING"
 #define EVT_SEND_TO_BASE "UIMGR_EVENT_SMARTAPP_SEND_TO_BASE"
 #define CMD_SET_MOTOR "SetMotor"
+#define CMD_SET_SYSTEM_MODE_POWER_CYCLE "SetSystemMode PowerCycle"
+#define CMD_SET_SYSTEM_MODE_SHUTDOWN "SetSystemMode Shutdown"
 #define CMD_GET_ROBOT_POS_RAW "GetRobotPos Raw"
 #define CMD_GET_ROBOT_POS_SMOOTH "GetRobotPos Smooth"
 

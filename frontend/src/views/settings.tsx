@@ -128,6 +128,62 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
     const [restarting, setRestarting] = useState(false);
     const pendingNav = useRef<string | null>(null);
 
+    // --- Robot power control ---
+    const [showRobotShutdownConfirm, setShowRobotShutdownConfirm] = useState(false);
+    const [robotRestarting, setRobotRestarting] = useState(false);
+    const robotRestartPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const robotRestartTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        return () => {
+            if (robotRestartPollTimer.current) clearTimeout(robotRestartPollTimer.current);
+            if (robotRestartTimeout.current) clearTimeout(robotRestartTimeout.current);
+        };
+    }, []);
+
+    const handleRobotRestart = useCallback(() => {
+        setRobotRestarting(true);
+
+        robotRestartTimeout.current = setTimeout(() => {
+            if (robotRestartPollTimer.current) clearTimeout(robotRestartPollTimer.current);
+            robotRestartPollTimer.current = null;
+            robotRestartTimeout.current = null;
+            setRobotRestarting(false);
+            errorStack.push("Robot did not recover after restart — check physical connection");
+        }, 30000);
+
+        api.robotRestart()
+            .then(() => {
+                const poll = () => {
+                    api.getState()
+                        .then(() => {
+                            if (robotRestartTimeout.current) clearTimeout(robotRestartTimeout.current);
+                            robotRestartTimeout.current = null;
+                            robotRestartPollTimer.current = null;
+                            setRobotRestarting(false);
+                        })
+                        .catch(() => {
+                            robotRestartPollTimer.current = setTimeout(poll, 2000);
+                        });
+                };
+                robotRestartPollTimer.current = setTimeout(poll, 2000);
+            })
+            .catch((e: unknown) => {
+                if (robotRestartTimeout.current) clearTimeout(robotRestartTimeout.current);
+                robotRestartTimeout.current = null;
+                setRobotRestarting(false);
+                errorStack.push(e instanceof Error ? e.message : "Failed to restart robot");
+            });
+    }, [errorStack]);
+
+    const handleRobotShutdown = useCallback(() => {
+        setShowRobotShutdownConfirm(false);
+        // Navigate immediately — the ESP32 will lose power and go offline,
+        // so we don't wait for the response or surface network errors.
+        api.robotShutdown().catch(() => {});
+        navigate("/");
+    }, [navigate]);
+
     // --- Unsaved changes guards ---
 
     const dirtyRef = useRef(false);
@@ -718,6 +774,29 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                     {saveLabel}
                 </button>
 
+                <SettingsCategory title="Robot Power" icon={robotSvg}>
+                    <div class="settings-section">
+                        <button type="button" class="settings-nav-row" onClick={handleRobotRestart}>
+                            <div class="settings-nav-row-left">
+                                <Icon svg={powerSvg} />
+                                Restart Robot
+                            </div>
+                        </button>
+                    </div>
+                    <div class="settings-section">
+                        <button
+                            type="button"
+                            class="settings-nav-row danger"
+                            onClick={() => setShowRobotShutdownConfirm(true)}
+                        >
+                            <div class="settings-nav-row-left">
+                                <Icon svg={alertSvg} />
+                                Shutdown Robot
+                            </div>
+                        </button>
+                    </div>
+                </SettingsCategory>
+
                 <SettingsCategory title="Device" icon={powerSvg}>
                     <div class="settings-section">
                         <button type="button" class="settings-nav-row" onClick={() => setShowRestartConfirm(true)}>
@@ -812,12 +891,25 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                 />
             )}
 
-            {rebooting && (
+            {showRobotShutdownConfirm && (
+                <ConfirmDialog
+                    message="Shut down the robot? The ESP32 will lose power and go offline. The robot needs a physical button press to turn back on."
+                    confirmLabel="Shutdown"
+                    onConfirm={handleRobotShutdown}
+                    onCancel={() => setShowRobotShutdownConfirm(false)}
+                />
+            )}
+
+            {(rebooting || robotRestarting) && (
                 <div class="reboot-overlay">
                     <div class="reboot-dialog">
                         <div class="reboot-spinner" />
-                        <div class="reboot-text">Rebooting...</div>
-                        <div class="reboot-subtext">Waiting for device to come back online</div>
+                        <div class="reboot-text">{robotRestarting ? "Restarting robot..." : "Rebooting..."}</div>
+                        <div class="reboot-subtext">
+                            {robotRestarting
+                                ? "Waiting for robot to come back online"
+                                : "Waiting for device to come back online"}
+                        </div>
                     </div>
                 </div>
             )}

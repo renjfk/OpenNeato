@@ -615,6 +615,36 @@ bool NeatoSerial::setMotorSideBrush(bool on, int powerMw, std::function<void(boo
             PRIORITY_MEDIUM);
 }
 
+// -- Power control -----------------------------------------------------------
+
+bool NeatoSerial::powerControl(const String& action, std::function<void(bool)> callback) {
+    const char *cmd;
+    if (action == "restart") {
+        cmd = CMD_SET_SYSTEM_MODE_POWER_CYCLE;
+    } else if (action == "shutdown") {
+        cmd = CMD_SET_SYSTEM_MODE_SHUTDOWN;
+    } else {
+        LOG("NEATO", "powerControl: unknown action '%s'", action.c_str());
+        if (callback)
+            callback(false);
+        return false;
+    }
+
+    // SetSystemMode requires TestMode On first (protocol specifies 100ms delay,
+    // which the inter-command delay covers). Chain: TestMode On -> SetSystemMode.
+    invalidateState();
+    const char *sysCmd = cmd; // capture for lambda
+    return testMode(true, [this, sysCmd, callback](bool ok) {
+        if (!ok) {
+            LOG("NEATO", "powerControl: TestMode On failed");
+            if (callback)
+                callback(false);
+            return;
+        }
+        enqueue(sysCmd, wrapAction(callback), PRIORITY_HIGH);
+    });
+}
+
 // -- Time commands -----------------------------------------------------------
 
 bool NeatoSerial::getTime(std::function<void(bool, const TimeData&)> callback) {

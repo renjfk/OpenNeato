@@ -131,6 +131,7 @@ private:
     static bool isCleaningState(const String& uiState);
     static bool isPausedState(const String& uiState);
     static bool isDockingState(const String& uiState);
+    static bool isSuspendedState(const String& uiState);
     static String cleanModeFromState(const String& uiState);
 };
 

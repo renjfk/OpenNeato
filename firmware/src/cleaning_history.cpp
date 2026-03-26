@@ -58,14 +58,18 @@ void CleaningHistory::checkState() {
         bool wasCleaning = isCleaningState(prevUiState);
         bool nowCleaning = isCleaningState(state.uiState);
 
+        // CLEANINGSUSPENDED + Charging_Cleaning means the robot is on the dock
+        // recharging mid-clean and will resume automatically — treat as active
+        bool isMidCleanRecharge = isSuspendedState(state.uiState) && state.robotState.indexOf("Charging_Cleaning") >= 0;
+
         // First poll after boot: if the robot is idle, finalize any orphan sessions
         // left by a previous crash/reboot so they don't get merged into the next clean
-        if (prevUiState.isEmpty() && !nowCleaning && !recoveryAttempted) {
+        if (prevUiState.isEmpty() && !nowCleaning && !isMidCleanRecharge && !recoveryAttempted) {
             recoveryAttempted = true;
             finalizeOrphanSessions();
         }
 
-        if (!wasCleaning && nowCleaning && !recoverCollection(state.uiState)) {
+        if (!wasCleaning && (nowCleaning || isMidCleanRecharge) && !recoverCollection(state.uiState)) {
             startCollection(state.uiState);
         }
 
@@ -85,6 +89,10 @@ bool CleaningHistory::isPausedState(const String& uiState) {
 
 bool CleaningHistory::isDockingState(const String& uiState) {
     return uiState.indexOf("DOCKING") >= 0;
+}
+
+bool CleaningHistory::isSuspendedState(const String& uiState) {
+    return uiState.indexOf("CLEANINGSUSPENDED") >= 0;
 }
 
 String CleaningHistory::cleanModeFromState(const String& uiState) {
@@ -647,9 +655,14 @@ void CleaningHistory::collectSnapshot() {
 
             bool isDocking = isDockingState(state.uiState);
             bool isCleaning = isCleaningState(state.uiState);
+            bool isSuspended = isSuspendedState(state.uiState);
             bool isChargingMidClean = state.robotState.indexOf("Charging_Cleaning") >= 0;
 
-            if (isDocking && isChargingMidClean) {
+            // Mid-clean recharge: robot returns to base to charge before resuming.
+            // The UI state can be DOCKING (on the way back) or CLEANINGSUSPENDED
+            // (already on the dock and charging). Both combined with the
+            // Charging_Cleaning robot state indicate a recharge-and-resume cycle.
+            if ((isDocking || isSuspended) && isChargingMidClean) {
                 if (!recharging) {
                     recharging = true;
                     rechargeCount++;
@@ -672,7 +685,7 @@ void CleaningHistory::collectSnapshot() {
                 dataLogger.logGenericEvent("history_recharge_end", {});
             }
 
-            if (!isCleaning && !isDocking) {
+            if (!isCleaning && !isDocking && !isSuspended) {
                 fetchPending = false;
                 stopCollection();
                 return;

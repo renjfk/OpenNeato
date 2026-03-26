@@ -530,6 +530,125 @@ bool parseTimeData(const String& raw, TimeData& out) {
     return true;
 }
 
+// -- User settings -----------------------------------------------------------
+
+std::vector<Field> UserSettingsData::toFields() const {
+    return {
+            {"buttonClick", buttonClick ? "true" : "false", FIELD_BOOL},
+            {"melodies", melodies ? "true" : "false", FIELD_BOOL},
+            {"warnings", warnings ? "true" : "false", FIELD_BOOL},
+            {"ecoMode", ecoMode ? "true" : "false", FIELD_BOOL},
+            {"intenseClean", intenseClean ? "true" : "false", FIELD_BOOL},
+            {"binFullDetect", binFullDetect ? "true" : "false", FIELD_BOOL},
+            {"wifi", wifi ? "true" : "false", FIELD_BOOL},
+            {"stealthLed", stealthLed ? "true" : "false", FIELD_BOOL},
+            {"filterChange", String(filterChange), FIELD_INT},
+            {"brushChange", String(brushChange), FIELD_INT},
+            {"dirtBin", String(dirtBin), FIELD_INT},
+    };
+}
+
+bool UserSettingsData::fromFields(const std::vector<Field>& fields) {
+    bool applied = false;
+    const Field *f;
+    if ((f = findField(fields, "buttonClick"))) {
+        buttonClick = f->value == "true";
+        applied = true;
+    }
+    if ((f = findField(fields, "melodies"))) {
+        melodies = f->value == "true";
+        applied = true;
+    }
+    if ((f = findField(fields, "warnings"))) {
+        warnings = f->value == "true";
+        applied = true;
+    }
+    if ((f = findField(fields, "ecoMode"))) {
+        ecoMode = f->value == "true";
+        applied = true;
+    }
+    if ((f = findField(fields, "intenseClean"))) {
+        intenseClean = f->value == "true";
+        applied = true;
+    }
+    if ((f = findField(fields, "binFullDetect"))) {
+        binFullDetect = f->value == "true";
+        applied = true;
+    }
+    if ((f = findField(fields, "wifi"))) {
+        wifi = f->value == "true";
+        applied = true;
+    }
+    if ((f = findField(fields, "stealthLed"))) {
+        stealthLed = f->value == "true";
+        applied = true;
+    }
+    if ((f = findField(fields, "filterChange"))) {
+        filterChange = f->value.toInt();
+        applied = true;
+    }
+    if ((f = findField(fields, "brushChange"))) {
+        brushChange = f->value.toInt();
+        applied = true;
+    }
+    if ((f = findField(fields, "dirtBin"))) {
+        dirtBin = f->value.toInt();
+        applied = true;
+    }
+    return applied;
+}
+
+// GetUserSettings response format: "Label, Value\r\n" pairs (note space after comma).
+// Labels use descriptive names with spaces, e.g. "ClickSounds, OFF", "Eco Mode, ON",
+// "Filter Change Time (seconds), 43200". The findCsvValue helper matches the label
+// prefix before the first comma, so we match the exact label strings from the robot.
+bool parseUserSettingsData(const String& raw, UserSettingsData& out) {
+    String val;
+    bool found = false;
+    if (findCsvValue(raw, "ClickSounds", val)) {
+        out.buttonClick = val.equalsIgnoreCase("ON");
+        found = true;
+    }
+    if (findCsvValue(raw, "Melody Sounds", val)) {
+        out.melodies = val.equalsIgnoreCase("ON");
+        found = true;
+    }
+    if (findCsvValue(raw, "Warning Sounds", val)) {
+        out.warnings = val.equalsIgnoreCase("ON");
+        found = true;
+    }
+    if (findCsvValue(raw, "Eco Mode", val)) {
+        out.ecoMode = val.equalsIgnoreCase("ON");
+        found = true;
+    }
+    if (findCsvValue(raw, "IntenseClean", val)) {
+        out.intenseClean = val.equalsIgnoreCase("ON");
+        found = true;
+    }
+    if (findCsvValue(raw, "Bin Full Detect", val)) {
+        out.binFullDetect = val.equalsIgnoreCase("ON");
+        found = true;
+    }
+    if (findCsvValue(raw, "WiFi", val)) {
+        out.wifi = val.equalsIgnoreCase("ON");
+        found = true;
+    }
+    if (findCsvValue(raw, "LED", val)) {
+        // "LED" controls standby indicator lights (StealthLED in Neato app terms).
+        // ON = LEDs visible (not stealth), OFF = LEDs hidden (stealth mode).
+        // We invert: stealthLed=true means LEDs are off.
+        out.stealthLed = val.equalsIgnoreCase("OFF");
+        found = true;
+    }
+    if (findCsvValue(raw, "Filter Change Time (seconds)", val))
+        out.filterChange = val.toInt();
+    if (findCsvValue(raw, "Brush Change Time (seconds)", val))
+        out.brushChange = val.toInt();
+    if (findCsvValue(raw, "Dirt Bin Alert Reminder Interval (minutes)", val))
+        out.dirtBin = val.toInt();
+    return found;
+}
+
 // -- Robot position ----------------------------------------------------------
 
 std::vector<Field> RobotPosData::toFields() const {

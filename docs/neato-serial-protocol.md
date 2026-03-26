@@ -84,6 +84,22 @@ Robot GND -> ESP GND. The robot provides 3.3V to power the ESP.
 - `GetSysLog` — System log data (unimplemented in XV-11)
 - `GetWarranty` — Warranty validation codes (hex values)
 - `PlaySound [SoundID N] [Stop]` — Play sound (0-20, see manual for IDs)
+- `GetUserSettings` — Get all user-configurable settings (sound, cleaning, power saving, maintenance)
+- `SetUserSettings [Key ON|OFF|Value]` — Set user settings
+  - `ButtonClick ON/OFF` — Button press sounds
+  - `Melodies ON/OFF` — Startup/shutdown melodies
+  - `Warnings ON/OFF` — Warning beeps
+  - `EcoMode ON/OFF` — Eco cleaning mode (lower brush/vacuum power)
+  - `IntenseClean ON/OFF` — Intense clean (double-pass)
+  - `BinFullDetect ON/OFF` — Dust bin full detection
+  - `WiFi ON/OFF` — Robot's own WiFi radio (unused with OpenNeato)
+  - `StealthLED ON/OFF` — Standby LEDs (ON = hidden, OFF = visible)
+  - `FilterChange <seconds>` — Filter change alert interval
+  - `BrushChange <seconds>` — Brush change alert interval
+  - `DirtBin <minutes>` — Dirt bin alert reminder interval
+  - `Reset` — Reset all user settings to factory defaults
+  - Note: `GetUserSettings` response uses different label names than `SetUserSettings` parameters
+    (e.g. "ClickSounds" vs "ButtonClick", "Melody Sounds" vs "Melodies")
 - `RestoreDefaults` — Restore user settings to default
 - `SetDistanceCal [DropMinimum|DropMiddle|DropMaximum] [WallMinimum|WallMiddle|WallMaximum]` — Set distance sensor calibration values for min and max distances
   - DropMinimum: Take minimum distance drop sensor readings (mutually exclusive of DropMiddle and DropMax)
@@ -262,6 +278,29 @@ Robot GND -> ESP GND. The robot provides 3.3V to power the ESP.
 - **No WiFi control commands** — robot WiFi is managed internally, no serial access
 
 ## Response Formats
+
+**GetUserSettings** — CSV: `Label, Value` (note space after comma)
+```
+Language, EL_NONE
+ClickSounds, OFF
+LED, ON
+Wall Enable, ON
+Eco Mode, ON
+IntenseClean, OFF
+WiFi, ON
+Melody Sounds, OFF
+Warning Sounds, ON
+Bin Full Detect, ON
+Filter Change Time (seconds), 43200
+Brush Change Time (seconds), 259200
+Dirt Bin Alert Reminder Interval (minutes), 90
+Current Dirt Bin Runtime is: 5857220
+Number of Cleanings where Dust Bin was Full is: 1
+Schedule is Disabled
+```
+Note: Labels differ from `SetUserSettings` parameter names (e.g. "ClickSounds" in
+response vs "ButtonClick" in set command, "LED" vs "StealthLED"). LED=ON means
+LEDs are visible (not stealth); StealthLED=ON means LEDs are hidden (stealth mode).
 
 **GetCharger** — CSV: `Label,Value`
 ```

@@ -7,6 +7,7 @@ import calendarSvg from "../assets/icons/calendar.svg?raw";
 import chipSvg from "../assets/icons/chip.svg?raw";
 import clockSvg from "../assets/icons/clock.svg?raw";
 import databaseSvg from "../assets/icons/database.svg?raw";
+import gearSvg from "../assets/icons/gear.svg?raw";
 import manualSvg from "../assets/icons/manual.svg?raw";
 import moonSvg from "../assets/icons/moon.svg?raw";
 import paletteSvg from "../assets/icons/palette.svg?raw";
@@ -21,7 +22,7 @@ import { ErrorBannerStack, useErrorStack } from "../components/error-banner";
 import { Icon } from "../components/icon";
 import { useNavigate } from "../components/router";
 import { usePolling } from "../hooks/use-polling";
-import type { FirmwareVersion, SystemData } from "../types";
+import type { FirmwareVersion, SystemData, UserSettingsData } from "../types";
 import {
     BRUSH_PRESETS,
     SIDE_BRUSH_PRESETS,
@@ -48,6 +49,23 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
     const navigate = useNavigate();
     const systemPoll = usePolling<SystemData>(api.getSystem, 10000);
     const system = systemPoll.data;
+    const userSettingsPoll = usePolling<UserSettingsData>(api.getUserSettings, 30000);
+    const [robotSettings, setRobotSettings] = useState<UserSettingsData | null>(null);
+    const [savingRobotSettings, setSavingRobotSettings] = useState(false);
+
+    // Sync polled data into local state — only on fresh poll results, not during/after saves.
+    // The ref tracks whether the user has made a local change; once they have, we stop
+    // overwriting from poll data until the next fresh poll result arrives.
+    const lastPollRef = useRef(userSettingsPoll.data);
+    useEffect(() => {
+        if (userSettingsPoll.data && userSettingsPoll.data !== lastPollRef.current && !savingRobotSettings) {
+            lastPollRef.current = userSettingsPoll.data;
+            setRobotSettings(userSettingsPoll.data);
+        }
+    }, [userSettingsPoll.data, savingRobotSettings]);
+
+    const robotSettingsDisabled = !robotSettings || savingRobotSettings || !firmware?.supported;
+
     const [errors, errorStack] = useErrorStack();
     const { rebooting, startRebootFlow } = useReboot(system?.uptime ?? 0);
 
@@ -99,6 +117,36 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
         onSaveClick,
     } = useSettingsForm(errorStack, startRebootFlow);
 
+    // --- Robot user settings save ---
+    // Maps frontend field names to SetUserSettings serial command keys.
+    // StealthLed is inverted: frontend true = LEDs hidden = StealthLED ON.
+    const robotSettingKeys: Record<string, string> = {
+        buttonClick: "ButtonClick",
+        melodies: "Melodies",
+        warnings: "Warnings",
+        ecoMode: "EcoMode",
+        intenseClean: "IntenseClean",
+        binFullDetect: "BinFullDetect",
+        wifi: "WiFi",
+        stealthLed: "StealthLED",
+    };
+
+    const handleRobotSettingsChange = useCallback(
+        (field: keyof typeof robotSettingKeys, value: boolean) => {
+            if (!robotSettings) return;
+            setRobotSettings({ ...robotSettings, [field]: value });
+            setSavingRobotSettings(true);
+            const serialValue = value ? "ON" : "OFF";
+            api.setUserSetting(robotSettingKeys[field], serialValue)
+                .catch((e: unknown) => {
+                    errorStack.push(e instanceof Error ? e.message : "Failed to update robot settings");
+                    if (userSettingsPoll.data) setRobotSettings(userSettingsPoll.data);
+                })
+                .finally(() => setSavingRobotSettings(false));
+        },
+        [robotSettings, userSettingsPoll.data, errorStack],
+    );
+
     // --- Notification test ---
     const [testingNotif, setTestingNotif] = useState(false);
     const [notifTestResult, setNotifTestResult] = useState<string | null>(null);
@@ -129,6 +177,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
     const pendingNav = useRef<string | null>(null);
 
     // --- Robot power control ---
+    const [showRobotRestartConfirm, setShowRobotRestartConfirm] = useState(false);
     const [showRobotShutdownConfirm, setShowRobotShutdownConfirm] = useState(false);
     const [robotRestarting, setRobotRestarting] = useState(false);
     const robotRestartPollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -333,7 +382,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                     </div>
                 </SettingsCategory>
 
-                <SettingsCategory title="Network" icon={wifiSvg}>
+                <SettingsCategory title="Device" icon={gearSvg}>
                     <div class="settings-section">
                         <div class="settings-section-title">Hostname</div>
                         <input
@@ -372,9 +421,6 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                             Lower power reduces range but improves stability on serial port power
                         </div>
                     </div>
-                </SettingsCategory>
-
-                <SettingsCategory title="Robot" icon={robotSvg}>
                     <div class="settings-section">
                         <div class="settings-section-title">Timezone</div>
                         <div class="settings-tz-select-wrap">
@@ -447,6 +493,14 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                                 Cleaning Schedule
                             </div>
                             <span class="settings-nav-chevron">&rsaquo;</span>
+                        </button>
+                    </div>
+                    <div class="settings-section">
+                        <button type="button" class="settings-nav-row" onClick={() => setShowRestartConfirm(true)}>
+                            <div class="settings-nav-row-left">
+                                <Icon svg={powerSvg} />
+                                Restart Device
+                            </div>
                         </button>
                     </div>
                 </SettingsCategory>
@@ -774,9 +828,127 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                     {saveLabel}
                 </button>
 
-                <SettingsCategory title="Robot Power" icon={robotSvg}>
+                <SettingsCategory title="Robot" icon={robotSvg} disabled={firmware?.supported === false}>
                     <div class="settings-section">
-                        <button type="button" class="settings-nav-row" onClick={handleRobotRestart}>
+                        <div class="settings-section-title">Sound</div>
+                        <div class="settings-toggle-row">
+                            <div class="settings-toggle-label">
+                                <span class="settings-toggle-title">Button clicks</span>
+                                <span class="settings-toggle-desc">Sound when pressing buttons</span>
+                            </div>
+                            <button
+                                type="button"
+                                class={`settings-toggle${robotSettings?.buttonClick ? " on" : ""}${savingRobotSettings ? " pending" : ""}`}
+                                onClick={() => handleRobotSettingsChange("buttonClick", !robotSettings?.buttonClick)}
+                                disabled={robotSettingsDisabled}
+                                aria-label="Toggle button clicks"
+                            />
+                        </div>
+                        <div class="settings-toggle-row">
+                            <div class="settings-toggle-label">
+                                <span class="settings-toggle-title">Melodies</span>
+                                <span class="settings-toggle-desc">Startup and shutdown sounds</span>
+                            </div>
+                            <button
+                                type="button"
+                                class={`settings-toggle${robotSettings?.melodies ? " on" : ""}${savingRobotSettings ? " pending" : ""}`}
+                                onClick={() => handleRobotSettingsChange("melodies", !robotSettings?.melodies)}
+                                disabled={robotSettingsDisabled}
+                                aria-label="Toggle melodies"
+                            />
+                        </div>
+                        <div class="settings-toggle-row">
+                            <div class="settings-toggle-label">
+                                <span class="settings-toggle-title">Warnings</span>
+                                <span class="settings-toggle-desc">Warning beeps</span>
+                            </div>
+                            <button
+                                type="button"
+                                class={`settings-toggle${robotSettings?.warnings ? " on" : ""}${savingRobotSettings ? " pending" : ""}`}
+                                onClick={() => handleRobotSettingsChange("warnings", !robotSettings?.warnings)}
+                                disabled={robotSettingsDisabled}
+                                aria-label="Toggle warnings"
+                            />
+                        </div>
+                    </div>
+                    <div class="settings-section">
+                        <div class="settings-section-title">Cleaning</div>
+                        <div class="settings-toggle-row">
+                            <div class="settings-toggle-label">
+                                <span class="settings-toggle-title">Eco mode</span>
+                                <span class="settings-toggle-desc">
+                                    Lower brush and vacuum power, longer battery life
+                                </span>
+                            </div>
+                            <button
+                                type="button"
+                                class={`settings-toggle${robotSettings?.ecoMode ? " on" : ""}${savingRobotSettings ? " pending" : ""}`}
+                                onClick={() => handleRobotSettingsChange("ecoMode", !robotSettings?.ecoMode)}
+                                disabled={robotSettingsDisabled}
+                                aria-label="Toggle eco mode"
+                            />
+                        </div>
+                        <div class="settings-toggle-row">
+                            <div class="settings-toggle-label">
+                                <span class="settings-toggle-title">Intense clean</span>
+                                <span class="settings-toggle-desc">Double-pass cleaning for deeper clean</span>
+                            </div>
+                            <button
+                                type="button"
+                                class={`settings-toggle${robotSettings?.intenseClean ? " on" : ""}${savingRobotSettings ? " pending" : ""}`}
+                                onClick={() => handleRobotSettingsChange("intenseClean", !robotSettings?.intenseClean)}
+                                disabled={robotSettingsDisabled}
+                                aria-label="Toggle intense clean"
+                            />
+                        </div>
+                        <div class="settings-toggle-row">
+                            <div class="settings-toggle-label">
+                                <span class="settings-toggle-title">Bin full detection</span>
+                                <span class="settings-toggle-desc">Alert when dust bin is full</span>
+                            </div>
+                            <button
+                                type="button"
+                                class={`settings-toggle${robotSettings?.binFullDetect ? " on" : ""}${savingRobotSettings ? " pending" : ""}`}
+                                onClick={() =>
+                                    handleRobotSettingsChange("binFullDetect", !robotSettings?.binFullDetect)
+                                }
+                                disabled={robotSettingsDisabled}
+                                aria-label="Toggle bin full detection"
+                            />
+                        </div>
+                    </div>
+                    <div class="settings-section">
+                        <div class="settings-section-title">Power Saving</div>
+                        <div class="settings-toggle-row">
+                            <div class="settings-toggle-label">
+                                <span class="settings-toggle-title">Robot WiFi</span>
+                                <span class="settings-toggle-desc">Unused with OpenNeato, disable to save power</span>
+                            </div>
+                            <button
+                                type="button"
+                                class={`settings-toggle${robotSettings?.wifi ? " on" : ""}${savingRobotSettings ? " pending" : ""}`}
+                                onClick={() => handleRobotSettingsChange("wifi", !robotSettings?.wifi)}
+                                disabled={robotSettingsDisabled}
+                                aria-label="Toggle robot WiFi"
+                            />
+                        </div>
+                        <div class="settings-toggle-row">
+                            <div class="settings-toggle-label">
+                                <span class="settings-toggle-title">Stealth LEDs</span>
+                                <span class="settings-toggle-desc">Disable standby indicator lights</span>
+                            </div>
+                            <button
+                                type="button"
+                                class={`settings-toggle${robotSettings?.stealthLed ? " on" : ""}${savingRobotSettings ? " pending" : ""}`}
+                                onClick={() => handleRobotSettingsChange("stealthLed", !robotSettings?.stealthLed)}
+                                disabled={robotSettingsDisabled}
+                                aria-label="Toggle stealth LEDs"
+                            />
+                        </div>
+                    </div>
+                    <div class="settings-section">
+                        <div class="settings-section-title">Power Control</div>
+                        <button type="button" class="settings-nav-row" onClick={() => setShowRobotRestartConfirm(true)}>
                             <div class="settings-nav-row-left">
                                 <Icon svg={powerSvg} />
                                 Restart Robot
@@ -797,15 +969,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                     </div>
                 </SettingsCategory>
 
-                <SettingsCategory title="Device" icon={powerSvg}>
-                    <div class="settings-section">
-                        <button type="button" class="settings-nav-row" onClick={() => setShowRestartConfirm(true)}>
-                            <div class="settings-nav-row-left">
-                                <Icon svg={powerSvg} />
-                                Restart
-                            </div>
-                        </button>
-                    </div>
+                <SettingsCategory title="Danger Zone" icon={alertSvg}>
                     <div class="settings-section">
                         <button
                             type="button"
@@ -888,6 +1052,18 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                         fw.startUpload();
                     }}
                     onCancel={() => setShowUploadConfirm(false)}
+                />
+            )}
+
+            {showRobotRestartConfirm && (
+                <ConfirmDialog
+                    message="Restart the robot? It will be unavailable for a few seconds."
+                    confirmLabel="Restart"
+                    onConfirm={() => {
+                        setShowRobotRestartConfirm(false);
+                        handleRobotRestart();
+                    }}
+                    onCancel={() => setShowRobotRestartConfirm(false)}
                 />
             )}
 

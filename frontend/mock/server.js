@@ -255,6 +255,18 @@ const state = {
     ntfyOnError: true,
     ntfyOnAlert: true,
     ntfyOnDocking: true,
+    // Robot user settings (from GetUserSettings)
+    buttonClick: true,
+    melodies: true,
+    warnings: true,
+    ecoMode: false,
+    intenseClean: false,
+    binFullDetect: true,
+    wifi: true,
+    stealthLed: false,
+    filterChange: 2592000,
+    brushChange: 2592000,
+    dirtBin: 30,
     // Schedule (Mon=0..Sun=6)
     scheduleEnabled: true,
     sched0Hour: 9,
@@ -720,6 +732,49 @@ const routes = {
 
     "GET /repos/renjfk/OpenNeato/releases/latest": (_req, res) => {
         jsonResponse(res, { tag_name: "v1.0" });
+    },
+
+    "GET /api/user-settings": (_req, res) => {
+        jsonResponse(res, {
+            buttonClick: state.buttonClick,
+            melodies: state.melodies,
+            warnings: state.warnings,
+            ecoMode: state.ecoMode,
+            intenseClean: state.intenseClean,
+            binFullDetect: state.binFullDetect,
+            wifi: state.wifi,
+            stealthLed: state.stealthLed,
+            filterChange: state.filterChange,
+            brushChange: state.brushChange,
+            dirtBin: state.dirtBin,
+        });
+    },
+
+    "POST /api/user-settings": (_req, res, query) => {
+        const keyMap = {
+            ButtonClick: "buttonClick",
+            Melodies: "melodies",
+            Warnings: "warnings",
+            EcoMode: "ecoMode",
+            IntenseClean: "intenseClean",
+            BinFullDetect: "binFullDetect",
+            WiFi: "wifi",
+            StealthLED: "stealthLed",
+            FilterChange: "filterChange",
+            BrushChange: "brushChange",
+            DirtBin: "dirtBin",
+        };
+        const serialKey = query.key;
+        const value = query.value;
+        if (!serialKey || !value) return sendError(res, "missing key or value", 400);
+        const stateKey = keyMap[serialKey];
+        if (!stateKey) return sendError(res, "unknown key", 400);
+        if (["filterChange", "brushChange", "dirtBin"].includes(stateKey)) {
+            state[stateKey] = parseInt(value, 10);
+        } else {
+            state[stateKey] = value.toUpperCase() === "ON";
+        }
+        sendOk(res);
     },
 
     "GET /api/firmware/version": (_req, res) => {

@@ -83,6 +83,20 @@ export interface SettingsData {
     sched6On: boolean;
 }
 
+export interface UserSettingsData {
+    buttonClick: boolean;
+    melodies: boolean;
+    warnings: boolean;
+    ecoMode: boolean;
+    intenseClean: boolean;
+    binFullDetect: boolean;
+    wifi: boolean;
+    stealthLed: boolean;
+    filterChange: number; // seconds
+    brushChange: number; // seconds
+    dirtBin: number; // minutes
+}
+
 export interface LidarPoint {
     angle: number;
     dist: number;

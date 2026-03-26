@@ -45,6 +45,8 @@
 #define CMD_SET_SYSTEM_MODE_SHUTDOWN "SetSystemMode Shutdown"
 #define CMD_GET_ROBOT_POS_RAW "GetRobotPos Raw"
 #define CMD_GET_ROBOT_POS_SMOOTH "GetRobotPos Smooth"
+#define CMD_GET_USER_SETTINGS "GetUserSettings"
+#define CMD_SET_USER_SETTINGS "SetUserSettings"
 
 // -- Sound IDs ---------------------------------------------------------------
 
@@ -181,6 +183,29 @@ struct LdsScanData {
     String toJson() const;
 };
 
+// Robot user settings — read via GetUserSettings, write via SetUserSettings.
+// Boolean flags are ON/OFF; interval fields are in seconds or minutes.
+struct UserSettingsData : public JsonSerializable {
+    // Sound control
+    bool buttonClick = true;
+    bool melodies = true;
+    bool warnings = true;
+    // Cleaning behavior
+    bool ecoMode = false;
+    bool intenseClean = false;
+    bool binFullDetect = true;
+    // Power saving
+    bool wifi = true;
+    bool stealthLed = false;
+    // Maintenance reminders (seconds for filter/brush, minutes for dirt bin)
+    int filterChange = 2592000; // 30 days
+    int brushChange = 2592000; // 30 days
+    int dirtBin = 30; // 30 minutes
+
+    std::vector<Field> toFields() const override;
+    bool fromFields(const std::vector<Field>& fields) override;
+};
+
 // Robot position — hidden command, response format unknown.
 // Returns the raw response verbatim for inspection on real hardware.
 struct RobotPosData : public JsonSerializable {
@@ -200,6 +225,7 @@ bool parseErrorData(const String& raw, ErrorData& out);
 bool parseLdsScanData(const String& raw, LdsScanData& out);
 bool parseTimeData(const String& raw, TimeData& out);
 bool parseRobotPosData(const String& raw, RobotPosData& out);
+bool parseUserSettingsData(const String& raw, UserSettingsData& out);
 
 // -- Model support -----------------------------------------------------------
 // Checks if the parsed model name matches a supported Botvac (D3-D7).

@@ -49,6 +49,7 @@ public:
 
     void getVersion(std::function<void(bool, const VersionData&)> callback);
     void getCharger(std::function<void(bool, const ChargerData&)> callback);
+    void getUserSettings(std::function<void(bool, const UserSettingsData&)> callback);
     void getDigitalSensors(std::function<void(bool, const DigitalSensorData&)> callback);
     void getDigitalSensors(std::function<void(bool, const DigitalSensorData&)> callback, CommandPriority priority);
     void getMotors(std::function<void(bool, const MotorData&)> callback);
@@ -69,6 +70,10 @@ public:
     bool setMotorVacuum(bool on, int speedPercent = 80, std::function<void(bool)> callback = nullptr);
     bool setMotorSideBrush(bool on, int powerMw = 5000, std::function<void(bool)> callback = nullptr);
     bool setTime(int dayOfWeek, int hour, int min, int sec, std::function<void(bool)> callback = nullptr);
+
+    // Set a single robot user setting via "SetUserSettings <key> <value>".
+    // Invalidates the user settings cache.
+    bool setUserSetting(const String& key, const String& value, std::function<void(bool)> callback = nullptr);
 
     // Power control: sends TestMode On, then SetSystemMode after inter-command delay.
     // action = "restart" (PowerCycle) or "shutdown" (Shutdown).
@@ -179,6 +184,7 @@ private:
     AsyncCache<LdsScanData> ldsCache;
     AsyncCache<RobotPosData> robotPosRawCache;
     AsyncCache<RobotPosData> robotPosSmoothCache;
+    AsyncCache<UserSettingsData> userSettingsCache;
 
     // Raw (uncached) fetch methods — enqueue the command and parse response
     void fetchVersion(std::function<void(bool, const VersionData&)> callback);
@@ -191,6 +197,7 @@ private:
     void fetchErrClear(std::function<void(bool, const ErrorData&)> callback);
     void fetchLdsScan(std::function<void(bool, const LdsScanData&)> callback);
     void fetchRobotPos(const char *cmd, std::function<void(bool, const RobotPosData&)> callback);
+    void fetchUserSettings(std::function<void(bool, const UserSettingsData&)> callback);
 };
 
 #endif // NEATO_SERIAL_H

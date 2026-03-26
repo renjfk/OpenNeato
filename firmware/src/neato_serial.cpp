@@ -38,7 +38,10 @@ NeatoSerial::NeatoSerial() :
     robotPosSmoothCache(
             CACHE_TTL_SENSORS,
             [this](AsyncCache<RobotPosData>::Callback cb) { fetchRobotPos(CMD_GET_ROBOT_POS_SMOOTH, cb); },
-            CACHE_HIT(CMD_GET_ROBOT_POS_SMOOTH)) {
+            CACHE_HIT(CMD_GET_ROBOT_POS_SMOOTH)),
+    userSettingsCache(
+            CACHE_TTL_VERSION, [this](AsyncCache<UserSettingsData>::Callback cb) { fetchUserSettings(cb); },
+            CACHE_HIT(CMD_GET_USER_SETTINGS)) {
     TaskRegistry::add(this);
 }
 
@@ -288,6 +291,10 @@ void NeatoSerial::getCharger(std::function<void(bool, const ChargerData&)> callb
     chargerCache.get(callback);
 }
 
+void NeatoSerial::getUserSettings(std::function<void(bool, const UserSettingsData&)> callback) {
+    userSettingsCache.get(callback);
+}
+
 void NeatoSerial::getDigitalSensors(std::function<void(bool, const DigitalSensorData&)> callback) {
     getDigitalSensors(callback, PRIORITY_NORMAL);
 }
@@ -453,6 +460,16 @@ void NeatoSerial::fetchRobotPos(const char *cmd, std::function<void(bool, const 
     });
 }
 
+void NeatoSerial::fetchUserSettings(std::function<void(bool, const UserSettingsData&)> callback) {
+    enqueue(CMD_GET_USER_SETTINGS, [callback](bool ok, const String& raw) {
+        UserSettingsData data;
+        if (ok)
+            ok = parseUserSettingsData(raw, data);
+        if (callback)
+            callback(ok, data);
+    });
+}
+
 // -- Cache invalidation ------------------------------------------------------
 
 void NeatoSerial::invalidateState() {
@@ -470,6 +487,7 @@ void NeatoSerial::invalidateAll() {
     ldsCache.invalidate();
     robotPosRawCache.invalidate();
     robotPosSmoothCache.invalidate();
+    userSettingsCache.invalidate();
 }
 
 // -- Action command convenience methods --------------------------------------
@@ -613,6 +631,14 @@ bool NeatoSerial::setMotorSideBrush(bool on, int powerMw, std::function<void(boo
                         PRIORITY_MEDIUM);
             },
             PRIORITY_MEDIUM);
+}
+
+// -- User settings -----------------------------------------------------------
+
+bool NeatoSerial::setUserSetting(const String& key, const String& value, std::function<void(bool)> callback) {
+    userSettingsCache.invalidate();
+    String cmd = String(CMD_SET_USER_SETTINGS) + " " + key + " " + value;
+    return enqueue(cmd, wrapAction(callback));
 }
 
 // -- Power control -----------------------------------------------------------

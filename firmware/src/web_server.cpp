@@ -87,6 +87,7 @@ void WebServer::registerApiRoutes() {
     registerGetRoute("/api/state", neato, &NeatoSerial::getState, {});
     registerGetRoute("/api/error", neato, &NeatoSerial::getErr, {});
     registerGetRoute("/api/lidar", neato, &NeatoSerial::getLdsScan, {});
+    registerGetRoute("/api/user-settings", neato, &NeatoSerial::getUserSettings, {});
 
     // -- Action endpoints ----------------------------------------------------
     // All parameterized actions use query strings: resource URL identifies the
@@ -97,6 +98,7 @@ void WebServer::registerApiRoutes() {
     registerPostRoute("/api/testmode", neato, &NeatoSerial::testMode, {"enable"});
     registerPostRoute("/api/power", neato, &NeatoSerial::powerControl, {"action"});
     registerPostRoute("/api/lidar/rotate", neato, &NeatoSerial::setLdsRotation, {"enable"});
+    registerPostRoute("/api/user-settings", neato, &NeatoSerial::setUserSetting, {"key", "value"});
 
     // Debug serial endpoint — send arbitrary serial command, returns raw response.
     // Only available when debug mode is enabled in settings.

@@ -11,6 +11,7 @@ import type {
     SettingsData,
     StateData,
     SystemData,
+    UserSettingsData,
 } from "./types";
 
 async function parseError(res: Response): Promise<string> {
@@ -141,5 +142,8 @@ export const api = {
             [`sched${day}On`]: on,
         }),
     setScheduleEnabled: (on: boolean) => put<SettingsData>("/api/settings", { scheduleEnabled: on }),
+    getUserSettings: () => get<UserSettingsData>("/api/user-settings"),
+    setUserSetting: (key: string, value: string) =>
+        post(`/api/user-settings?key=${encodeURIComponent(key)}&value=${encodeURIComponent(value)}`),
     sendSerial: (cmd: string) => sendSerial(cmd),
 };

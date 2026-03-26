@@ -663,6 +663,11 @@ body {
     overflow: hidden;
 }
 
+.settings-category.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
 .settings-category-header {
     display: flex;
     align-items: center;

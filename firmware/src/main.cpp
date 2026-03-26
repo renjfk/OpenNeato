@@ -151,7 +151,7 @@ void setup() {
     // Initialize data logger (LittleFS, serial command hook)
     // Note: WiFi/OTA events buffered in memory above get flushed once LittleFS mounts here.
     LOG("BOOT", "Initializing data logger...");
-    dataLogger.setDebugCheck([&]() { return settingsManager.get().debug; });
+    dataLogger.setLogLevelCheck([&]() { return settingsManager.get().logLevel; });
     dataLogger.begin();
 
     // Fetch robot time as fallback clock

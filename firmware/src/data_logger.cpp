@@ -168,8 +168,10 @@ void DataLogger::tick() {
         }
     }
 
-    // Enforce space and file count limits (one delete per loop iteration)
-    if (!compressing && !bulkDeletePending) {
+    // Enforce space and file count limits — throttled to once per 30s.
+    // Previously ran every 50ms tick, causing constant LittleFS directory scans
+    // that block the main loop and degrade serial response times.
+    if (!compressing && !bulkDeletePending && enforceLimitsTicker.elapsed(LOG_ENFORCE_LIMITS_MS)) {
         enforceLimits();
     }
 
@@ -233,10 +235,17 @@ void DataLogger::flushBuffer() {
         return;
     }
 
+    // Build a single string and write once to minimize LittleFS COW metadata
+    // updates. Previously each println() triggered a separate COW + B-tree
+    // update, causing 50-300ms stalls that blocked the UART state machine.
+    String batch;
+    batch.reserve(bufferBytes());
     for (const auto& line: writeBuffer) {
-        size_t written = f.println(line);
-        currentFileSize += written;
+        batch += line;
+        batch += '\n';
     }
+    size_t written = f.write(reinterpret_cast<const uint8_t *>(batch.c_str()), batch.length());
+    currentFileSize += written;
     f.close();
     writeBuffer.clear();
     lastFlushMs = millis();
@@ -409,6 +418,11 @@ void DataLogger::enforceLimits() {
 // -- Public logging methods --------------------------------------------------
 
 void DataLogger::logEvent(const String& type, const std::vector<Field>& fields) {
+    // Skip if logging is off — no filesystem I/O, no buffer growth.
+    // If logLevelCheck is not yet wired (null during early boot), default to off.
+    if (!logLevelCheck || logLevelCheck() == LOG_LEVEL_OFF)
+        return;
+
     String line = "{\"t\":" + String(static_cast<long>(sysMgr.now())) + ",\"typ\":\"" + type + "\",\"d\":{" +
                   fieldsToJsonInner(fields) + "}}";
     bufferLine(line);
@@ -509,10 +523,17 @@ void DataLogger::logBootEvent() {
 
 void DataLogger::onCommand(const String& cmd, CommandStatus status, unsigned long ms, const String& raw, int queueDepth,
                            size_t respBytes, unsigned long cacheAgeMs) {
+    int level = logLevelCheck ? logLevelCheck() : LOG_LEVEL_OFF;
+    if (level == LOG_LEVEL_OFF)
+        return;
+
     // Skip cache hits — they are memory lookups, not real serial I/O.
-    // Logging every cache hit is the dominant source of buffer churn during
-    // normal dashboard polling (GetState/GetErr every 2s from multiple consumers).
     if (cacheAgeMs > 0)
+        return;
+
+    // Info level: only log failures (timeouts, errors, queue_full, unsupported).
+    // Successful routine polls are noise at info level.
+    if (level == LOG_LEVEL_INFO && status == CMD_SUCCESS)
         return;
 
     // Convert status enum to string for JSON
@@ -541,13 +562,13 @@ void DataLogger::onCommand(const String& cmd, CommandStatus status, unsigned lon
             break;
     }
 
-    // Log command metadata; include raw response only when debug logging is enabled
+    // Log command metadata; include raw response only at debug level
     std::vector<Field> fields = {{"cmd", cmd, FIELD_STRING},
                                  {"status", statusStr, FIELD_STRING},
                                  {"ms", String(ms), FIELD_INT},
                                  {"q", String(queueDepth), FIELD_INT},
                                  {"bytes", String(respBytes), FIELD_INT}};
-    if (debugCheck && debugCheck())
+    if (level >= LOG_LEVEL_DEBUG)
         fields.push_back({"resp", raw, FIELD_STRING});
     logEvent("command", fields);
 }

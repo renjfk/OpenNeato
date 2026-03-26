@@ -29,11 +29,17 @@ Three top-level components: `firmware/` (ESP32 C/C++), `frontend/` (Preact SPA),
 
 ### Data Logging
 
+Logging is controlled by `logLevel` in settings (0=off, 1=info, 2=debug). Default
+is **off** — nothing written to LittleFS. Both info and debug auto-revert to off
+after a timeout (1 hour / 10 minutes) to prevent forgotten logging from degrading
+serial performance via LittleFS COW overhead.
+
 All significant events must be logged via `DataLogger` (injected by reference).
 `logEvent` is private — use typed public helpers (`logRequest`, `logWifi`, `logOta`,
 `logNtp`, `logGenericEvent`, `logNotification`). When adding a new manager that
 needs logging, add a new typed helper following the existing pattern. Log both
-success and failure outcomes.
+success and failure outcomes. At info level, only failures and state transitions
+are logged; at debug level, all serial commands including raw responses are included.
 
 ### Filesystem and Flash Wear
 

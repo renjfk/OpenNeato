@@ -342,9 +342,18 @@ void CleaningHistory::bufferLine(const String& line) {
 void CleaningHistory::flushWriteBuffer() {
     if (writeBuffer.empty() || !activeFile)
         return;
+    // Build a single string and write once to minimize LittleFS COW metadata updates
+    String batch;
+    size_t total = 0;
     for (const auto& line: writeBuffer) {
-        activeFile.println(line);
+        total += line.length() + 1;
     }
+    batch.reserve(total);
+    for (const auto& line: writeBuffer) {
+        batch += line;
+        batch += '\n';
+    }
+    activeFile.write(reinterpret_cast<const uint8_t *>(batch.c_str()), batch.length());
     activeFile.flush();
     writeBuffer.clear();
     lastFlushMs = millis();

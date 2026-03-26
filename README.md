@@ -49,7 +49,8 @@ port, giving you a local web interface that works without any external dependenc
   is available on GitHub
 - **Settings page** for hostname, timezone, motor presets, notification topics, UART pins, theme (dark/light/auto), and
   more
-- **Event logging** with compressed JSONL files on LittleFS, browsable and downloadable from the UI
+- **Event logging** with configurable log levels (off/info/debug), compressed JSONL files on LittleFS, browsable and
+  downloadable from the UI; logging is off by default to minimize flash wear
 - **Factory reset** via 5-second button hold on the ESP32 or from the settings page
 - **Robot clock sync** — pushes NTP time to the robot automatically, re-syncs every 4 hours
 - **Flash tool** — standalone CLI that auto-detects the USB port, downloads the correct firmware from GitHub Releases,

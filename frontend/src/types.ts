@@ -43,7 +43,7 @@ export interface SystemData {
 // Per-day schedule fields: sched{0-6}Hour, sched{0-6}Min, sched{0-6}On (Mon=0..Sun=6)
 export interface SettingsData {
     tz: string;
-    debug: boolean;
+    logLevel: number; // 0=off, 1=info, 2=debug
     wifiTxPower: number; // 0.25 dBm units (e.g. 34 = 8.5 dBm)
     uartTxPin: number;
     uartRxPin: number;

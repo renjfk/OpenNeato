@@ -96,6 +96,7 @@ enum CommandStatus {
 #define LOG_CURRENT_FILE "/log/current.jsonl"
 #define LOG_FLUSH_INTERVAL_MS 30000 // Flush write buffer to filesystem every 30 seconds (reduces flash wear)
 #define LOG_FLUSH_MAX_LINES 128 // Also flush when buffer reaches this many lines
+#define LOG_ENFORCE_LIMITS_MS 30000 // Check log dir size/count limits every 30s (not every 50ms tick)
 
 // NVS (Non-Volatile Storage) — single shared namespace for all settings
 #define NVS_NAMESPACE "neato"
@@ -109,8 +110,17 @@ enum CommandStatus {
 
 // NVS keys — Settings
 #define NVS_KEY_HOSTNAME "hostname"
-#define NVS_KEY_DEBUG "debug"
-#define DEBUG_AUTO_OFF_MS 600000 // Auto-disable debug mode after 10 minutes to prevent forgotten verbose logging
+#define NVS_KEY_LOG_LEVEL "log_level"
+#define NVS_KEY_DEBUG "debug" // TODO: Remove after v0.5 — legacy key, migrated to log_level on first boot
+#define LOG_LEVEL_AUTO_OFF_DEBUG_MS 600000 // Auto-revert debug -> off after 10 minutes
+#define LOG_LEVEL_AUTO_OFF_INFO_MS 3600000 // Auto-revert info -> off after 1 hour
+
+// Log levels — controls what gets written to LittleFS. Default off to minimize
+// flash wear. LittleFS copy-on-write metadata updates on every write stall
+// the main loop and degrade serial response times as storage fills up.
+#define LOG_LEVEL_OFF 0 // Nothing written to LittleFS (default)
+#define LOG_LEVEL_INFO 1 // Errors, state transitions, boot, wifi, ota, ntp, cleaning events, notifications
+#define LOG_LEVEL_DEBUG 2 // Everything in Info + all serial commands + raw responses
 #define NVS_KEY_WIFI_TX_POWER "wifi_tx_pwr"
 #define NVS_KEY_UART_TX_PIN "uart_tx_pin"
 #define NVS_KEY_UART_RX_PIN "uart_rx_pin"

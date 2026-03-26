@@ -64,6 +64,7 @@ private:
     NeatoSerial& serial;
     bool active = false;
     bool enabling = false; // Transition in progress (enable sequence)
+    unsigned long enablingStartMs = 0; // millis() when enable() started (for timeout recovery)
     bool disabling = false; // Transition in progress (disable sequence)
 
     // Current motor state (to avoid redundant commands on toggle)

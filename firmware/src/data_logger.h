@@ -98,10 +98,11 @@ public:
     void logGenericEvent(const String& category, const std::vector<Field>& extra = {});
     void logNotification(const String& category, const String& message, bool success);
 
-    // Debug mode check — when set and returns true, sensor payloads are
-    // included in request log entries. Wired by main.cpp to SettingsManager.
-    using DebugCheck = std::function<bool()>;
-    void setDebugCheck(DebugCheck check) { debugCheck = check; }
+    // Log level check — returns current log level from SettingsManager.
+    // 0=off (no logging), 1=info (events only), 2=debug (all commands + raw responses).
+    // Wired by main.cpp to SettingsManager.
+    using LogLevelCheck = std::function<int()>;
+    void setLogLevelCheck(LogLevelCheck check) { logLevelCheck = check; }
 
     // -- Log file management (for API) --------------------------------------
 
@@ -115,7 +116,7 @@ private:
 
     NeatoSerial& neato;
     SystemManager& sysMgr;
-    DebugCheck debugCheck;
+    LogLevelCheck logLevelCheck;
 
     void logEvent(const String& type, const std::vector<Field>& fields);
 
@@ -153,6 +154,7 @@ private:
     bool compressStep(); // Returns true when compression is complete
 
     void enforceLimits();
+    Ticker enforceLimitsTicker; // Throttle enforceLimits to once per 30s instead of every 50ms tick
 
     // -- Deferred bulk delete ------------------------------------------------
     bool bulkDeletePending = false;

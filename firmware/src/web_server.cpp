@@ -98,17 +98,11 @@ void WebServer::registerApiRoutes() {
     registerPostRoute("/api/power", neato, &NeatoSerial::powerControl, {"action"});
     registerPostRoute("/api/lidar/rotate", neato, &NeatoSerial::setLdsRotation, {"enable"});
 
-    // Debug serial endpoint — send arbitrary serial command, returns raw response.
-    // Only available when debug mode is enabled in settings.
+    // Serial endpoint — send arbitrary serial command, returns raw response.
+    // Always available (no debug gate — useful for diagnostics without enabling verbose logging).
     server.on("/api/serial", HTTP_POST, [this](AsyncWebServerRequest *request) {
         lastApiActivity = millis();
         unsigned long startMs = lastApiActivity;
-
-        if (!settingsMgr.get().debug) {
-            logger.logRequest(HTTP_POST, "/api/serial", 403, millis() - startMs);
-            sendError(request, 403, "debug mode disabled");
-            return;
-        }
 
         if (!request->hasParam("cmd")) {
             logger.logRequest(HTTP_POST, "/api/serial", 400, millis() - startMs);

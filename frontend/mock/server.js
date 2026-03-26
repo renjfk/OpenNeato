@@ -239,7 +239,7 @@ const state = {
     lidarLowQuality: false,
     lidarSlowRotation: false,
     tz: "UTC0",
-    debug: false,
+    logLevel: 0,
     wifiTxPower: 60, // 15 dBm in 0.25 dBm units
     uartTxPin: 3,
     uartRxPin: 4,
@@ -686,7 +686,7 @@ const routes = {
         const s = {};
         const keys = [
             "tz",
-            "debug",
+            "logLevel",
             "wifiTxPower",
             "uartTxPin",
             "uartRxPin",
@@ -896,7 +896,7 @@ const handleRequest = async (req, res) => {
             const data = JSON.parse(body);
             await new Promise((r) => setTimeout(r, rand(300, 600)));
             if (data.tz !== undefined) state.tz = data.tz;
-            if (data.debug !== undefined) state.debug = data.debug;
+            if (data.logLevel !== undefined) state.logLevel = data.logLevel;
             if (data.wifiTxPower !== undefined) state.wifiTxPower = data.wifiTxPower;
             const pinsChanged =
                 (data.uartTxPin !== undefined && data.uartTxPin !== state.uartTxPin) ||
@@ -930,7 +930,7 @@ const handleRequest = async (req, res) => {
             const s = {};
             const keys = [
                 "tz",
-                "debug",
+                "logLevel",
                 "wifiTxPower",
                 "uartTxPin",
                 "uartRxPin",
@@ -960,9 +960,8 @@ const handleRequest = async (req, res) => {
         }
     }
 
-    // Debug serial endpoint — gated on debug mode
+    // Serial endpoint — always available (no log level gate)
     if (req.method === "POST" && path === "/api/serial") {
-        if (!state.debug) return sendError(res, "debug mode disabled", 403);
         const cmd = query.cmd;
         if (!cmd) return sendError(res, "missing cmd", 400);
         // Simulate serial response with a delay

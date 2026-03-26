@@ -12,10 +12,21 @@ SettingsManager::SettingsManager(Preferences& prefs) : prefs(prefs) {}
 
 // -- Lifecycle ---------------------------------------------------------------
 
+static const char *logLevelStr(int level) {
+    switch (level) {
+        case LOG_LEVEL_INFO:
+            return "info";
+        case LOG_LEVEL_DEBUG:
+            return "debug";
+        default:
+            return "off";
+    }
+}
+
 void SettingsManager::begin() {
     load();
-    LOG("SETTINGS", "Loaded: hostname=%s tz=%s debug=%s txPower=%d (%.1f dBm) uart=TX%d/RX%d sched=%s",
-        current.hostname.c_str(), current.tz.c_str(), current.debug ? "true" : "false", current.wifiTxPower,
+    LOG("SETTINGS", "Loaded: hostname=%s tz=%s logLevel=%s txPower=%d (%.1f dBm) uart=TX%d/RX%d sched=%s",
+        current.hostname.c_str(), current.tz.c_str(), logLevelStr(current.logLevel), current.wifiTxPower,
         current.wifiTxPower * 0.25f, current.uartTxPin, current.uartRxPin, current.scheduleEnabled ? "on" : "off");
 }
 
@@ -24,9 +35,21 @@ void SettingsManager::begin() {
 void SettingsManager::load() {
     current.hostname = prefs.getString(NVS_KEY_HOSTNAME, DEFAULT_HOSTNAME);
     current.tz = prefs.getString(NVS_KEY_TIMEZONE, NTP_DEFAULT_TZ);
-    current.debug = prefs.getBool(NVS_KEY_DEBUG, false);
-    if (current.debug)
-        debugEnabledAt = millis(); // Start auto-expire timer for persisted debug state
+
+    // TODO: Remove this migration block after v0.5 — all devices will have migrated by then.
+    // Migrate legacy "debug" bool to "log_level" int on first boot after upgrade.
+    // Old firmware stored debug=true/false; new firmware uses logLevel 0/1/2.
+    if (prefs.isKey(NVS_KEY_DEBUG)) {
+        bool oldDebug = prefs.getBool(NVS_KEY_DEBUG, false);
+        current.logLevel = oldDebug ? LOG_LEVEL_DEBUG : LOG_LEVEL_OFF;
+        prefs.remove(NVS_KEY_DEBUG);
+        prefs.putInt(NVS_KEY_LOG_LEVEL, current.logLevel);
+        LOG("SETTINGS", "Migrated debug=%s -> logLevel=%s", oldDebug ? "true" : "false", logLevelStr(current.logLevel));
+    } else {
+        current.logLevel = prefs.getInt(NVS_KEY_LOG_LEVEL, LOG_LEVEL_OFF);
+    }
+    if (current.logLevel > LOG_LEVEL_OFF)
+        logLevelEnabledAt = millis(); // Start auto-expire timer for persisted log level
     current.wifiTxPower = prefs.getInt(NVS_KEY_WIFI_TX_POWER, WIFI_DEFAULT_TX_POWER);
     current.uartTxPin = prefs.getInt(NVS_KEY_UART_TX_PIN, NEATO_DEFAULT_TX_PIN);
     current.uartRxPin = prefs.getInt(NVS_KEY_UART_RX_PIN, NEATO_DEFAULT_RX_PIN);
@@ -51,7 +74,7 @@ void SettingsManager::load() {
 void SettingsManager::save() {
     prefs.putString(NVS_KEY_HOSTNAME, current.hostname);
     prefs.putString(NVS_KEY_TIMEZONE, current.tz);
-    prefs.putBool(NVS_KEY_DEBUG, current.debug);
+    prefs.putInt(NVS_KEY_LOG_LEVEL, current.logLevel);
     prefs.putInt(NVS_KEY_WIFI_TX_POWER, current.wifiTxPower);
     prefs.putInt(NVS_KEY_UART_TX_PIN, current.uartTxPin);
     prefs.putInt(NVS_KEY_UART_RX_PIN, current.uartRxPin);
@@ -76,13 +99,18 @@ void SettingsManager::save() {
 // -- Debug auto-expire -------------------------------------------------------
 
 const Settings& SettingsManager::get() {
-    // Auto-disable debug mode after timeout to prevent forgotten verbose logging
-    // that inflates log files (raw serial responses can be kilobytes per entry)
-    if (current.debug && debugEnabledAt > 0 && millis() - debugEnabledAt >= DEBUG_AUTO_OFF_MS) {
-        current.debug = false;
-        debugEnabledAt = 0;
-        save();
-        LOG("SETTINGS", "Debug auto-disabled after timeout");
+    // Auto-revert log level to off after timeout to prevent forgotten verbose
+    // logging that fills flash and degrades serial performance via LittleFS COW.
+    if (current.logLevel > LOG_LEVEL_OFF && logLevelEnabledAt > 0) {
+        unsigned long timeout =
+                (current.logLevel >= LOG_LEVEL_DEBUG) ? LOG_LEVEL_AUTO_OFF_DEBUG_MS : LOG_LEVEL_AUTO_OFF_INFO_MS;
+        if (millis() - logLevelEnabledAt >= timeout) {
+            LOG("SETTINGS", "Log level auto-reverted: %s -> off (after %lu ms)", logLevelStr(current.logLevel),
+                timeout);
+            current.logLevel = LOG_LEVEL_OFF;
+            logLevelEnabledAt = 0;
+            save();
+        }
     }
     return current;
 }
@@ -122,11 +150,16 @@ ApplyResult SettingsManager::apply(const String& json) {
         LOG("SETTINGS", "Timezone -> %s", current.tz.c_str());
     }
 
-    if (incoming.debug != current.debug) {
-        current.debug = incoming.debug;
+    if (incoming.logLevel != current.logLevel) {
+        int clamped = constrain(incoming.logLevel, LOG_LEVEL_OFF, LOG_LEVEL_DEBUG);
+        current.logLevel = clamped;
         changed = true;
-        debugEnabledAt = current.debug ? millis() : 0;
-        LOG("SETTINGS", "Debug -> %s%s", current.debug ? "on" : "off", current.debug ? " (auto-off in 10 min)" : "");
+        logLevelEnabledAt = (current.logLevel > LOG_LEVEL_OFF) ? millis() : 0;
+        unsigned long timeout = (current.logLevel >= LOG_LEVEL_DEBUG)  ? LOG_LEVEL_AUTO_OFF_DEBUG_MS
+                                : (current.logLevel == LOG_LEVEL_INFO) ? LOG_LEVEL_AUTO_OFF_INFO_MS
+                                                                       : 0;
+        LOG("SETTINGS", "Log level -> %s%s", logLevelStr(current.logLevel),
+            timeout > 0 ? String(" (auto-off in " + String(timeout / 60000) + " min)").c_str() : "");
     }
 
     if (incoming.wifiTxPower != current.wifiTxPower) {
@@ -257,7 +290,7 @@ std::vector<Field> Settings::toFields() const {
     std::vector<Field> f = {
             {"hostname", hostname, FIELD_STRING},
             {"tz", tz, FIELD_STRING},
-            {"debug", debug ? "true" : "false", FIELD_BOOL},
+            {"logLevel", String(logLevel), FIELD_INT},
             {"wifiTxPower", String(wifiTxPower), FIELD_INT},
             {"uartTxPin", String(uartTxPin), FIELD_INT},
             {"uartRxPin", String(uartRxPin), FIELD_INT},
@@ -295,8 +328,8 @@ bool Settings::fromFields(const std::vector<Field>& fields) {
         tz = f->value;
         applied = true;
     }
-    if ((f = findField(fields, "debug")) && f->type == FIELD_BOOL) {
-        debug = (f->value == "true");
+    if ((f = findField(fields, "logLevel")) && f->type == FIELD_INT) {
+        logLevel = f->value.toInt();
         applied = true;
     }
     if ((f = findField(fields, "wifiTxPower")) && f->type == FIELD_INT) {

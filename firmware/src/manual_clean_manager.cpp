@@ -16,6 +16,7 @@ bool ManualCleanManager::enable(bool doEnable, std::function<void(bool)> callbac
         }
 
         enabling = true;
+        enablingStartMs = millis();
         LOG("MANUAL", "Enabling manual mode...");
 
         // Step 1: Enter TestMode
@@ -198,16 +199,27 @@ bool ManualCleanManager::setMotors(bool brush, bool vacuum, bool sideBrush, std:
 // -- Loop (safety polling + watchdog) ----------------------------------------
 
 void ManualCleanManager::tick() {
+    // Recover from stuck enabling state — if the enable callback never fires
+    // (e.g. serial queue was full when TestMode/LDS commands were enqueued),
+    // reset after 10s so the user can retry instead of being locked out forever.
+    if (enabling && enablingStartMs > 0 && millis() - enablingStartMs >= 10000) {
+        LOG("MANUAL", "Enable timeout — resetting enabling flag after 10s");
+        enabling = false;
+        enablingStartMs = 0;
+    }
+
     if (!active)
         return;
 
-    // Safety polling — bumpers
-    if (safetyTicker.elapsed(MANUAL_SAFETY_POLL_MS)) {
+    // Safety polling — bumpers (skip if serial queue is more than half full
+    // to prevent queue saturation that blocks all other commands including
+    // TestMode entry and move commands — root cause of #18)
+    if (safetyTicker.elapsed(MANUAL_SAFETY_POLL_MS) && serial.queueDepth() <= NEATO_QUEUE_MAX_SIZE / 2) {
         pollBumpers();
     }
 
     // Stall detection — poll motor odometry while wheels are moving
-    if (wheelsMoving && stallTicker.elapsed(MANUAL_STALL_POLL_MS)) {
+    if (wheelsMoving && stallTicker.elapsed(MANUAL_STALL_POLL_MS) && serial.queueDepth() <= NEATO_QUEUE_MAX_SIZE / 2) {
         pollStall();
     }
 

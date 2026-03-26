@@ -21,7 +21,7 @@ Everything you need to set up, configure, and troubleshoot OpenNeato.
     - [Verifying the Connection](#verifying-the-connection)
     - [Quick Commands](#quick-commands)
 - [Troubleshooting](#troubleshooting)
-    - [Enabling Debug Mode](#enabling-debug-mode)
+    - [Enabling Logging](#enabling-logging)
     - [Collecting Logs](#collecting-logs)
     - [Downloading Cleaning Maps](#downloading-cleaning-maps)
     - [Factory Reset](#factory-reset)
@@ -314,17 +314,23 @@ Once connected, you can type single-key commands in the serial monitor at any ti
 If something isn't working as expected, use the built-in diagnostics tools to collect
 information before creating an issue.
 
-### Enabling Debug Mode
+### Enabling Logging
 
-Go to **Settings -> Diagnostics** and toggle **Debug mode** on. This enables:
+Go to **Settings -> Diagnostics** and set **Log Level**:
 
-- Verbose event logging (sensor payloads, raw serial responses)
-- The raw serial console endpoint (`POST /api/serial?cmd=<command>`) for direct robot
-  communication
+- **Off** (default) — no events written to storage, zero flash wear
+- **Info** — logs errors, timeouts, state transitions, boot, WiFi, OTA, NTP, cleaning events,
+  and notifications. Auto-reverts to off after 1 hour.
+- **Debug** — everything in Info plus all serial commands with raw responses. Auto-reverts to
+  off after 10 minutes.
+
+The raw serial console endpoint (`POST /api/serial?cmd=<command>`) for direct robot
+communication is always available regardless of log level.
 
 > [!NOTE]
-> Debug mode auto-expires after 10 minutes to prevent forgotten verbose logging from filling
-> up storage. You can re-enable it if you need more time.
+> Logging writes to flash storage using LittleFS. Higher levels generate more writes, which
+> increases flash wear and can slow serial communication as the filesystem fills up. Use Info
+> or Debug only when actively diagnosing an issue.
 
 ### Collecting Logs
 
@@ -369,8 +375,8 @@ Two ways to factory reset:
 
 Before creating an issue on GitHub:
 
-1. **Enable debug mode** (Settings -> Diagnostics -> Debug mode)
-2. **Reproduce the problem** while debug mode is active
+1. **Set log level to Debug** (Settings -> Diagnostics -> Log Level -> Debug)
+2. **Reproduce the problem** while logging is active
 3. **Download the logs** (Settings -> Diagnostics -> Logs)
 4. **If the issue involves cleaning**: download the relevant cleaning session from History
 5. Create an issue at [github.com/renjfk/OpenNeato/issues](https://github.com/renjfk/OpenNeato/issues)

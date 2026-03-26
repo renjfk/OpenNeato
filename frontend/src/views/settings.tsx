@@ -56,8 +56,8 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
     const {
         tz,
         setTz,
-        debug,
-        setDebug,
+        logLevel,
+        setLogLevel,
         wifiTxPower,
         setWifiTxPower,
         uartTxPin,
@@ -739,19 +739,22 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
 
                 <SettingsCategory title="Diagnostics" icon={stethoscopeSvg}>
                     <div class="settings-section">
-                        <div class="settings-section-title">Diagnostics</div>
-                        <div class="settings-toggle-row">
-                            <div class="settings-toggle-label">
-                                <span class="settings-toggle-title">Debug mode</span>
-                                <span class="settings-toggle-desc">Verbose logging and serial console endpoint</span>
-                            </div>
-                            <button
-                                type="button"
-                                class={`settings-toggle${debug ? " on" : ""}`}
-                                onClick={() => setDebug(!debug)}
+                        <div class="settings-section-title">Log Level</div>
+                        <div class="settings-tz-select-wrap">
+                            <select
+                                class="settings-tz-select"
+                                value={logLevel}
+                                onChange={(e) => setLogLevel(parseInt((e.target as HTMLSelectElement).value, 10))}
                                 disabled={saving}
-                                aria-label="Toggle debug mode"
-                            />
+                            >
+                                <option value={0}>Off (default)</option>
+                                <option value={1}>Info (auto-off after 1 hour)</option>
+                                <option value={2}>Debug (auto-off after 10 min)</option>
+                            </select>
+                        </div>
+                        <div class="settings-robot-time">
+                            Logging writes to flash storage. Higher levels increase wear and can slow serial
+                            communication.
                         </div>
                     </div>
                     <div class="settings-section">

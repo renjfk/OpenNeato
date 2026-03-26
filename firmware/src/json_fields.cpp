@@ -55,6 +55,38 @@ String fieldsToJson(const std::vector<Field>& fields) {
     return "{" + fieldsToJsonInner(fields) + "}";
 }
 
+bool isValidJsonObject(const String& s) {
+    int len = static_cast<int>(s.length());
+    if (len < 2 || s[0] != '{' || s[len - 1] != '}')
+        return false;
+    // Walk the string checking brace/bracket balance and string quoting.
+    // This catches corrupted separator characters (e.g. '.' instead of ',')
+    // that produce unbalanced or structurally invalid JSON.
+    int depth = 0;
+    bool inString = false;
+    for (int i = 0; i < len; i++) {
+        char c = s[i];
+        if (inString) {
+            if (c == '\\') {
+                i++; // skip escaped char
+            } else if (c == '"') {
+                inString = false;
+            }
+            continue;
+        }
+        if (c == '"') {
+            inString = true;
+        } else if (c == '{' || c == '[') {
+            depth++;
+        } else if (c == '}' || c == ']') {
+            depth--;
+            if (depth < 0)
+                return false;
+        }
+    }
+    return depth == 0 && !inString;
+}
+
 // -- JSON parsing (inverse of serialization) ---------------------------------
 
 // Skip whitespace characters (space, tab, CR, LF)

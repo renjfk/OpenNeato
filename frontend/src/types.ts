@@ -181,6 +181,7 @@ export interface HistoryFileInfo {
     size: number;
     compressed: boolean;
     recording: boolean;
+    corrupted?: boolean;
     session: MapSession | null;
     summary: MapSummary | null;
 }

@@ -1,4 +1,5 @@
 import { useCallback, useState } from "preact/hooks";
+import alertSvg from "../../assets/icons/alert.svg?raw";
 import boltSvg from "../../assets/icons/bolt.svg?raw";
 import clockSvg from "../../assets/icons/clock.svg?raw";
 import downloadSvg from "../../assets/icons/download.svg?raw";
@@ -13,13 +14,59 @@ interface SessionCardProps {
     session: MapSession | null;
     summary: MapSummary | null;
     filename: string;
+    size: number;
     index: number;
     active?: boolean;
+    corrupted?: boolean;
     onSelect: (i: number) => void;
     onDelete: (i: number) => void;
 }
 
-function SessionCard({ session, summary, filename, index, active, onSelect, onDelete }: SessionCardProps) {
+function formatSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    return `${(bytes / 1024).toFixed(1)} KB`;
+}
+
+function SessionCard({
+    session,
+    summary,
+    filename,
+    size,
+    index,
+    active,
+    corrupted,
+    onSelect,
+    onDelete,
+}: SessionCardProps) {
+    if (corrupted) {
+        return (
+            <div class="history-session-row corrupted">
+                <div class="history-session-card history-session-corrupted">
+                    <div class="history-session-icon corrupted">
+                        <Icon svg={alertSvg} />
+                    </div>
+                    <div class="history-session-body">
+                        <div class="history-session-header">
+                            <span class="history-session-mode">Corrupted</span>
+                            <span class="history-session-date">{formatSize(size)}</span>
+                        </div>
+                        <div class="history-session-stats corrupted">
+                            <span>{filename}</span>
+                        </div>
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    class="history-session-delete"
+                    onClick={() => onDelete(index)}
+                    aria-label="Delete session"
+                >
+                    <Icon svg={trashSvg} />
+                </button>
+            </div>
+        );
+    }
+
     const info = modeInfo(session?.mode ?? "");
     return (
         <div class={`history-session-row${active ? " running" : ""}`}>
@@ -139,8 +186,10 @@ export function HistoryListView({
                     session={f.session}
                     summary={f.summary}
                     filename={f.name}
+                    size={f.size}
                     index={i}
                     active={f.recording}
+                    corrupted={f.corrupted}
                     onSelect={onSelect}
                     onDelete={() => setConfirmTarget(`session-${i}`)}
                 />

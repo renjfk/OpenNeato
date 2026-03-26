@@ -406,16 +406,15 @@ void WebServer::registerMapRoutes() {
                 json += R"({"name":")" + s.name + R"(","size":)" + String(static_cast<unsigned long>(s.size)) +
                         R"(,"compressed":)" + String(s.compressed ? "true" : "false") + R"(,"recording":)" +
                         String(s.recording ? "true" : "false");
-                if (s.session.length() > 0) {
-                    json += ",\"session\":" + s.session;
-                } else {
-                    json += ",\"session\":null";
-                }
-                if (s.summary.length() > 0) {
-                    json += ",\"summary\":" + s.summary;
-                } else {
-                    json += ",\"summary\":null";
-                }
+                // Validate raw JSON before embedding — corrupted heatshrink
+                // decompression can produce malformed text that breaks the list
+                bool sessionOk = s.session.length() > 0 && isValidJsonObject(s.session);
+                bool summaryOk = s.summary.length() > 0 && isValidJsonObject(s.summary);
+                bool corrupted = (s.session.length() > 0 && !sessionOk) || (s.summary.length() > 0 && !summaryOk);
+                json += sessionOk ? ",\"session\":" + s.session : ",\"session\":null";
+                json += summaryOk ? ",\"summary\":" + s.summary : ",\"summary\":null";
+                if (corrupted)
+                    json += ",\"corrupted\":true";
                 json += "}";
             }
             json += "]";

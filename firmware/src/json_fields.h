@@ -35,6 +35,11 @@ std::vector<Field> fieldsFromJson(const String& json);
 // Look up a field by key. Returns nullptr if not found.
 const Field *findField(const std::vector<Field>& fields, const char *key);
 
+// Quick structural validation: checks balanced braces, starts with '{', ends with '}'.
+// Does NOT validate full JSON grammar — just enough to reject obviously corrupted
+// strings before embedding them as raw values in a larger JSON response.
+bool isValidJsonObject(const String& s);
+
 // Base struct for JSON-serializable types.
 // Subclasses implement toFields() for serialization and fromFields() for deserialization.
 struct JsonSerializable {

@@ -217,6 +217,11 @@ body {
     transform: scale(0.85);
 }
 
+.header-right-btn:disabled {
+    opacity: 0.3;
+    pointer-events: none;
+}
+
 /* Hero area */
 
 .hero-area {
@@ -244,6 +249,50 @@ body {
     width: 100%;
     height: 100%;
     filter: drop-shadow(1px 0 0 #fff) drop-shadow(-1px 0 0 #fff) drop-shadow(0 1px 0 #fff) drop-shadow(0 -1px 0 #fff);
+}
+
+/* Gate hero — shown when robot is identifying or unsupported */
+
+.gate-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.gate-robot {
+    position: static;
+    width: 120px;
+    height: 120px;
+    opacity: 0.15;
+}
+
+.gate-message {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.gate-message > span svg {
+    width: 32px;
+    height: 32px;
+    color: var(--amber);
+    margin-bottom: 8px;
+}
+
+.gate-message h2 {
+    margin: 0 0 8px;
+    font-size: 18px;
+    color: var(--text-primary);
+}
+
+.gate-message p {
+    margin: 0;
+    line-height: 1.5;
+    max-width: 320px;
 }
 
 /* Info cards */
@@ -544,49 +593,6 @@ body {
 
 .conn-error span {
     display: flex;
-}
-
-/* Unsupported robot screen */
-
-.unsupported-screen {
-    text-align: center;
-    padding: 40px 24px;
-    color: var(--text-dim);
-    font-size: 14px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 80vh;
-}
-
-.unsupported-screen .unsupported-icon {
-    opacity: 0.15;
-    margin-bottom: 16px;
-}
-
-.unsupported-screen .unsupported-icon span svg {
-    width: 120px;
-    height: 120px;
-}
-
-.unsupported-screen > span svg {
-    width: 32px;
-    height: 32px;
-    color: var(--amber);
-    margin-bottom: 8px;
-}
-
-.unsupported-screen h2 {
-    margin: 0 0 8px;
-    font-size: 18px;
-    color: var(--text-primary);
-}
-
-.unsupported-screen p {
-    margin: 0;
-    line-height: 1.5;
-    max-width: 320px;
 }
 
 /* Settings page */

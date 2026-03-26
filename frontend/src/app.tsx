@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { api } from "./api";
-import alertSvg from "./assets/icons/alert.svg?raw";
-import robotSvg from "./assets/robot.svg?raw";
-import { Icon } from "./components/icon";
 import { Route, Router } from "./components/router";
 import { usePolling } from "./hooks/use-polling";
 import type { FirmwareVersion, ManualStatus, StateData } from "./types";
@@ -136,60 +133,42 @@ export function App() {
         setSideBrush(next);
     }, [brush, vacuum, sideBrush]);
 
-    // Show a loading screen while the firmware is still trying to identify the robot
-    // (GetVersion may need multiple retries if the robot is slow to boot).
-    if (!firmware.data || firmware.data.identifying) {
-        return (
-            <div class="unsupported-screen">
-                <div class="unsupported-icon">
-                    <Icon svg={robotSvg} />
-                </div>
-                <p>Connecting to robot...</p>
-            </div>
-        );
-    }
-
-    // Block the entire UI if the robot model is unsupported (SKey not computed).
-    // firmware.data.supported is false when GetVersion returned no usable serial
-    // number (e.g. XV-series, D8/D9/D10, or UART not connected).
-    if (!firmware.data.supported) {
-        return (
-            <div class="unsupported-screen">
-                <div class="unsupported-icon">
-                    <Icon svg={robotSvg} />
-                </div>
-                <Icon svg={alertSvg} />
-                <h2>Unsupported Robot</h2>
-                <p>
-                    OpenNeato requires a Neato Botvac D3, D4, D5, D6, or D7.
-                    <br />
-                    The connected robot could not be identified.
-                </p>
-            </div>
-        );
-    }
+    // When the robot is still identifying or unsupported, the dashboard shows a
+    // gate message in the hero area with action buttons disabled, but settings,
+    // logs, and other ESP32-only pages remain accessible so the user can fix
+    // UART pins, update firmware, or diagnose the issue (#14).
+    const robotReady = !!(firmware.data && !firmware.data.identifying && firmware.data.supported);
 
     return (
         <Router>
             <Route path="/">
-                <DashboardView firmware={firmware} state={state} isManual={isManual} updateInfo={updateInfo} />
+                <DashboardView
+                    firmware={firmware}
+                    state={state}
+                    isManual={isManual}
+                    updateInfo={updateInfo}
+                    robotReady={robotReady}
+                    identifying={!firmware.data || firmware.data.identifying}
+                />
             </Route>
             <Route path="/settings">
                 <SettingsView theme={theme} onThemeChange={setTheme} firmware={firmware.data} />
             </Route>
-            <Route path="/manual">
-                <ManualView
-                    isManual={isManual}
-                    status={manualStatus.data}
-                    brush={brush}
-                    vacuum={vacuum}
-                    sideBrush={sideBrush}
-                    onToggleBrush={toggleBrush}
-                    onToggleVacuum={toggleVacuum}
-                    onToggleSideBrush={toggleSideBrush}
-                    onToggleAll={toggleAll}
-                />
-            </Route>
+            {robotReady && (
+                <Route path="/manual">
+                    <ManualView
+                        isManual={isManual}
+                        status={manualStatus.data}
+                        brush={brush}
+                        vacuum={vacuum}
+                        sideBrush={sideBrush}
+                        onToggleBrush={toggleBrush}
+                        onToggleVacuum={toggleVacuum}
+                        onToggleSideBrush={toggleSideBrush}
+                        onToggleAll={toggleAll}
+                    />
+                </Route>
+            )}
             <Route path="/schedule">
                 <ScheduleView />
             </Route>

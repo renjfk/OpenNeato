@@ -111,9 +111,11 @@ interface DashboardViewProps {
     state: PollResult<StateData>;
     isManual: boolean;
     updateInfo: UpdateInfo | null;
+    robotReady: boolean;
+    identifying: boolean;
 }
 
-export function DashboardView({ firmware, state, isManual, updateInfo }: DashboardViewProps) {
+export function DashboardView({ firmware, state, isManual, updateInfo, robotReady, identifying }: DashboardViewProps) {
     const navigate = useNavigate();
     const charger = usePolling<ChargerData>(api.getCharger, 5000);
     const error = usePolling<ErrorData>(api.getError, 2000);
@@ -209,6 +211,7 @@ export function DashboardView({ firmware, state, isManual, updateInfo }: Dashboa
                         class="header-right-btn"
                         aria-label="Cleaning History"
                         onClick={() => navigate("/history")}
+                        disabled={!robotReady}
                     >
                         <Icon svg={historySvg} />
                     </button>
@@ -277,7 +280,26 @@ export function DashboardView({ firmware, state, isManual, updateInfo }: Dashboa
             <ErrorBannerStack errors={actionErrors} />
 
             {/* Hero area — robot right, cards left */}
-            {offline ? (
+            {!robotReady ? (
+                <div class="hero-area gate-hero">
+                    <div class="robot-float gate-robot">
+                        <Icon svg={robotSvg} />
+                    </div>
+                    {identifying ? (
+                        <p class="gate-message">Connecting to robot...</p>
+                    ) : (
+                        <div class="gate-message">
+                            <Icon svg={alertSvg} />
+                            <h2>Unsupported Robot</h2>
+                            <p>
+                                OpenNeato requires a Neato Botvac D3, D4, D5, D6, or D7.
+                                <br />
+                                The connected robot could not be identified.
+                            </p>
+                        </div>
+                    )}
+                </div>
+            ) : offline ? (
                 <div class="conn-error">
                     <Icon svg={wifiOffSvg} />
                     Unable to reach robot
@@ -334,7 +356,7 @@ export function DashboardView({ firmware, state, isManual, updateInfo }: Dashboa
                                 type="button"
                                 class={`action-btn primary${pending ? " pending" : ""}`}
                                 onClick={() => handleAction(isPaused ? api.cleanHouse : api.cleanPause)}
-                                disabled={offline || pending}
+                                disabled={!robotReady || offline || pending}
                             >
                                 <Icon svg={isPaused ? playSvg : pauseSvg} />
                                 {isPaused ? "Resume" : "Pause"}
@@ -343,7 +365,7 @@ export function DashboardView({ firmware, state, isManual, updateInfo }: Dashboa
                                 type="button"
                                 class={`action-btn${pending ? " pending" : ""}`}
                                 onClick={() => handleAction(api.cleanDock)}
-                                disabled={offline || pending}
+                                disabled={!robotReady || offline || pending}
                             >
                                 <Icon svg={dockSvg} />
                                 Dock
@@ -352,7 +374,7 @@ export function DashboardView({ firmware, state, isManual, updateInfo }: Dashboa
                                 type="button"
                                 class={`action-btn${pending ? " pending" : ""}`}
                                 onClick={() => handleAction(api.cleanStop)}
-                                disabled={offline || pending}
+                                disabled={!robotReady || offline || pending}
                             >
                                 <Icon svg={stopSvg} />
                                 Stop
@@ -365,7 +387,7 @@ export function DashboardView({ firmware, state, isManual, updateInfo }: Dashboa
                                 type="button"
                                 class={`action-btn primary${pending ? " pending" : ""}`}
                                 onClick={() => handleAction(api.cleanHouse)}
-                                disabled={offline || isDocking || isManual || pending || hasRobotError}
+                                disabled={!robotReady || offline || isDocking || isManual || pending || hasRobotError}
                             >
                                 <Icon svg={houseSvg} />
                                 House
@@ -374,7 +396,7 @@ export function DashboardView({ firmware, state, isManual, updateInfo }: Dashboa
                                 type="button"
                                 class={`action-btn${pending ? " pending" : ""}`}
                                 onClick={() => handleAction(api.cleanSpot)}
-                                disabled={offline || isDocking || isManual || pending || hasRobotError}
+                                disabled={!robotReady || offline || isDocking || isManual || pending || hasRobotError}
                             >
                                 <Icon svg={spotSvg} />
                                 Spot
@@ -393,7 +415,10 @@ export function DashboardView({ firmware, state, isManual, updateInfo }: Dashboa
                                             })
                                 }
                                 disabled={
-                                    offline || (pending && !isManual) || (hasRobotError && !isManual && !isDocking)
+                                    !robotReady ||
+                                    offline ||
+                                    (pending && !isManual) ||
+                                    (hasRobotError && !isManual && !isDocking)
                                 }
                             >
                                 <Icon svg={isDocking ? stopSvg : manualSvg} />

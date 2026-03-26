@@ -1882,29 +1882,6 @@ body {
     box-shadow: 0 0 8px rgba(52, 199, 89, 0.15);
 }
 
-.history-session-row.corrupted {
-    border-color: var(--red);
-    opacity: 0.7;
-}
-
-.history-session-corrupted {
-    cursor: default;
-}
-
-.history-session-icon.corrupted {
-    background: rgba(255, 69, 58, 0.1);
-}
-
-.history-session-icon.corrupted svg {
-    color: var(--red);
-}
-
-.history-session-stats.corrupted {
-    font-family: monospace;
-    font-size: 11px;
-    opacity: 0.6;
-}
-
 .history-running-badge {
     display: inline-block;
     font-size: 0.65rem;

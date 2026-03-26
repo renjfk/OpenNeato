@@ -772,17 +772,13 @@ const handleRequest = async (req, res) => {
                 } catch {}
             }
             const raw = `${lines.join("\n")}\n`;
-            // Simulate firmware-detected corruption: when fhc is active,
-            // the first completed session appears corrupted (session/summary null)
-            const corrupted = faults.historyCorrupt && summary !== null;
             return {
                 name,
                 size: Buffer.byteLength(raw),
                 compressed: name.endsWith(".hs"),
-                recording: !corrupted && summary === null,
-                ...(corrupted ? { corrupted: true } : {}),
-                session: corrupted ? null : session,
-                summary: corrupted ? null : summary,
+                recording: summary === null,
+                session,
+                summary,
             };
         });
         return jsonResponse(res, list);

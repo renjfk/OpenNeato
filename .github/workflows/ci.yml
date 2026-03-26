@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        env: [c3-debug, esp32-debug]
+        env: [c3-debug, s3-debug, esp32-debug]
     steps:
       - uses: actions/checkout@v4
 

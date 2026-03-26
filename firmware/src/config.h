@@ -25,6 +25,7 @@
 // Pin Configuration — boot/reset button and default UART pins vary by chip.
 // Original ESP32: BOOT is GPIO0, GPIO1/3 are the USB-UART bridge (U0TXD/U0RXD).
 // ESP32-C3: BOOT is GPIO9, GPIO1/3 are free GPIOs.
+// ESP32-S3: BOOT is GPIO0, GPIO19/20 are native USB — use free GPIOs for UART.
 #if CONFIG_IDF_TARGET_ESP32
 #define RESET_BUTTON_PIN 0
 #define NEATO_DEFAULT_TX_PIN 17
@@ -35,6 +36,11 @@
 #define NEATO_DEFAULT_TX_PIN 3
 #define NEATO_DEFAULT_RX_PIN 4
 #define MAX_GPIO_PIN 21
+#elif CONFIG_IDF_TARGET_ESP32S3
+#define RESET_BUTTON_PIN 0
+#define NEATO_DEFAULT_TX_PIN 17
+#define NEATO_DEFAULT_RX_PIN 18
+#define MAX_GPIO_PIN 48
 #else
 #error "Unsupported chip — add pin definitions for this target"
 #endif

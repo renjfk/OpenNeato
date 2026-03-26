@@ -12,7 +12,8 @@
         ],
         "includeDir": ".",
         "flags": [
-            "-I private"
+            "-I private",
+            "-std=gnu++17"
         ]
     }
 }

@@ -97,9 +97,10 @@ These are the **robot's** RX/TX labels, so you cross-connect to the ESP32:
 | TX        | ESP RX    | Robot sends data to ESP      |
 | GND       | GND       | Common ground                |
 
-The default TX/RX GPIOs depend on the chip (ESP32-C3: GPIO 3/4, original ESP32: GPIO 17/16)
-but are fully configurable from the web UI in **Settings -> Robot -> UART Pins** — so wire
-whichever GPIOs are convenient and update the setting to match.
+The default TX/RX GPIOs depend on the chip (ESP32-C3: GPIO 3/4, ESP32-S3: GPIO 17/18,
+original ESP32: GPIO 17/16) but are fully configurable from the web UI in
+**Settings -> Robot -> UART Pins** — so wire whichever GPIOs are convenient and update the
+setting to match.
 
 ### Wiring
 
@@ -362,7 +363,7 @@ Two ways to factory reset:
 
 1. **From the web UI**: Settings -> Device -> Factory Reset. Type `RESET` to confirm.
 2. **Hardware button**: Hold the BOOT button for 5 seconds (GPIO9 on ESP32-C3, GPIO0 on
-   original ESP32). The ESP32 will erase all settings and restart.
+   ESP32-S3 and original ESP32). The ESP32 will erase all settings and restart.
 
 > [!CAUTION]
 > Both methods erase everything — WiFi credentials, settings, logs, and cleaning history.

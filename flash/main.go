@@ -14,6 +14,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 )
 
 func main() {
@@ -111,6 +112,11 @@ func main() {
 			fatal("%v", err)
 		}
 		fmt.Println("Flash complete!")
+
+		// Wait for ESP32 to boot after hard reset before opening the serial
+		// monitor. Without this delay the monitor can open before the firmware
+		// prints its banner/menu, causing the user to see a blank terminal.
+		time.Sleep(2 * time.Second)
 	}
 
 	// Monitor

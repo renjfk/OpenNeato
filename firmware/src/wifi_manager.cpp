@@ -1,5 +1,6 @@
 #include "wifi_manager.h"
 #include "data_logger.h"
+#include <esp_task_wdt.h>
 #include <esp_wifi.h>
 
 WiFiManager::WiFiManager(Preferences& prefs, DataLogger& logger) :
@@ -281,10 +282,13 @@ bool WiFiManager::connectToWiFi(const String& ssid, const String& password) {
     applyTxPower(); // Set before WiFi.begin — improves association reliability
     WiFi.begin(ssid.c_str(), password.c_str());
 
-    // Wait up to 30 seconds (60 attempts x 500ms)
+    // Wait up to 30 seconds (60 attempts x 500ms).
+    // Feed the task watchdog each iteration so slow associations (mesh APs,
+    // weak signal) don't trigger a TWDT reset when called from loop().
     unsigned long connectStart = millis();
     int attempts = 0;
     while (WiFi.status() != WL_CONNECTED && attempts < 60) {
+        esp_task_wdt_reset();
         delay(500);
         attempts++;
     }
@@ -336,9 +340,11 @@ void WiFiManager::tick() {
     delay(100);
     WiFi.begin(ssid.c_str(), password.c_str());
 
-    // Brief non-blocking wait (don't block loop for 30s like initial connect)
+    // Brief wait — shorter than initial connect but still blocks loop().
+    // Feed the watchdog each iteration to stay within the TWDT window.
     unsigned long start = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - start < 5000) {
+        esp_task_wdt_reset();
         delay(100);
     }
 

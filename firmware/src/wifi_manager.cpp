@@ -186,7 +186,7 @@ void WiFiManager::handleNetworkSelection(int index) {
             delay(2000);
             ESP.restart();
         } else {
-            networkMenu.printError("Connection failed!");
+            networkMenu.printError("Connection failed: " + wifiStatusReason(WiFi.status()));
             menu.show();
         }
     } else {
@@ -201,7 +201,7 @@ void WiFiManager::handleNetworkSelection(int index) {
                 delay(2000);
                 ESP.restart();
             } else {
-                networkMenu.printError("Connection failed!");
+                networkMenu.printError("Connection failed: " + wifiStatusReason(WiFi.status()));
                 menu.show();
             }
         });
@@ -222,7 +222,7 @@ void WiFiManager::manualSSID() {
                 delay(2000);
                 ESP.restart();
             } else {
-                menu.printError("Connection failed!");
+                menu.printError("Connection failed: " + wifiStatusReason(WiFi.status()));
                 menu.show();
             }
         });
@@ -376,6 +376,23 @@ void WiFiManager::tick() {
                                               {"attempt", String(reconnectAttemptCount), FIELD_INT},
                                               {"backoff", String(reconnectBackoff), FIELD_INT},
                                               {"ms", String(reconnectMs), FIELD_INT}});
+    }
+}
+
+String WiFiManager::wifiStatusReason(wl_status_t status) {
+    switch (status) {
+        case WL_NO_SSID_AVAIL:
+            return "network not found";
+        case WL_CONNECT_FAILED:
+            return "wrong password or authentication rejected";
+        case WL_CONNECTION_LOST:
+            return "connection lost during setup";
+        case WL_DISCONNECTED:
+            return "timed out (no response from network)";
+        case WL_IDLE_STATUS:
+            return "timed out (WiFi idle)";
+        default:
+            return "unknown error (status=" + String((int) status) + ")";
     }
 }
 

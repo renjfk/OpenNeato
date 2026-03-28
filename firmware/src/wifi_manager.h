@@ -60,6 +60,9 @@ private:
     void showStatus();
     void resetCredentials();
     void handleNetworkSelection(int index);
+
+    // Human-readable reason for the last WiFi.status() failure code
+    static String wifiStatusReason(wl_status_t status);
 };
 
 #endif // WIFI_MANAGER_H

@@ -31,6 +31,13 @@ function parseChipFromBin(buf: ArrayBuffer): string | null {
     return CHIP_IDS[chipId] ?? null;
 }
 
+// Build the canonical release firmware filename from chip name detected in the binary header.
+// e.g. "ESP32-C3" -> "openneato-esp32-c3-firmware.bin", "ESP32" -> "openneato-esp32-firmware.bin".
+// This avoids relying on the user-provided filename which may be renamed by the OS (e.g. appending "(1)").
+function canonicalFirmwareName(chip: string): string {
+    return `openneato-${chip.toLowerCase()}-firmware.bin`;
+}
+
 // Parse GoReleaser checksums.txt format: "<sha256hex>  <filename>\n" per line.
 // Returns a map of lowercase filename -> lowercase sha256 hex.
 function parseChecksums(text: string): Map<string, string> {
@@ -141,10 +148,14 @@ export function useFirmwareUpload(
 
     // Compute SHA-256 of firmware file and check against loaded checksums.
     // Uses pure-JS sha256 — crypto.subtle is unavailable over plain HTTP (non-secure context).
+    // Looks up by canonical release filename derived from the chip ID in the binary header,
+    // so renamed files (e.g. "firmware(1).bin") still match.
     const verifyFirmwareFile = useCallback(async (fw: File, checksums: Map<string, string>) => {
         const buf = await fw.arrayBuffer();
         const hash = sha256(buf);
-        setChecksumResult(verifyChecksum(checksums, fw.name, hash));
+        const chip = parseChipFromBin(buf);
+        const lookupName = chip ? canonicalFirmwareName(chip) : fw.name;
+        setChecksumResult(verifyChecksum(checksums, lookupName, hash));
     }, []);
 
     const selectChecksumFile = useCallback(

@@ -47,13 +47,15 @@ func detectPorts() ([]detectedPort, error) {
 		}
 
 		dp := detectedPort{Name: p.Name}
+		vid := strings.ToUpper(p.VID)
+		pid := strings.ToUpper(p.PID)
 
 		// Check for native Espressif USB
-		if p.VID == espressifVID {
-			if desc, ok := espressifPIDs[p.PID]; ok {
+		if vid == espressifVID {
+			if desc, ok := espressifPIDs[pid]; ok {
 				dp.Description = desc
 			} else {
-				dp.Description = fmt.Sprintf("Espressif (PID %s)", p.PID)
+				dp.Description = fmt.Sprintf("Espressif (PID %s)", pid)
 			}
 			dp.IsESP = true
 			found = append(found, dp)
@@ -61,7 +63,7 @@ func detectPorts() ([]detectedPort, error) {
 		}
 
 		// Check for common USB-UART bridges
-		if desc, ok := uartBridgeVIDs[p.VID]; ok {
+		if desc, ok := uartBridgeVIDs[vid]; ok {
 			dp.Description = desc
 			dp.IsESP = true // likely an ESP dev board
 			found = append(found, dp)
@@ -69,7 +71,7 @@ func detectPorts() ([]detectedPort, error) {
 		}
 
 		// Unknown USB serial device
-		dp.Description = fmt.Sprintf("USB Serial (VID %s, PID %s)", p.VID, p.PID)
+		dp.Description = fmt.Sprintf("USB Serial (VID %s, PID %s)", vid, pid)
 		found = append(found, dp)
 	}
 

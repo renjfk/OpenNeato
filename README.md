@@ -41,7 +41,7 @@ port, giving you a local web interface that works without any external dependenc
   canvas with coverage overlay
 - **7-day cleaning scheduler** managed entirely on the ESP32 (doesn't use the robot's built-in schedule commands)
 - **Cleaning history** with recorded robot paths rendered as coverage maps, session stats like duration, distance, area
-  covered, and battery usage
+  covered, and battery usage; individual session import/export for backup and restore
 - **Push notifications** via [ntfy.sh](https://ntfy.sh); get notified when cleaning is done, an error occurs, a
   maintenance alert triggers, or the robot docks; fully optional, configurable per event
 - **OTA firmware updates** from the browser with SHA-256 download verification (against published `checksums.txt`), MD5
@@ -49,7 +49,7 @@ port, giving you a local web interface that works without any external dependenc
   is available on GitHub
 - **Settings page** for hostname, timezone, motor presets, notification topics, UART pins, theme (dark/light/auto), and
   more
-- **Event logging** with configurable log levels (off/info/debug), compressed JSONL files on LittleFS, browsable and
+- **Event logging** with configurable log levels (off/info/debug), compressed JSONL files on SPIFFS, browsable and
   downloadable from the UI; logging is off by default to minimize flash wear
 - **Factory reset** via 5-second button hold on the ESP32 or from the settings page
 - **Robot clock sync** — pushes NTP time to the robot automatically, re-syncs every 4 hours

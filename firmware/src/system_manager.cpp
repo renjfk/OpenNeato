@@ -1,5 +1,5 @@
 #include "system_manager.h"
-#include <LittleFS.h>
+#include <SPIFFS.h>
 #include <WiFi.h>
 #include <ctime>
 
@@ -122,11 +122,11 @@ void SystemManager::checkPendingReboot() {
         LOG("SYS", "Factory reset: clearing NVS, WiFi credentials, and filesystem...");
         prefs.clear();
         WiFi.disconnect(true, true);
-        LittleFS.format();
+        SPIFFS.format();
         delay(500);
     } else if (pendingFormatFs) {
         LOG("SYS", "Formatting filesystem...");
-        LittleFS.format();
+        SPIFFS.format();
         delay(500);
     }
     LOG("SYS", "Rebooting...");
@@ -156,8 +156,8 @@ SystemHealth SystemManager::getSystemHealth(const String& tz) const {
     h.heapTotal = ESP.getHeapSize();
     h.uptime = millis();
     h.rssi = WiFi.RSSI();
-    h.fsUsed = LittleFS.usedBytes();
-    h.fsTotal = LittleFS.totalBytes();
+    h.fsUsed = SPIFFS.usedBytes();
+    h.fsTotal = SPIFFS.totalBytes();
     h.ntpSynced = ntpSynced;
     h.time = now();
     h.timeSource = ntpSynced ? "ntp" : (fallbackSet ? "fallback" : "millis");

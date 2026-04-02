@@ -187,7 +187,7 @@ subsequent runs.
 **Firmware pack** — The downloaded `.tar.gz` contains everything needed to flash:
 
 - `bootloader.bin` — First-stage bootloader
-- `partitions.bin` — Partition table (dual OTA slots, LittleFS, NVS, coredump)
+- `partitions.bin` — Partition table (dual OTA slots, SPIFFS, NVS, coredump)
 - `boot_app0.bin` — OTA boot selector
 - `firmware.bin` — The application firmware (includes the embedded web UI)
 - `offsets.json` — Flash addresses for each binary
@@ -329,9 +329,8 @@ The raw serial console endpoint (`POST /api/serial?cmd=<command>`) for direct ro
 communication is always available regardless of log level.
 
 > [!NOTE]
-> Logging writes to flash storage using LittleFS. Higher levels generate more writes, which
-> increases flash wear and can slow serial communication as the filesystem fills up. Use Info
-> or Debug only when actively diagnosing an issue.
+> Logging writes to flash storage (SPIFFS). Higher levels generate more writes, which
+> increases flash wear. Use Info or Debug only when actively diagnosing an issue.
 
 ### Collecting Logs
 

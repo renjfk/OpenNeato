@@ -92,7 +92,7 @@ void setup() {
     neatoSerial.onCleanStart([&] { cleaningHistory.notifyCleanStart(); });
 
     // Wire WiFi events to data logger BEFORE WiFi connects so boot events are captured.
-    // DataLogger buffers entries in memory — they get flushed once LittleFS mounts in begin().
+    // DataLogger buffers entries in memory - they get flushed once SPIFFS mounts in begin().
     WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
         switch (event) {
             case ARDUINO_EVENT_WIFI_STA_CONNECTED:
@@ -148,8 +148,8 @@ void setup() {
         LOG("BOOT", "WiFi not ready — web server will start when connected");
     }
 
-    // Initialize data logger (LittleFS, serial command hook)
-    // Note: WiFi/OTA events buffered in memory above get flushed once LittleFS mounts here.
+    // Initialize data logger (SPIFFS, serial command hook)
+    // Note: WiFi/OTA events buffered in memory above get flushed once SPIFFS mounts here.
     LOG("BOOT", "Initializing data logger...");
     dataLogger.setLogLevelCheck([&]() { return settingsManager.get().logLevel; });
     dataLogger.begin();
@@ -172,7 +172,7 @@ void setup() {
         LOG("MAIN", "Robot time: %02d:%02d:%02d -> epoch %ld", t.hour, t.minute, t.second, static_cast<long>(epoch));
     });
 
-    // Start task watchdog AFTER all slow init is complete (LittleFS mount,
+    // Start task watchdog AFTER all slow init is complete (SPIFFS mount,
     // WiFi connect, etc.) so boot sequence doesn't trigger a false reset.
     systemManager.initTaskWdt();
 

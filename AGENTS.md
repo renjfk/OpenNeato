@@ -30,9 +30,9 @@ Three top-level components: `firmware/` (ESP32 C/C++), `frontend/` (Preact SPA),
 ### Data Logging
 
 Logging is controlled by `logLevel` in settings (0=off, 1=info, 2=debug). Default
-is **off** — nothing written to LittleFS. Both info and debug auto-revert to off
+is **off** - nothing written to SPIFFS. Both info and debug auto-revert to off
 after a timeout (1 hour / 10 minutes) to prevent forgotten logging from degrading
-serial performance via LittleFS COW overhead.
+serial performance.
 
 All significant events must be logged via `DataLogger` (injected by reference).
 `logEvent` is private — use typed public helpers (`logRequest`, `logWifi`, `logOta`,
@@ -43,7 +43,7 @@ are logged; at debug level, all serial commands including raw responses are incl
 
 ### Filesystem and Flash Wear
 
-LittleFS (not SPIFFS). Buffer writes in RAM, never write to flash in a loop.
+SPIFFS (not LittleFS). Buffer writes in RAM, never write to flash in a loop.
 NVS writes are user-triggered only (settings save, WiFi provisioning).
 
 ## Build Commands
@@ -111,6 +111,6 @@ CSS frameworks, routing, or HTTP wrapper libraries.
 ## Hardware
 
 - **Board**: ESP32-C3-DevKitM-1 (RISC-V, 160MHz, 320KB RAM, 4MB flash)
-- **Flash layout**: Dual OTA slots (1600KB each), 768KB LittleFS, 20KB NVS
+- **Flash layout**: Dual OTA slots (1600KB each), 768KB SPIFFS, 20KB NVS
 - **NVS**: Single `"neato"` namespace, opened once, passed by reference
 - **Reset**: GPIO9, hold 5s for factory reset

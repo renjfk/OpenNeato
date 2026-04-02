@@ -25,9 +25,9 @@ struct HistorySessionInfo {
 
 // Records robot pose data during autonomous cleaning runs and stores each
 // session as a JSONL file on SPIFFS. During collection, raw JSONL lines are
-// written directly to /history/<epoch>.jsonl. When cleaning ends, the file
-// is compressed to .jsonl.hs via incremental heatshrink encoding (non-blocking,
-// spread across tick() calls).
+// buffered and flushed to /history/<epoch>.jsonl. When cleaning ends, the
+// file is compressed to .jsonl.hs via incremental heatshrink encoding
+// (non-blocking, spread across tick() calls).
 //
 // Files are served through the same LogReader/CompressedLogReader/PlainLogReader
 // abstractions used by DataLogger, so the web server streaming code is identical.

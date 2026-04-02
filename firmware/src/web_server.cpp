@@ -8,7 +8,7 @@
 #include "manual_clean_manager.h"
 #include "notification_manager.h"
 #include "cleaning_history.h"
-#include <LittleFS.h>
+#include <SPIFFS.h>
 
 unsigned long WebServer::lastApiActivity = 0;
 

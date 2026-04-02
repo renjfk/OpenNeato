@@ -121,10 +121,9 @@ enum CommandStatus {
 #define LOG_LEVEL_AUTO_OFF_DEBUG_MS 600000 // Auto-revert debug -> off after 10 minutes
 #define LOG_LEVEL_AUTO_OFF_INFO_MS 3600000 // Auto-revert info -> off after 1 hour
 
-// Log levels — controls what gets written to LittleFS. Default off to minimize
-// flash wear. LittleFS copy-on-write metadata updates on every write stall
-// the main loop and degrade serial response times as storage fills up.
-#define LOG_LEVEL_OFF 0 // Nothing written to LittleFS (default)
+// Log levels - controls what gets written to SPIFFS. Default off to minimize
+// flash wear.
+#define LOG_LEVEL_OFF 0 // Nothing written to SPIFFS (default)
 #define LOG_LEVEL_INFO 1 // Errors, state transitions, boot, wifi, ota, ntp, cleaning events, notifications
 #define LOG_LEVEL_DEBUG 2 // Everything in Info + all serial commands + raw responses
 #define NVS_KEY_WIFI_TX_POWER "wifi_tx_pwr"
@@ -161,7 +160,7 @@ enum CommandStatus {
 #define HISTORY_INTERVAL_ACTIVE_MS 2000 // Poll state/pose every 2s during active cleaning (~0.6m resolution at 300mm/s)
 #define HISTORY_FLUSH_INTERVAL_MS 30000 // Flush buffered pose snapshots to disk every 30 seconds
 #define HISTORY_COMPRESS_INTERVAL_MS 50 // Fast tick during post-session compression (512B/tick)
-#define HISTORY_DIR "/history" // LittleFS directory for session files
+#define HISTORY_DIR "/history" // SPIFFS directory for session files
 #define HISTORY_MAX_FS_PERCENT 50 // Delete oldest sessions when history dir exceeds this share of filesystem
 #define HISTORY_MIN_FS_PERCENT 10 // History always gets at least this % of filesystem
 #define HISTORY_MAX_FILES 20 // Maximum number of archived session files to keep

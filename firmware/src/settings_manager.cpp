@@ -100,7 +100,7 @@ void SettingsManager::save() {
 
 const Settings& SettingsManager::get() {
     // Auto-revert log level to off after timeout to prevent forgotten verbose
-    // logging that fills flash and degrades serial performance via LittleFS COW.
+    // logging that fills flash and degrades serial performance.
     if (current.logLevel > LOG_LEVEL_OFF && logLevelEnabledAt > 0) {
         unsigned long timeout =
                 (current.logLevel >= LOG_LEVEL_DEBUG) ? LOG_LEVEL_AUTO_OFF_DEBUG_MS : LOG_LEVEL_AUTO_OFF_INFO_MS;

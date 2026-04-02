@@ -130,6 +130,14 @@ export function HistoryView() {
             .finally(() => setDeleting(false));
     }, [selectedName, navigate, errorStack]);
 
+    const handleImported = useCallback(() => {
+        api.getHistoryList()
+            .then((fileList) => setFiles(sortByDateDesc(fileList)))
+            .catch((e: unknown) => {
+                errorStack.push(e instanceof Error ? e.message : "Failed to refresh list");
+            });
+    }, [errorStack]);
+
     const showDetail = selectedName !== null && selectedFile !== null;
 
     return (
@@ -148,7 +156,16 @@ export function HistoryView() {
                 {loading && <div class="history-empty">Loading...</div>}
 
                 {!loading && files.length === 0 && !showDetail && (
-                    <div class="history-empty">No cleaning history yet</div>
+                    <HistoryListView
+                        files={files}
+                        hasRecording={false}
+                        deleting={false}
+                        onSelect={handleSelect}
+                        onDeleteSession={handleDeleteSession}
+                        onDeleteAll={handleDeleteAll}
+                        onImported={handleImported}
+                        onError={errorStack.push}
+                    />
                 )}
 
                 {!loading && files.length > 0 && !showDetail && (
@@ -159,6 +176,8 @@ export function HistoryView() {
                         onSelect={handleSelect}
                         onDeleteSession={handleDeleteSession}
                         onDeleteAll={handleDeleteAll}
+                        onImported={handleImported}
+                        onError={errorStack.push}
                     />
                 )}
 

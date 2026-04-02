@@ -1043,3 +1043,152 @@ void CleaningHistory::deleteAllSessions() {
     }
     LOG("HIST", "Deleted %u session files", paths.size());
 }
+
+// -- Session import (compress-on-write from browser upload) -------------------
+
+bool CleaningHistory::beginImport(const String& filename) {
+    importError = "";
+
+    if (importing) {
+        importError = "Import already in progress";
+        return false;
+    }
+    if (collecting) {
+        importError = "Cannot import while recording";
+        return false;
+    }
+    if (compressing) {
+        importError = "Cannot import while compressing";
+        return false;
+    }
+
+    // Validate filename pattern: <digits>.jsonl
+    if (!filename.endsWith(".jsonl")) {
+        importError = "Invalid filename";
+        return false;
+    }
+
+    // Check for duplicate (both raw and compressed)
+    String rawPath = String(HISTORY_DIR) + "/" + filename;
+    String hsPath = rawPath + ".hs";
+    if (LittleFS.exists(rawPath) || LittleFS.exists(hsPath)) {
+        importError = "Session already exists";
+        return false;
+    }
+
+    // Open destination file for compressed output
+    importFilePath = hsPath;
+    importFile = LittleFS.open(importFilePath, FILE_WRITE);
+    if (!importFile) {
+        importError = "Failed to create file";
+        importFilePath = "";
+        return false;
+    }
+
+    heatshrink_encoder_reset(&importEncoder);
+    importBytesReceived = 0;
+    importing = true;
+    LOG("HIST", "Import started: %s", importFilePath.c_str());
+    return true;
+}
+
+bool CleaningHistory::writeImportChunk(const uint8_t *data, size_t len) {
+    if (!importing || !importFile) {
+        importError = "No import in progress";
+        return false;
+    }
+
+    importBytesReceived += len;
+    if (importBytesReceived > HISTORY_IMPORT_MAX_BYTES) {
+        importError = "File too large";
+        importFile.close();
+        LittleFS.remove(importFilePath);
+        importing = false;
+        return false;
+    }
+
+    static const size_t OUT_BUF_SIZE = 512;
+    uint8_t outBuf[OUT_BUF_SIZE];
+    size_t offset = 0;
+
+    while (offset < len) {
+        size_t sunk = 0;
+        HSE_sink_res sres = heatshrink_encoder_sink(&importEncoder, data + offset, len - offset, &sunk);
+        if (sres < 0) {
+            importError = "Compression error";
+            importFile.close();
+            LittleFS.remove(importFilePath);
+            importing = false;
+            return false;
+        }
+        offset += sunk;
+
+        // Drain compressed output
+        size_t outSz = 0;
+        HSE_poll_res pres;
+        do {
+            pres = heatshrink_encoder_poll(&importEncoder, outBuf, OUT_BUF_SIZE, &outSz);
+            if (pres < 0) {
+                importError = "Compression error";
+                importFile.close();
+                LittleFS.remove(importFilePath);
+                importing = false;
+                return false;
+            }
+            if (outSz > 0) {
+                importFile.write(outBuf, outSz);
+            }
+        } while (pres == HSER_POLL_MORE);
+    }
+    return true;
+}
+
+bool CleaningHistory::endImport() {
+    if (!importing || !importFile) {
+        importError = "No import in progress";
+        return false;
+    }
+
+    static const size_t OUT_BUF_SIZE = 512;
+    uint8_t outBuf[OUT_BUF_SIZE];
+
+    // Finish the encoder — may require multiple poll rounds
+    bool done = false;
+    while (!done) {
+        HSE_finish_res fres = heatshrink_encoder_finish(&importEncoder);
+        if (fres < 0) {
+            importError = "Compression finish error";
+            importFile.close();
+            LittleFS.remove(importFilePath);
+            importing = false;
+            return false;
+        }
+        done = (fres == HSER_FINISH_DONE);
+
+        size_t outSz = 0;
+        HSE_poll_res pres;
+        do {
+            pres = heatshrink_encoder_poll(&importEncoder, outBuf, OUT_BUF_SIZE, &outSz);
+            if (pres < 0) {
+                importError = "Compression finish error";
+                importFile.close();
+                LittleFS.remove(importFilePath);
+                importing = false;
+                return false;
+            }
+            if (outSz > 0) {
+                importFile.write(outBuf, outSz);
+            }
+        } while (pres == HSER_POLL_MORE);
+    }
+
+    importFile.close();
+    importing = false;
+    LOG("HIST", "Import complete: %s", importFilePath.c_str());
+    dataLogger.logGenericEvent("history_import", {{"path", importFilePath, FIELD_STRING}});
+
+    // Delete oldest sessions if storage budget exceeded
+    enforceLimits();
+
+    return true;
+}

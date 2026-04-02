@@ -2122,6 +2122,42 @@ body {
     animation: btn-pulse 1s ease-in-out infinite;
 }
 
+.history-summary-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.history-import-input {
+    display: none;
+}
+
+.history-import-label {
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.history-import-btn {
+    display: inline-block;
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.history-import-label:active .history-import-btn {
+    opacity: 0.7;
+}
+
+.history-import-btn.pending {
+    animation: btn-pulse 1s ease-in-out infinite;
+}
+
 .history-detail-stats {
     display: flex;
     justify-content: space-around;

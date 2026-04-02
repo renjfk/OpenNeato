@@ -859,6 +859,60 @@ const handleRequest = async (req, res) => {
         return sendOk(res);
     }
 
+    // POST /api/history/import — accept multipart upload, parse JSONL, store in memory
+    if (path === "/api/history/import" && req.method === "POST") {
+        const chunks = [];
+        await new Promise((resolve) => {
+            req.on("data", (chunk) => chunks.push(chunk));
+            req.on("end", resolve);
+        });
+        const body = Buffer.concat(chunks);
+        const bodyStr = body.toString("binary");
+        // Extract filename from Content-Disposition header in multipart body
+        const nameMatch = bodyStr.match(/filename="([^"]+)"/);
+        if (!nameMatch || !nameMatch[1].endsWith(".jsonl")) {
+            return sendError(res, "Invalid file: expected a .jsonl session file", 400);
+        }
+        const filename = nameMatch[1];
+        // Extract file content between multipart headers and closing boundary
+        const headerEnd = bodyStr.indexOf("\r\n\r\n");
+        const boundaryEnd = bodyStr.lastIndexOf("\r\n--");
+        if (headerEnd < 0 || boundaryEnd < 0) {
+            return sendError(res, "Malformed multipart body", 400);
+        }
+        const content = body.subarray(headerEnd + 4, boundaryEnd).toString("utf8");
+        const lines = content
+            .trim()
+            .split("\n")
+            .filter((l) => l.length > 0);
+        if (lines.length === 0) {
+            return sendError(res, "Empty session file", 400);
+        }
+        // Validate first line is a session header with matching timestamp
+        try {
+            const header = JSON.parse(lines[0]);
+            if (header.type !== "session") {
+                return sendError(res, "First line must be a session header", 400);
+            }
+            // Filename is <epoch>.jsonl — extract epoch and compare to header time
+            const fileEpoch = filename.replace(".jsonl", "");
+            if (header.time !== undefined && String(header.time) !== fileEpoch) {
+                return sendError(res, "Session timestamp does not match filename", 400);
+            }
+        } catch {
+            return sendError(res, "Invalid JSON in session header", 400);
+        }
+        // Check for duplicate — firmware stores as .hs, but also check raw name
+        const storedName = `${filename}.hs`;
+        if (historySessions.has(storedName) || historySessions.has(filename)) {
+            return sendError(res, "Session already exists", 409);
+        }
+        historySessions.set(storedName, lines);
+        // Simulate compression delay
+        await new Promise((r) => setTimeout(r, rand(200, 500)));
+        return sendOk(res);
+    }
+
     const historyMatch = path.match(/^\/api\/history\/(.+)$/);
     if (historyMatch) {
         const filename = historyMatch[1];

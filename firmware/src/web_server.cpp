@@ -459,5 +459,40 @@ void WebServer::registerMapRoutes() {
         return 404;
     });
 
+    // POST /api/history/import — upload a .jsonl session file, compress and store
+    server.on(
+            "/api/history/import", HTTP_POST,
+            // Response handler (called after upload completes)
+            [this](AsyncWebServerRequest *request) {
+                unsigned long startMs = millis();
+                bool ok = historyMgr.getImportError().isEmpty();
+
+                if (ok) {
+                    ok = historyMgr.endImport();
+                }
+
+                if (!ok) {
+                    logger.logRequest(HTTP_POST, "/api/history/import", 400, millis() - startMs);
+                    sendError(request, 400, historyMgr.getImportError());
+                } else {
+                    logger.logRequest(HTTP_POST, "/api/history/import", 200, millis() - startMs);
+                    sendOk(request);
+                }
+            },
+            // Upload handler (called per chunk)
+            [this](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len,
+                   bool final) {
+                // First chunk: initialize import session
+                if (!index) {
+                    if (!historyMgr.beginImport(filename)) {
+                        return;
+                    }
+                }
+
+                if (len && historyMgr.isImporting()) {
+                    historyMgr.writeImportChunk(data, len);
+                }
+            });
+
     LOG("WEB", "History routes registered");
 }

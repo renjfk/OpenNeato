@@ -48,6 +48,18 @@ public:
     // instead of waiting for the next idle-interval tick.
     void notifyCleanStart();
 
+    // -- Session import (upload from browser, compress-on-write) ---------------
+    // Called by WebServer upload handler. Receives raw JSONL data from the browser,
+    // compresses it via heatshrink, and writes directly to /history/<name>.jsonl.hs.
+
+    // Prepare for import. Returns false with an error message if busy or file exists.
+    bool beginImport(const String& filename);
+    // Feed a chunk of raw JSONL data into the compressor and write to disk.
+    bool writeImportChunk(const uint8_t *data, size_t len);
+    // Finalize the encoder, flush remaining bytes, close file. Returns true on success.
+    bool endImport();
+    bool isImporting() const { return importing; }
+    const String& getImportError() const { return importError; }
 
 private:
     void tick() override;
@@ -124,6 +136,14 @@ private:
 
     // Storage enforcement — delete oldest sessions when budget exceeded
     void enforceLimits();
+
+    // -- Import state (separate from recording compression) -------------------
+    bool importing = false;
+    File importFile;
+    heatshrink_encoder importEncoder;
+    String importFilePath; // e.g. "/history/1771683615.jsonl.hs"
+    String importError;
+    size_t importBytesReceived = 0;
 
     // Read first and last lines from a session file (decompresses .hs files)
     static void readFirstLastLines(const String& path, bool compressed, String& firstLine, String& lastLine);

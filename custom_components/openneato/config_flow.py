@@ -8,7 +8,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from .api import OpenNeatoApiClient, OpenNeatoApiError, OpenNeatoConnectionError
 from .const import CONF_HOST, DOMAIN
@@ -35,7 +35,7 @@ class OpenNeatoConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             host = user_input[CONF_HOST]
-            session = async_get_clientsession(self.hass)
+            session = async_create_clientsession(self.hass)
             api = OpenNeatoApiClient(host, session)
 
             try:

@@ -8,7 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from .api import OpenNeatoApiClient, OpenNeatoConnectionError
 from .const import CONF_HOST, DOMAIN
@@ -30,7 +30,11 @@ PLATFORMS: list[Platform] = [
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up OpenNeato from a config entry."""
     host = entry.data[CONF_HOST]
-    session = async_get_clientsession(hass)
+    # Create a dedicated session that bypasses any system proxy settings.
+    # HA's shared session inherits HTTP_PROXY from the environment, which
+    # can route local requests through a proxy (e.g. Squid on OPNsense)
+    # that blocks or times out on the ESP32's API endpoints.
+    session = async_create_clientsession(hass)
     api = OpenNeatoApiClient(host, session)
 
     # Fetch version info for device_info — raises ConfigEntryNotReady on failure

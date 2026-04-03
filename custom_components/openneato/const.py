@@ -7,16 +7,15 @@ CONF_HOST = "host"
 DEFAULT_FAST_POLL_INTERVAL = 5  # seconds
 DEFAULT_SLOW_POLL_INTERVAL = 30  # seconds
 
-# Map OpenNeato uiState strings to VacuumActivity
-# Note: IDLE requires runtime check of charger state to distinguish DOCKED vs IDLE
-UISTATE_MAP: dict[str, VacuumActivity] = {
-    "Cleaning": VacuumActivity.CLEANING,
-    "Spot Cleaning": VacuumActivity.CLEANING,
-    "Manual Cleaning": VacuumActivity.CLEANING,
-    "Paused": VacuumActivity.PAUSED,
-    "Suspended": VacuumActivity.PAUSED,
-    "Docking": VacuumActivity.RETURNING,
-    "Error": VacuumActivity.ERROR,
-}
+# The firmware returns uiState as full enum strings like "UIMGR_STATE_HOUSECLEANINGRUNNING".
+# We match using substrings (via .includes() style) like the frontend does in dashboard.tsx.
+# These substring keys are checked against the raw uiState value.
+UISTATE_SUBSTRINGS: list[tuple[str, VacuumActivity]] = [
+    ("CLEANINGRUNNING", VacuumActivity.CLEANING),
+    ("MANUALCLEANING", VacuumActivity.CLEANING),
+    ("CLEANINGPAUSED", VacuumActivity.PAUSED),
+    ("CLEANINGSUSPENDED", VacuumActivity.PAUSED),
+    ("DOCKING", VacuumActivity.RETURNING),
+]
 
 FAN_SPEEDS = ["eco", "normal", "intense"]

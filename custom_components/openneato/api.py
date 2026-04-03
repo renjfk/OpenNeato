@@ -9,7 +9,7 @@ import async_timeout
 
 from homeassistant.exceptions import HomeAssistantError
 
-TIMEOUT = 10  # seconds
+TIMEOUT = 30  # seconds — ESP32 can be slow when serial queue is busy
 
 
 class OpenNeatoConnectionError(HomeAssistantError):

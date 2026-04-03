@@ -10,6 +10,16 @@ WiFiManager::WiFiManager(Preferences& prefs, DataLogger& logger) :
 void WiFiManager::begin() {
     LOG("WIFI", "Starting WiFi setup...");
 
+    // If build-time credentials are provided and no credentials are saved yet,
+    // seed them into NVS so the device connects on first boot without serial.
+#if defined(PRESET_WIFI_SSID) && defined(PRESET_WIFI_PASS)
+    if (!prefs.isKey(NVS_KEY_WIFI_SSID)) {
+        LOG("WIFI", "Seeding build-time WiFi credentials into NVS");
+        prefs.putString(NVS_KEY_WIFI_SSID, PRESET_WIFI_SSID);
+        prefs.putString(NVS_KEY_WIFI_PASS, PRESET_WIFI_PASS);
+    }
+#endif
+
     // Try to load and connect with saved credentials
     String ssid, password;
     if (loadCredentials(ssid, password)) {

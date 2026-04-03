@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to OpenNeato",
+        "description": "Enter the IP address or hostname of your OpenNeato robot.",
+        "data": {
+          "host": "Host"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to the robot. Please check the host and try again.",
+      "unknown": "An unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "This robot is already configured."
+    }
+  }
+}

@@ -44,9 +44,9 @@ class OpenNeatoApiClient:
         url = f"{self._base_url}{path}"
         try:
             async with async_timeout.timeout(TIMEOUT):
-                response = await self._session.get(url)
-                response.raise_for_status()
-                return await response.json()
+                async with self._session.get(url) as response:
+                    response.raise_for_status()
+                    return await response.json()
         except aiohttp.ClientConnectionError as err:
             raise OpenNeatoConnectionError(
                 f"Unable to connect to OpenNeato at {self._host}: {err}"
@@ -67,12 +67,12 @@ class OpenNeatoApiClient:
         url = f"{self._base_url}{path}"
         try:
             async with async_timeout.timeout(TIMEOUT):
-                response = await self._session.post(url, params=params)
-                response.raise_for_status()
-                content_type = response.content_type or ""
-                if "json" in content_type:
-                    return await response.json()
-                return await response.text()
+                async with self._session.post(url, params=params) as response:
+                    response.raise_for_status()
+                    content_type = response.content_type or ""
+                    if "json" in content_type:
+                        return await response.json()
+                    return await response.text()
         except aiohttp.ClientConnectionError as err:
             raise OpenNeatoConnectionError(
                 f"Unable to connect to OpenNeato at {self._host}: {err}"
@@ -91,9 +91,9 @@ class OpenNeatoApiClient:
         url = f"{self._base_url}{path}"
         try:
             async with async_timeout.timeout(TIMEOUT):
-                response = await self._session.put(url, json=json_data)
-                response.raise_for_status()
-                return await response.json()
+                async with self._session.put(url, json=json_data) as response:
+                    response.raise_for_status()
+                    return await response.json()
         except aiohttp.ClientConnectionError as err:
             raise OpenNeatoConnectionError(
                 f"Unable to connect to OpenNeato at {self._host}: {err}"

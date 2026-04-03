@@ -7,9 +7,10 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import OpenNeatoApiClient
+from .api import OpenNeatoApiClient, OpenNeatoConnectionError
 from .const import CONF_HOST, DOMAIN
 from .coordinator import OpenNeatoFastCoordinator, OpenNeatoSlowCoordinator
 
@@ -25,18 +26,21 @@ PLATFORMS: list[Platform] = [
     Platform.CAMERA,
 ]
 
-type OpenNeatoConfigEntry = ConfigEntry
 
-
-async def async_setup_entry(hass: HomeAssistant, entry: OpenNeatoConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up OpenNeato from a config entry."""
     host = entry.data[CONF_HOST]
     session = async_get_clientsession(hass)
     api = OpenNeatoApiClient(host, session)
 
-    # Fetch version info for device_info – validates connectivity too
-    firmware_info = await api.get_firmware_version()
-    robot_info = await api.get_robot_version()
+    # Fetch version info for device_info — raises ConfigEntryNotReady on failure
+    try:
+        firmware_info = await api.get_firmware_version()
+        robot_info = await api.get_robot_version()
+    except OpenNeatoConnectionError as err:
+        raise ConfigEntryNotReady(
+            f"Cannot connect to OpenNeato at {host}: {err}"
+        ) from err
 
     serial = robot_info.get("serialNumber", entry.data.get("serial", "unknown"))
     model = robot_info.get("modelName", entry.data.get("model"))
@@ -65,7 +69,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: OpenNeatoConfigEntry) ->
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: OpenNeatoConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload an OpenNeato config entry."""
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         hass.data[DOMAIN].pop(entry.entry_id)

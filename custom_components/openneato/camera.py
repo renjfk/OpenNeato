@@ -211,6 +211,6 @@ class OpenNeatoMapCamera(OpenNeatoEntity, Camera):
 
         url = f"{self._api.base_url}/api/history/{filename}"
         async with async_timeout.timeout(30):
-            response = await self._api.session.get(url)
-            response.raise_for_status()
-            return await response.text()
+            async with self._api.session.get(url) as response:
+                response.raise_for_status()
+                return await response.text()

@@ -29,7 +29,6 @@ class OpenNeatoEntity(CoordinatorEntity):
             identifiers={(DOMAIN, serial)},
             manufacturer="OpenNeato",
             model=model,
-            sw_version=sw_version,
-            hw_version=fw_version,
+            sw_version=sw_version or fw_version,
             configuration_url=f"http://{host}" if host else None,
         )

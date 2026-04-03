@@ -15,7 +15,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import OpenNeatoApiClient
-from .const import DOMAIN, FAN_SPEEDS, UISTATE_MAP
+from .const import DOMAIN, FAN_SPEEDS, UISTATE_SUBSTRINGS
 from .entity import OpenNeatoEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -96,8 +96,10 @@ class OpenNeatoVacuum(OpenNeatoEntity, StateVacuumEntity):
 
         ui_state = state_data.get("uiState", "")
 
-        if ui_state in UISTATE_MAP:
-            return UISTATE_MAP[ui_state]
+        # Match using substrings, same as the firmware frontend
+        for substring, activity in UISTATE_SUBSTRINGS:
+            if substring in ui_state:
+                return activity
 
         # For unmapped states, use charger to distinguish docked vs idle
         if charger_data.get("chargingActive") or charger_data.get("extPwrPresent"):

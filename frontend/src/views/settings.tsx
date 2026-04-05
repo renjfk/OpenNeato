@@ -95,6 +95,10 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
         setSideBrushPower,
         ntfyTopic,
         setNtfyTopic,
+        ntfyServer,
+        setNtfyServer,
+        ntfyToken,
+        setNtfyToken,
         ntfyEnabled,
         setNtfyEnabled,
         ntfyOnDone,
@@ -510,7 +514,9 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                         <div class="settings-toggle-row">
                             <div class="settings-toggle-label">
                                 <span class="settings-toggle-title">Enable notifications</span>
-                                <span class="settings-toggle-desc">Push alerts via ntfy.sh over plain HTTP</span>
+                                <span class="settings-toggle-desc">
+                                    Push alerts via ntfy (custom server or ntfy.sh)
+                                </span>
                             </div>
                             <button
                                 type="button"
@@ -540,6 +546,22 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                                         {testingNotif ? "..." : (notifTestResult ?? "Test")}
                                     </button>
                                 </div>
+                                <input
+                                    type="text"
+                                    class="settings-text-input"
+                                    value={ntfyServer}
+                                    onInput={(e) => setNtfyServer((e.target as HTMLInputElement).value)}
+                                    disabled={saving}
+                                    placeholder="Server hostname (blank = ntfy.sh)"
+                                />
+                                <input
+                                    type="password"
+                                    class="settings-text-input"
+                                    value={ntfyToken}
+                                    onInput={(e) => setNtfyToken((e.target as HTMLInputElement).value)}
+                                    disabled={saving}
+                                    placeholder="Access token (blank = no auth)"
+                                />
                                 <div class="settings-toggle-row">
                                     <div class="settings-toggle-label">
                                         <span class="settings-toggle-title">Cleaning done</span>

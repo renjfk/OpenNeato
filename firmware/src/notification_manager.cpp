@@ -4,9 +4,9 @@
 #include "data_logger.h"
 #include <WiFi.h>
 #include <WiFiClient.h>
+#include <WiFiClientSecure.h>
 
-#define NTFY_HOST "ntfy.sh"
-#define NTFY_PORT 80
+#define NTFY_DEFAULT_HOST "ntfy.sh"
 #define NTFY_CONNECT_TIMEOUT_MS 3000
 
 NotificationManager::NotificationManager(NeatoSerial& neato, SettingsManager& settings, DataLogger& logger) :
@@ -116,28 +116,49 @@ bool NotificationManager::isActiveState(const String& uiState) {
 void NotificationManager::sendNotification(const String& topic, const String& tags, const String& message) {
     LOG("NOTIF", "Sending: [%s] %s", tags.c_str(), message.c_str());
 
-    WiFiClient client;
-    client.setTimeout(NTFY_CONNECT_TIMEOUT_MS);
+    const Settings& cfg = settings.get();
+    String host = cfg.ntfyServer.isEmpty() ? NTFY_DEFAULT_HOST : cfg.ntfyServer;
+    bool useHttps = !cfg.ntfyServer.isEmpty(); // Custom servers use HTTPS; ntfy.sh uses plain HTTP
 
-    if (!client.connect(NTFY_HOST, NTFY_PORT)) {
-        LOG("NOTIF", "Connect to %s:%d failed", NTFY_HOST, NTFY_PORT);
-        dataLogger.logNotification("notif_send_fail", message, false);
-        return;
+    WiFiClientSecure secureClient;
+    WiFiClient plainClient;
+    Client* client;
+
+    if (useHttps) {
+        secureClient.setInsecure(); // Skip cert validation — self-hosted server
+        secureClient.setTimeout(NTFY_CONNECT_TIMEOUT_MS);
+        if (!secureClient.connect(host.c_str(), 443)) {
+            LOG("NOTIF", "TLS connect to %s:443 failed", host.c_str());
+            dataLogger.logNotification("notif_send_fail", message, false);
+            return;
+        }
+        client = &secureClient;
+    } else {
+        plainClient.setTimeout(NTFY_CONNECT_TIMEOUT_MS);
+        if (!plainClient.connect(host.c_str(), 80)) {
+            LOG("NOTIF", "Connect to %s:80 failed", host.c_str());
+            dataLogger.logNotification("notif_send_fail", message, false);
+            return;
+        }
+        client = &plainClient;
     }
 
-    // Build minimal HTTP/1.1 POST request
-    client.print("POST /" + topic + " HTTP/1.1\r\n");
-    client.print("Host: " NTFY_HOST "\r\n");
-    client.print("Content-Type: text/plain\r\n");
-    client.print("Tags: " + tags + "\r\n");
-    client.print("Content-Length: " + String(message.length()) + "\r\n");
-    client.print("Connection: close\r\n");
-    client.print("\r\n");
-    client.print(message);
+    // Build HTTP POST request
+    client->print("POST /" + topic + " HTTP/1.1\r\n");
+    client->print("Host: " + host + "\r\n");
+    client->print("Content-Type: text/plain\r\n");
+    client->print("Tags: " + tags + "\r\n");
+    client->print("Content-Length: " + String(message.length()) + "\r\n");
+    if (!cfg.ntfyToken.isEmpty()) {
+        client->print("Authorization: Bearer " + cfg.ntfyToken + "\r\n");
+    }
+    client->print("Connection: close\r\n");
+    client->print("\r\n");
+    client->print(message);
 
     // Read just the HTTP status line (e.g. "HTTP/1.1 200 OK\r\n")
     bool ok = false;
-    String statusLine = client.readStringUntil('\n');
+    String statusLine = client->readStringUntil('\n');
     if (statusLine.length() > 0) {
         int spaceIdx = statusLine.indexOf(' ');
         if (spaceIdx > 0) {
@@ -147,7 +168,7 @@ void NotificationManager::sendNotification(const String& topic, const String& ta
         }
     }
 
-    client.stop();
+    client->stop();
 
     dataLogger.logNotification("notif_sent", message, ok);
 }

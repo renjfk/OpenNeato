@@ -58,6 +58,8 @@ void SettingsManager::load() {
     current.vacuumSpeed = prefs.getInt(NVS_KEY_MC_VACUUM_PCT, MANUAL_VACUUM_SPEED_PCT);
     current.sideBrushPower = prefs.getInt(NVS_KEY_MC_SBRUSH_MW, MANUAL_SIDE_BRUSH_POWER_MW);
     current.ntfyTopic = prefs.getString(NVS_KEY_NTFY_TOPIC, "");
+    current.ntfyServer = prefs.getString(NVS_KEY_NTFY_SERVER, "");
+    current.ntfyToken = prefs.getString(NVS_KEY_NTFY_TOKEN, "");
     current.ntfyEnabled = prefs.getBool(NVS_KEY_NTFY_ENABLED, false);
     current.ntfyOnDone = prefs.getBool(NVS_KEY_NTFY_ON_DONE, true);
     current.ntfyOnError = prefs.getBool(NVS_KEY_NTFY_ON_ERR, true);
@@ -83,6 +85,8 @@ void SettingsManager::save() {
     prefs.putInt(NVS_KEY_MC_VACUUM_PCT, current.vacuumSpeed);
     prefs.putInt(NVS_KEY_MC_SBRUSH_MW, current.sideBrushPower);
     prefs.putString(NVS_KEY_NTFY_TOPIC, current.ntfyTopic);
+    prefs.putString(NVS_KEY_NTFY_SERVER, current.ntfyServer);
+    prefs.putString(NVS_KEY_NTFY_TOKEN, current.ntfyToken);
     prefs.putBool(NVS_KEY_NTFY_ENABLED, current.ntfyEnabled);
     prefs.putBool(NVS_KEY_NTFY_ON_DONE, current.ntfyOnDone);
     prefs.putBool(NVS_KEY_NTFY_ON_ERR, current.ntfyOnError);
@@ -226,6 +230,16 @@ ApplyResult SettingsManager::apply(const String& json) {
         changed = true;
         LOG("SETTINGS", "ntfy topic -> %s", current.ntfyTopic.isEmpty() ? "(disabled)" : current.ntfyTopic.c_str());
     }
+    if (incoming.ntfyServer != current.ntfyServer) {
+        current.ntfyServer = incoming.ntfyServer;
+        changed = true;
+        LOG("SETTINGS", "ntfy server -> %s", current.ntfyServer.isEmpty() ? "(ntfy.sh)" : current.ntfyServer.c_str());
+    }
+    if (incoming.ntfyToken != current.ntfyToken) {
+        current.ntfyToken = incoming.ntfyToken;
+        changed = true;
+        LOG("SETTINGS", "ntfy token -> %s", current.ntfyToken.isEmpty() ? "(none)" : "****");
+    }
 
     if (incoming.ntfyEnabled != current.ntfyEnabled) {
         current.ntfyEnabled = incoming.ntfyEnabled;
@@ -300,6 +314,8 @@ std::vector<Field> Settings::toFields() const {
             {"vacuumSpeed", String(vacuumSpeed), FIELD_INT},
             {"sideBrushPower", String(sideBrushPower), FIELD_INT},
             {"ntfyTopic", ntfyTopic, FIELD_STRING},
+            {"ntfyServer", ntfyServer, FIELD_STRING},
+            {"ntfyToken", ntfyToken, FIELD_STRING},
             {"ntfyEnabled", ntfyEnabled ? "true" : "false", FIELD_BOOL},
             {"ntfyOnDone", ntfyOnDone ? "true" : "false", FIELD_BOOL},
             {"ntfyOnError", ntfyOnError ? "true" : "false", FIELD_BOOL},
@@ -362,6 +378,14 @@ bool Settings::fromFields(const std::vector<Field>& fields) {
     }
     if ((f = findField(fields, "ntfyTopic")) && f->type == FIELD_STRING) {
         ntfyTopic = f->value;
+        applied = true;
+    }
+    if ((f = findField(fields, "ntfyServer")) && f->type == FIELD_STRING) {
+        ntfyServer = f->value;
+        applied = true;
+    }
+    if ((f = findField(fields, "ntfyToken")) && f->type == FIELD_STRING) {
+        ntfyToken = f->value;
         applied = true;
     }
     if ((f = findField(fields, "ntfyEnabled")) && f->type == FIELD_BOOL) {

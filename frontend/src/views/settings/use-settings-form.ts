@@ -19,6 +19,8 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
     const [vacuumSpeed, setVacuumSpeed] = useState(80);
     const [sideBrushPower, setSideBrushPower] = useState(1500);
     const [ntfyTopic, setNtfyTopic] = useState("");
+    const [ntfyServer, setNtfyServer] = useState("");
+    const [ntfyToken, setNtfyToken] = useState("");
     const [ntfyEnabled, setNtfyEnabled] = useState(false);
     const [ntfyOnDone, setNtfyOnDone] = useState(true);
     const [ntfyOnError, setNtfyOnError] = useState(true);
@@ -51,6 +53,8 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
             setVacuumSpeed(fetched.vacuumSpeed);
             setSideBrushPower(fetched.sideBrushPower);
             setNtfyTopic(fetched.ntfyTopic ?? "");
+            setNtfyServer(fetched.ntfyServer ?? "");
+            setNtfyToken(fetched.ntfyToken ?? "");
             setNtfyEnabled(fetched.ntfyEnabled ?? false);
             setNtfyOnDone(fetched.ntfyOnDone ?? true);
             setNtfyOnError(fetched.ntfyOnError ?? true);
@@ -75,6 +79,8 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
             vacuumSpeed !== server.current.vacuumSpeed ||
             sideBrushPower !== server.current.sideBrushPower ||
             ntfyTopic !== (server.current.ntfyTopic ?? "") ||
+            ntfyServer !== (server.current.ntfyServer ?? "") ||
+            ntfyToken !== (server.current.ntfyToken ?? "") ||
             ntfyEnabled !== (server.current.ntfyEnabled ?? false) ||
             ntfyOnDone !== (server.current.ntfyOnDone ?? true) ||
             ntfyOnError !== (server.current.ntfyOnError ?? true) ||
@@ -119,6 +125,8 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         if (vacuumSpeed !== server.current.vacuumSpeed) patch.vacuumSpeed = vacuumSpeed;
         if (sideBrushPower !== server.current.sideBrushPower) patch.sideBrushPower = sideBrushPower;
         if (ntfyTopic !== (server.current.ntfyTopic ?? "")) patch.ntfyTopic = ntfyTopic;
+        if (ntfyServer !== (server.current.ntfyServer ?? "")) patch.ntfyServer = ntfyServer;
+        if (ntfyToken !== (server.current.ntfyToken ?? "")) patch.ntfyToken = ntfyToken;
         if (ntfyEnabled !== (server.current.ntfyEnabled ?? false)) patch.ntfyEnabled = ntfyEnabled;
         if (ntfyOnDone !== (server.current.ntfyOnDone ?? true)) patch.ntfyOnDone = ntfyOnDone;
         if (ntfyOnError !== (server.current.ntfyOnError ?? true)) patch.ntfyOnError = ntfyOnError;
@@ -137,6 +145,8 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         vacuumSpeed,
         sideBrushPower,
         ntfyTopic,
+        ntfyServer,
+        ntfyToken,
         ntfyEnabled,
         ntfyOnDone,
         ntfyOnError,
@@ -202,6 +212,10 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         setSideBrushPower,
         ntfyTopic,
         setNtfyTopic,
+        ntfyServer,
+        setNtfyServer,
+        ntfyToken,
+        setNtfyToken,
         ntfyEnabled,
         setNtfyEnabled,
         ntfyOnDone,

@@ -3,9 +3,14 @@
 // Day-name labels for JSON responses (Mon=0 .. Sun=6)
 static const char *DAY_NAMES[SCHEDULE_DAYS] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
 
-// Build NVS key for a per-day schedule field: "s0h", "s0m", "s0on", etc.
-static String schedKey(int day, const char *suffix) {
-    return "s" + String(day) + suffix;
+// Build NVS key for a per-day, per-slot schedule field.
+// Slot 0 (legacy): "s0h", "s0m", "s0on" (backwards compatible with single-slot firmware)
+// Slot 1: "s0h1", "s0m1", "s0on1"
+static String schedKey(int day, int slot, const char *suffix) {
+    String key = "s" + String(day) + suffix;
+    if (slot > 0)
+        key += String(slot);
+    return key;
 }
 
 SettingsManager::SettingsManager(Preferences& prefs) : prefs(prefs) {}
@@ -65,9 +70,11 @@ void SettingsManager::load() {
     current.ntfyOnDocking = prefs.getBool(NVS_KEY_NTFY_ON_DOCK, true);
     current.scheduleEnabled = prefs.getBool(NVS_KEY_SCHED_ENABLED, false);
     for (int d = 0; d < SCHEDULE_DAYS; d++) {
-        current.sched[d].hour = prefs.getInt(schedKey(d, "h").c_str(), 0);
-        current.sched[d].minute = prefs.getInt(schedKey(d, "m").c_str(), 0);
-        current.sched[d].on = prefs.getBool(schedKey(d, "on").c_str(), false);
+        for (int s = 0; s < SCHEDULE_SLOTS_PER_DAY; s++) {
+            current.sched[d].slots[s].hour = prefs.getInt(schedKey(d, s, "h").c_str(), 0);
+            current.sched[d].slots[s].minute = prefs.getInt(schedKey(d, s, "m").c_str(), 0);
+            current.sched[d].slots[s].on = prefs.getBool(schedKey(d, s, "on").c_str(), false);
+        }
     }
 }
 
@@ -90,9 +97,11 @@ void SettingsManager::save() {
     prefs.putBool(NVS_KEY_NTFY_ON_DOCK, current.ntfyOnDocking);
     prefs.putBool(NVS_KEY_SCHED_ENABLED, current.scheduleEnabled);
     for (int d = 0; d < SCHEDULE_DAYS; d++) {
-        prefs.putInt(schedKey(d, "h").c_str(), current.sched[d].hour);
-        prefs.putInt(schedKey(d, "m").c_str(), current.sched[d].minute);
-        prefs.putBool(schedKey(d, "on").c_str(), current.sched[d].on);
+        for (int s = 0; s < SCHEDULE_SLOTS_PER_DAY; s++) {
+            prefs.putInt(schedKey(d, s, "h").c_str(), current.sched[d].slots[s].hour);
+            prefs.putInt(schedKey(d, s, "m").c_str(), current.sched[d].slots[s].minute);
+            prefs.putBool(schedKey(d, s, "on").c_str(), current.sched[d].slots[s].on);
+        }
     }
 }
 
@@ -260,17 +269,20 @@ ApplyResult SettingsManager::apply(const String& json) {
     }
 
     for (int d = 0; d < SCHEDULE_DAYS; d++) { // NOLINT(modernize-loop-convert) index needed for DAY_NAMES[d]
-        SchedDay& cur = current.sched[d];
-        const SchedDay& inc = incoming.sched[d];
-        if (inc.hour != cur.hour || inc.minute != cur.minute || inc.on != cur.on) {
-            // Validate hour/minute ranges
-            if (inc.hour < 0 || inc.hour > 23 || inc.minute < 0 || inc.minute > 59)
-                return APPLY_INVALID;
-            cur.hour = inc.hour;
-            cur.minute = inc.minute;
-            cur.on = inc.on;
-            changed = true;
-            LOG("SETTINGS", "Sched %s -> %02d:%02d %s", DAY_NAMES[d], cur.hour, cur.minute, cur.on ? "on" : "off");
+        for (int s = 0; s < SCHEDULE_SLOTS_PER_DAY; s++) {
+            SchedSlot& cur = current.sched[d].slots[s];
+            const SchedSlot& inc = incoming.sched[d].slots[s];
+            if (inc.hour != cur.hour || inc.minute != cur.minute || inc.on != cur.on) {
+                // Validate hour/minute ranges
+                if (inc.hour < 0 || inc.hour > 23 || inc.minute < 0 || inc.minute > 59)
+                    return APPLY_INVALID;
+                cur.hour = inc.hour;
+                cur.minute = inc.minute;
+                cur.on = inc.on;
+                changed = true;
+                LOG("SETTINGS", "Sched %s slot %d -> %02d:%02d %s", DAY_NAMES[d], s, cur.hour, cur.minute,
+                    cur.on ? "on" : "off");
+            }
         }
     }
 
@@ -308,10 +320,16 @@ std::vector<Field> Settings::toFields() const {
             {"scheduleEnabled", scheduleEnabled ? "true" : "false", FIELD_BOOL},
     };
     for (int d = 0; d < SCHEDULE_DAYS; d++) {
-        String prefix = "sched" + String(d);
-        f.push_back({prefix + "Hour", String(sched[d].hour), FIELD_INT});
-        f.push_back({prefix + "Min", String(sched[d].minute), FIELD_INT});
-        f.push_back({prefix + "On", sched[d].on ? "true" : "false", FIELD_BOOL});
+        for (int s = 0; s < SCHEDULE_SLOTS_PER_DAY; s++) {
+            // Slot 0: "sched0Hour", "sched0Min", "sched0On" (backwards compatible)
+            // Slot 1: "sched0Slot1Hour", "sched0Slot1Min", "sched0Slot1On"
+            String prefix = "sched" + String(d);
+            if (s > 0)
+                prefix += "Slot" + String(s);
+            f.push_back({prefix + "Hour", String(sched[d].slots[s].hour), FIELD_INT});
+            f.push_back({prefix + "Min", String(sched[d].slots[s].minute), FIELD_INT});
+            f.push_back({prefix + "On", sched[d].slots[s].on ? "true" : "false", FIELD_BOOL});
+        }
     }
     return f;
 }
@@ -389,18 +407,22 @@ bool Settings::fromFields(const std::vector<Field>& fields) {
         applied = true;
     }
     for (int d = 0; d < SCHEDULE_DAYS; d++) { // NOLINT(modernize-loop-convert) index needed for field name prefix
-        String prefix = "sched" + String(d);
-        if ((f = findField(fields, (prefix + "Hour").c_str())) && f->type == FIELD_INT) {
-            sched[d].hour = f->value.toInt();
-            applied = true;
-        }
-        if ((f = findField(fields, (prefix + "Min").c_str())) && f->type == FIELD_INT) {
-            sched[d].minute = f->value.toInt();
-            applied = true;
-        }
-        if ((f = findField(fields, (prefix + "On").c_str())) && f->type == FIELD_BOOL) {
-            sched[d].on = (f->value == "true");
-            applied = true;
+        for (int s = 0; s < SCHEDULE_SLOTS_PER_DAY; s++) {
+            String prefix = "sched" + String(d);
+            if (s > 0)
+                prefix += "Slot" + String(s);
+            if ((f = findField(fields, (prefix + "Hour").c_str())) && f->type == FIELD_INT) {
+                sched[d].slots[s].hour = f->value.toInt();
+                applied = true;
+            }
+            if ((f = findField(fields, (prefix + "Min").c_str())) && f->type == FIELD_INT) {
+                sched[d].slots[s].minute = f->value.toInt();
+                applied = true;
+            }
+            if ((f = findField(fields, (prefix + "On").c_str())) && f->type == FIELD_BOOL) {
+                sched[d].slots[s].on = (f->value == "true");
+                applied = true;
+            }
         }
     }
 

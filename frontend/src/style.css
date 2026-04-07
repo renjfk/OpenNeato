@@ -2080,6 +2080,10 @@ body {
     opacity: 0.5;
 }
 
+.history-session-stats .history-session-battery {
+    display: none;
+}
+
 .history-session-chevron {
     font-size: 20px;
     color: var(--text-muted);
@@ -2304,15 +2308,125 @@ body {
     gap: 8px;
 }
 
-.schedule-day-row {
+.sched-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
+    padding: 10px 14px;
     border: 1px solid var(--border);
     border-radius: 12px;
     background: var(--surface);
-    gap: 10px;
+    gap: 8px;
+}
+
+.sched-day-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    min-width: 30px;
+    flex-shrink: 0;
+}
+
+.sched-day-label.off {
+    color: var(--text-muted);
+}
+
+.sched-slots {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    justify-content: flex-end;
+}
+
+.sched-time-input {
+    width: 56px;
+    padding: 6px 4px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card-bg);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
+    text-align: center;
+    outline: none;
+    -webkit-appearance: none;
+    font-variant-numeric: tabular-nums;
+}
+
+.sched-time-input:focus {
+    border-color: var(--accent);
+}
+
+.sched-time-input.invalid {
+    border-color: var(--red);
+    color: var(--red);
+}
+
+.sched-time-input:disabled {
+    opacity: 0.5;
+}
+
+.sched-slot2-wrap {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.sched-add-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    border: 1px dashed var(--text-muted);
+    background: none;
+    color: var(--text-muted);
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.sched-add-btn:active {
+    opacity: 0.6;
+}
+
+.sched-add-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+.sched-remove-btn {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    flex-shrink: 0;
+    opacity: 0.5;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.sched-remove-btn:active {
+    opacity: 1;
+}
+
+.sched-remove-btn:disabled {
+    cursor: default;
 }
 
 .schedule-day-left {
@@ -2361,70 +2475,16 @@ body {
     background: var(--green);
 }
 
-.schedule-day-name {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text);
-    min-width: 32px;
+.schedule-page .settings-save-btn {
+    margin-top: 20px;
 }
 
-.schedule-day-name.off {
-    color: var(--text-muted);
-}
-
-.schedule-day-right {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex: 1;
-    justify-content: flex-end;
-}
-
-.schedule-time-inputs {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.schedule-time-inputs span {
-    display: flex;
-}
-
-.schedule-time-inputs svg {
-    width: 14px;
-    height: 14px;
-    opacity: 0.4;
-}
-
-.schedule-time-select {
-    width: 48px;
-    padding: 6px 4px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--card-bg);
-    color: var(--text);
-    font-size: 13px;
+.schedule-tz-hint {
+    font-size: 12px;
     font-weight: 500;
-    font-family: inherit;
-    text-align: center;
-    appearance: none;
-    -webkit-appearance: none;
-    cursor: pointer;
-    outline: none;
-}
-
-.schedule-time-select:focus {
-    border-color: var(--accent);
-}
-
-.schedule-time-colon {
-    font-size: 14px;
-    font-weight: 600;
     color: var(--text-muted);
-}
-
-.schedule-day-row.pending {
-    animation: btn-pulse 1s ease-in-out infinite;
+    text-align: center;
+    margin-bottom: 12px;
 }
 
 /* Manual control page */
@@ -2633,6 +2693,10 @@ body {
 /* Tablets and desktop */
 
 @media (min-width: 600px) {
+    .history-session-stats .history-session-battery {
+        display: flex;
+    }
+
     body {
         max-width: 600px;
     }

@@ -267,8 +267,9 @@ const state = {
     filterChange: 2592000,
     brushChange: 2592000,
     dirtBin: 30,
-    // Schedule (Mon=0..Sun=6)
+    // Schedule (Mon=0..Sun=6), two slots per day
     scheduleEnabled: true,
+    // Slot 0 (primary)
     sched0Hour: 9,
     sched0Min: 0,
     sched0On: true, // Mon
@@ -290,6 +291,28 @@ const state = {
     sched6Hour: 0,
     sched6Min: 0,
     sched6On: false, // Sun
+    // Slot 1 (secondary)
+    sched0Slot1Hour: 15,
+    sched0Slot1Min: 0,
+    sched0Slot1On: true, // Mon afternoon
+    sched1Slot1Hour: 15,
+    sched1Slot1Min: 0,
+    sched1Slot1On: true, // Tue afternoon
+    sched2Slot1Hour: 15,
+    sched2Slot1Min: 0,
+    sched2Slot1On: true, // Wed afternoon
+    sched3Slot1Hour: 15,
+    sched3Slot1Min: 0,
+    sched3Slot1On: true, // Thu afternoon
+    sched4Slot1Hour: 15,
+    sched4Slot1Min: 0,
+    sched4Slot1On: true, // Fri afternoon
+    sched5Slot1Hour: 0,
+    sched5Slot1Min: 0,
+    sched5Slot1On: false, // Sat
+    sched6Slot1Hour: 0,
+    sched6Slot1Min: 0,
+    sched6Slot1On: false, // Sun
     ...merged,
 };
 
@@ -721,6 +744,9 @@ const routes = {
             s[`sched${d}Hour`] = state[`sched${d}Hour`];
             s[`sched${d}Min`] = state[`sched${d}Min`];
             s[`sched${d}On`] = state[`sched${d}On`];
+            s[`sched${d}Slot1Hour`] = state[`sched${d}Slot1Hour`];
+            s[`sched${d}Slot1Min`] = state[`sched${d}Slot1Min`];
+            s[`sched${d}Slot1On`] = state[`sched${d}Slot1On`];
         }
         jsonResponse(res, s);
     },
@@ -1029,6 +1055,9 @@ const handleRequest = async (req, res) => {
                 if (data[`sched${d}Hour`] !== undefined) state[`sched${d}Hour`] = data[`sched${d}Hour`];
                 if (data[`sched${d}Min`] !== undefined) state[`sched${d}Min`] = data[`sched${d}Min`];
                 if (data[`sched${d}On`] !== undefined) state[`sched${d}On`] = data[`sched${d}On`];
+                if (data[`sched${d}Slot1Hour`] !== undefined) state[`sched${d}Slot1Hour`] = data[`sched${d}Slot1Hour`];
+                if (data[`sched${d}Slot1Min`] !== undefined) state[`sched${d}Slot1Min`] = data[`sched${d}Slot1Min`];
+                if (data[`sched${d}Slot1On`] !== undefined) state[`sched${d}Slot1On`] = data[`sched${d}Slot1On`];
             }
             if (pinsChanged || hostnameChanged) {
                 setTimeout(() => {
@@ -1062,6 +1091,9 @@ const handleRequest = async (req, res) => {
                 s[`sched${d}Hour`] = state[`sched${d}Hour`];
                 s[`sched${d}Min`] = state[`sched${d}Min`];
                 s[`sched${d}On`] = state[`sched${d}On`];
+                s[`sched${d}Slot1Hour`] = state[`sched${d}Slot1Hour`];
+                s[`sched${d}Slot1Min`] = state[`sched${d}Slot1Min`];
+                s[`sched${d}Slot1On`] = state[`sched${d}Slot1On`];
             }
             return jsonResponse(res, s);
         } catch {

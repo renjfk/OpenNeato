@@ -40,7 +40,9 @@ export interface SystemData {
     tz: string;
 }
 
-// Per-day schedule fields: sched{0-6}Hour, sched{0-6}Min, sched{0-6}On (Mon=0..Sun=6)
+// Per-day schedule fields (Mon=0..Sun=6), two slots per day.
+// Slot 0 (primary):   sched{0-6}Hour, sched{0-6}Min, sched{0-6}On
+// Slot 1 (secondary): sched{0-6}Slot1Hour, sched{0-6}Slot1Min, sched{0-6}Slot1On
 export interface SettingsData {
     tz: string;
     logLevel: number; // 0=off, 1=info, 2=debug
@@ -60,6 +62,7 @@ export interface SettingsData {
     ntfyOnAlert: boolean; // Notify on robot alert (UI_ALERT_*, code 201-242)
     ntfyOnDocking: boolean; // Notify when robot returns to base
     scheduleEnabled: boolean;
+    // Slot 0 (primary)
     sched0Hour: number;
     sched0Min: number;
     sched0On: boolean;
@@ -81,6 +84,28 @@ export interface SettingsData {
     sched6Hour: number;
     sched6Min: number;
     sched6On: boolean;
+    // Slot 1 (secondary)
+    sched0Slot1Hour: number;
+    sched0Slot1Min: number;
+    sched0Slot1On: boolean;
+    sched1Slot1Hour: number;
+    sched1Slot1Min: number;
+    sched1Slot1On: boolean;
+    sched2Slot1Hour: number;
+    sched2Slot1Min: number;
+    sched2Slot1On: boolean;
+    sched3Slot1Hour: number;
+    sched3Slot1Min: number;
+    sched3Slot1On: boolean;
+    sched4Slot1Hour: number;
+    sched4Slot1Min: number;
+    sched4Slot1On: boolean;
+    sched5Slot1Hour: number;
+    sched5Slot1Min: number;
+    sched5Slot1On: boolean;
+    sched6Slot1Hour: number;
+    sched6Slot1Min: number;
+    sched6Slot1On: boolean;
 }
 
 export interface UserSettingsData {

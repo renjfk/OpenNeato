@@ -1,0 +1,11 @@
+{
+  "domain": "openneato",
+  "name": "OpenNeato",
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/renjfk/OpenNeato",
+  "iot_class": "local_polling",
+  "requirements": ["Pillow>=8.0.0"],
+  "version": "1.0.0"
+}

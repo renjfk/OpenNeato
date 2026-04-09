@@ -322,6 +322,7 @@ void WebServer::registerFirmwareRoutes() {
                 {"version", fwMgr.getFirmwareVersion(), FIELD_STRING},
                 {"chip", fwMgr.getChipModel(), FIELD_STRING},
                 {"model", neato.getModelName(), FIELD_STRING},
+                {"hostname", settingsMgr.get().hostname, FIELD_STRING},
                 {"supported", isSupportedModel(neato.getModelName()) ? "true" : "false", FIELD_BOOL},
                 {"identifying", neato.isIdentifying() ? "true" : "false", FIELD_BOOL},
         };

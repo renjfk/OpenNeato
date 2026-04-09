@@ -204,7 +204,10 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
         <>
             {/* Header */}
             <div class="header">
-                <h1>OpenNeato</h1>
+                <h1>
+                    OpenNeato
+                    {firmware.data?.hostname && <span class="header-hostname"> ({firmware.data.hostname})</span>}
+                </h1>
                 <div class="header-btns">
                     <button
                         type="button"

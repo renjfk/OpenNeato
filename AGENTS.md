@@ -55,11 +55,11 @@ pio run -e c3-debug                        # Build
 pio run -e c3-debug -t upload              # Upload via USB
 pio run -e c3-debug -t upload -t monitor   # Upload + serial monitor
 pio run -e c3-release                      # Release build (no serial logging)
-python scripts/check_format.py             # clang-format check (--fix to auto-fix)
+./scripts/check_format.py                  # clang-format check (--fix to auto-fix)
 pio check -e c3-debug                      # Static analysis (clang-tidy)
 ```
 
-Verify firmware changes: `pio run -e c3-debug` + `python scripts/check_format.py` +
+Verify firmware changes: `pio run -e c3-debug` + `./scripts/check_format.py` +
 `pio check -e c3-debug` with zero defects.
 
 Verify frontend changes: `npm run check` + `npm run build` in `frontend/`.

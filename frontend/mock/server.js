@@ -781,6 +781,7 @@ const routes = {
         jsonResponse(res, {
             version: state.firmwareVersion ?? getVersion(),
             chip: "ESP32-C3",
+            hostname: "neato-kitchen",
             supported: !state.unsupported && !state.identifying,
             identifying: state.identifying,
         });

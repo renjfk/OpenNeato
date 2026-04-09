@@ -113,6 +113,7 @@ export interface LidarScan {
 export interface FirmwareVersion {
     version: string;
     chip: string;
+    hostname: string;
     supported: boolean;
     identifying: boolean;
 }

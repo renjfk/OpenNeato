@@ -260,15 +260,6 @@ std::vector<Field> ErrorData::toFields() const {
     };
 }
 
-std::vector<Field> TimeData::toFields() const {
-    return {
-            {"dayOfWeek", String(dayOfWeek), FIELD_INT},
-            {"hour", String(hour), FIELD_INT},
-            {"minute", String(minute), FIELD_INT},
-            {"second", String(second), FIELD_INT},
-    };
-}
-
 // -- LDS scan special serializers --------------------------------------------
 
 String LdsScanData::toJson() const {
@@ -332,6 +323,39 @@ bool parseVersionData(const String& raw, VersionData& out) {
     if (findCsvValue(raw, "MainBoard Version", val)) {
         out.mainBoardVersion = val;
         out.mainBoardVersion.replace(",", ".");
+    }
+    // Parse "Time UTC" field, format: "Sat Apr 11 19:26:13 2026"
+    if (findCsvValue(raw, "Time UTC", val)) {
+        val.trim();
+        struct tm tm = {};
+        // Skip day-of-week prefix (e.g. "Sat ")
+        int space = val.indexOf(' ');
+        if (space > 0) {
+            String rest = val.substring(space + 1);
+            static const char *months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+            // Parse "Apr 11 19:26:13 2026"
+            String monStr = rest.substring(0, 3);
+            int mon = -1;
+            for (int i = 0; i < 12; i++) {
+                if (monStr.equalsIgnoreCase(months[i])) {
+                    mon = i;
+                    break;
+                }
+            }
+            int day = 0, hour = 0, min = 0, sec = 0, year = 0;
+            if (mon >= 0 && sscanf(rest.c_str() + 4, "%d %d:%d:%d %d", &day, &hour, &min, &sec, &year) == 5 &&
+                year >= 2020) {
+                // Compute UTC epoch directly (avoids mktime which applies local TZ)
+                static const int cumDays[] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
+                int y = year - 1;
+                long days = 365L * (year - 1970) + (y / 4 - y / 100 + y / 400) - (1969 / 4 - 1969 / 100 + 1969 / 400);
+                days += cumDays[mon] + day - 1;
+                if (mon > 1 && (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)))
+                    days++; // leap year adjustment
+                out.timeUtc = static_cast<time_t>(days) * 86400 + hour * 3600 + min * 60 + sec;
+            }
+        }
     }
     return out.modelName.length() > 0 || out.softwareVersion.length() > 0;
 }
@@ -580,38 +604,6 @@ bool parseLdsScanData(const String& raw, LdsScanData& out) {
     return foundData;
 }
 
-// -- Time parser -------------------------------------------------------------
-
-bool parseTimeData(const String& raw, TimeData& out) {
-    // Format: "Sunday 13:57:09" (DayOfWeek HH:MM:SS)
-    String line = raw;
-    line.trim();
-
-    // Map day name to number
-    static const char *days[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
-    int spaceIdx = line.indexOf(' ');
-    if (spaceIdx < 0)
-        return false;
-
-    String dayName = line.substring(0, spaceIdx);
-    out.dayOfWeek = -1;
-    for (int i = 0; i < 7; i++) {
-        if (dayName.equalsIgnoreCase(days[i])) {
-            out.dayOfWeek = i;
-            break;
-        }
-    }
-
-    String timeStr = line.substring(spaceIdx + 1);
-    int h = 0, m = 0, s = 0;
-    if (sscanf(timeStr.c_str(), "%d:%d:%d", &h, &m, &s) != 3)
-        return false;
-
-    out.hour = h;
-    out.minute = m;
-    out.second = s;
-    return true;
-}
 
 // -- User settings -----------------------------------------------------------
 

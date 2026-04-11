@@ -671,23 +671,6 @@ bool NeatoSerial::powerControl(const String& action, std::function<void(bool)> c
     });
 }
 
-// -- Time commands -----------------------------------------------------------
-
-bool NeatoSerial::getTime(std::function<void(bool, const TimeData&)> callback) {
-    return enqueue(CMD_GET_TIME, [callback](bool ok, const String& raw) {
-        TimeData data;
-        if (ok)
-            ok = parseTimeData(raw, data);
-        callback(ok, data);
-    });
-}
-
-bool NeatoSerial::setTime(int dayOfWeek, int hour, int min, int sec, std::function<void(bool)> callback) {
-    String cmd = String(CMD_SET_TIME) + " Day " + String(dayOfWeek) + " Hour " + String(hour) + " Min " + String(min) +
-                 " Sec " + String(sec);
-    return enqueue(cmd, wrapAction(callback));
-}
-
 bool NeatoSerial::sendRaw(const String& cmd, std::function<void(bool, const String&)> callback) {
     if (cmd.isEmpty())
         return false;

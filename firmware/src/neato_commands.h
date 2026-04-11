@@ -16,7 +16,6 @@
 #define CMD_GET_ERR_CLEAR "GetErr Clear"
 #define CMD_GET_LDS_SCAN "GetLDSScan"
 
-#define CMD_GET_TIME "GetTime"
 #define CMD_GET_CAL_INFO "GetCalInfo"
 #define CMD_GET_LIFE_STAT_LOG "GetLifeStatLog"
 #define CMD_GET_WARRANTY "GetWarranty"
@@ -29,8 +28,6 @@
 #define CMD_SET_LDS_ROTATION_ON "SetLDSRotation On"
 #define CMD_SET_LDS_ROTATION_OFF "SetLDSRotation Off"
 #define CMD_PLAY_SOUND "PlaySound"
-#define CMD_SET_TIME "SetTime"
-
 // -- SetEvent constants (D3-D7, requires SKey) --------------------------------
 #define CMD_SET_EVENT_PREFIX "SetEvent event "
 #define CMD_SET_EVENT_SKEY " SKey "
@@ -83,6 +80,7 @@ struct VersionData : public JsonSerializable {
     String ldsVersion;
     String ldsSerial;
     String mainBoardVersion;
+    time_t timeUtc = 0; // Parsed from "Time UTC" field (0 = not available)
 
     std::vector<Field> toFields() const override;
 };
@@ -157,16 +155,7 @@ struct ErrorData : public JsonSerializable {
     std::vector<Field> toFields() const override;
 };
 
-struct TimeData : public JsonSerializable {
-    int dayOfWeek = -1; // 0=Sunday .. 6=Saturday
-    int hour = 0;
-    int minute = 0;
-    int second = 0;
-
-    std::vector<Field> toFields() const override;
-};
-
-// LDS scan — special case, does not use toFields()
+// LDS scan - special case, does not use toFields()
 struct LdsScanPoint {
     int angleDeg = 0;
     int distMM = 0;
@@ -223,7 +212,6 @@ bool parseMotorData(const String& raw, MotorData& out);
 bool parseRobotState(const String& raw, RobotState& out);
 bool parseErrorData(const String& raw, ErrorData& out);
 bool parseLdsScanData(const String& raw, LdsScanData& out);
-bool parseTimeData(const String& raw, TimeData& out);
 bool parseRobotPosData(const String& raw, RobotPosData& out);
 bool parseUserSettingsData(const String& raw, UserSettingsData& out);
 

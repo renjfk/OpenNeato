@@ -188,7 +188,6 @@ enum CommandStatus {
 #define NTP_SERVER_1 "pool.ntp.org"
 #define NTP_SERVER_2 "time.nist.gov"
 #define NTP_DEFAULT_TZ "UTC0" // POSIX TZ string, stored in NVS
-#define ROBOT_TIME_SYNC_INTERVAL_MS 14400000 // Push NTP to robot every 4 hours
 
 // Logging — enabled by default, disable with -DENABLE_LOGGING=0
 #ifndef ENABLE_LOGGING

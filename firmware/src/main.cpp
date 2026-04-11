@@ -32,25 +32,8 @@ CleaningHistory cleaningHistory(neatoSerial, dataLogger, systemManager);
 WebServer webServer(server, neatoSerial, dataLogger, systemManager, firmwareManager, settingsManager, manualClean,
                     notifMgr, cleaningHistory);
 
-// Robot time sync state (managed here, not in SystemManager)
-unsigned long lastRobotSync = 0;
-
 // Tracks whether web server has been started (may be deferred if WiFi was slow at boot)
 bool webServerStarted = false;
-
-
-// Push NTP time to robot clock via SetTime
-static void syncRobotClock() {
-    time_t t = time(nullptr);
-    if (t <= 1700000000)
-        return;
-
-    struct tm tm;
-    localtime_r(&t, &tm);
-
-    neatoSerial.setTime(tm.tm_wday, tm.tm_hour, tm.tm_min, tm.tm_sec,
-                        [](bool ok) { LOG("MAIN", "Robot clock sync %s", ok ? "OK" : "FAILED"); });
-}
 
 void setup() {
     Serial.begin(115200);
@@ -123,12 +106,10 @@ void setup() {
     systemManager.begin();
     systemManager.applyTimezone(settingsManager.get().tz);
 
-    // Wire NTP sync callback: push time to robot, log the event
+    // Wire NTP sync callback: log the event
     systemManager.onNtpSync([&] {
         time_t t = time(nullptr);
         dataLogger.logNtp("sync_ok", {{"epoch", String(static_cast<long>(t)), FIELD_INT}});
-        syncRobotClock();
-        lastRobotSync = millis();
     });
 
     // Initialize web server and OTA if WiFi is already connected.
@@ -154,22 +135,14 @@ void setup() {
     dataLogger.setLogLevelCheck([&]() { return settingsManager.get().logLevel; });
     dataLogger.begin();
 
-    // Fetch robot time as fallback clock
-    neatoSerial.getTime([](bool ok, const TimeData& t) {
-        if (!ok) {
-            LOG("MAIN", "GetTime failed, no robot clock available");
+    // Fetch robot time as fallback clock (parsed from "Time UTC" in GetVersion)
+    neatoSerial.getVersion([](bool ok, const VersionData& v) {
+        if (!ok || v.timeUtc == 0) {
+            LOG("MAIN", "GetVersion time not available, no robot clock fallback");
             return;
         }
-        struct tm tm = {};
-        tm.tm_year = 2025 - 1900;
-        tm.tm_mon = 0;
-        tm.tm_mday = 1;
-        tm.tm_hour = t.hour;
-        tm.tm_min = t.minute;
-        tm.tm_sec = t.second;
-        time_t epoch = mktime(&tm);
-        systemManager.setFallbackClock(epoch);
-        LOG("MAIN", "Robot time: %02d:%02d:%02d -> epoch %ld", t.hour, t.minute, t.second, static_cast<long>(epoch));
+        systemManager.setFallbackClock(v.timeUtc);
+        LOG("MAIN", "Robot clock fallback set from GetVersion: epoch %ld", static_cast<long>(v.timeUtc));
     });
 
     // Start task watchdog AFTER all slow init is complete (SPIFFS mount,
@@ -258,10 +231,4 @@ void loop() {
     // each constructor): NeatoSerial, ManualCleanManager, SystemManager, DataLogger,
     // NotificationManager, Scheduler. Each respects its own LoopTask interval.
     TaskRegistry::tickAll();
-
-    // Periodic robot time re-sync from NTP (every 4 hours)
-    if (systemManager.isNtpSynced() && millis() - lastRobotSync >= ROBOT_TIME_SYNC_INTERVAL_MS) {
-        syncRobotClock();
-        lastRobotSync = millis();
-    }
 }

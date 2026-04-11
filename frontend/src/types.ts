@@ -38,6 +38,8 @@ export interface SystemData {
     time: number;
     timeSource: string;
     tz: string;
+    localTime: string; // DST-aware local time, e.g. "Sat 17:45:01"
+    isDst: boolean; // true when daylight saving time is active
 }
 
 // Per-day schedule fields (Mon=0..Sun=6), two slots per day.

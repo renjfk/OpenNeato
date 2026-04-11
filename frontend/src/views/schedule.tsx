@@ -7,8 +7,8 @@ import { ErrorBannerStack, useErrorStack } from "../components/error-banner";
 import { Icon } from "../components/icon";
 import { useDirtyGuard } from "../hooks/use-dirty-guard";
 import { useFetch } from "../hooks/use-fetch";
-import type { SettingsData } from "../types";
-import { findPresetLabel } from "./settings/helpers";
+import type { SettingsData, SystemData } from "../types";
+import { findCurrentTzAbbrev, findPresetLabel } from "./settings/helpers";
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const SLOTS_PER_DAY = 2;
@@ -74,7 +74,18 @@ function parseTime(value: string): { hour: number; minute: number } | null {
     return { hour: Number.parseInt(match[1], 10), minute: Number.parseInt(match[2], 10) };
 }
 
-function tzLabel(tz: string): string {
+function tzLabel(tz: string, isDst?: boolean): string {
+    // Show abbreviation with current offset, e.g. "EEST (UTC+3)"
+    if (isDst !== undefined) {
+        const abbrev = findCurrentTzAbbrev(tz, isDst);
+        const preset = findPresetLabel(tz);
+        if (abbrev && preset) {
+            const offset = preset.replace(/^.*\(UTC([^)]+)\/([^)]+)\).*$/, (_m, std, dst) => (isDst ? dst : std));
+            // If regex matched (DST zone), show "EEST (UTC+3)"; otherwise just use the preset label
+            return offset !== preset ? `${abbrev} (UTC${offset})` : preset;
+        }
+        if (abbrev) return abbrev;
+    }
     const preset = findPresetLabel(tz);
     if (preset) return preset;
     const match = tz.match(/^([A-Z]{2,5})/);
@@ -111,6 +122,7 @@ export function ScheduleView() {
     const [saving, setSaving] = useState(false);
 
     const { data: settings, loading, error: fetchError } = useFetch(api.getSettings);
+    const { data: system } = useFetch<SystemData>(api.getSystem);
 
     const [enabled, setEnabled] = useState(false);
     const [tz, setTz] = useState("UTC0");
@@ -265,7 +277,7 @@ export function ScheduleView() {
                             />
                         </div>
 
-                        <div class="schedule-tz-hint">Times are in {tzLabel(tz)}</div>
+                        <div class="schedule-tz-hint">Times are in {tzLabel(tz, system?.isDst)}</div>
 
                         {/* Day rows */}
                         <div class="schedule-days">

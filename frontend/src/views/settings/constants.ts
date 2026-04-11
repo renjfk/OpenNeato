@@ -3,6 +3,8 @@ import type { SettingsData } from "../../types";
 interface TimezonePreset {
     label: string;
     tz: string;
+    std?: string; // Standard time abbreviation, e.g. "EET"
+    dst?: string; // DST abbreviation, e.g. "EEST"
 }
 
 interface TxPowerPreset {
@@ -11,24 +13,24 @@ interface TxPowerPreset {
 }
 
 // Common timezone presets — label shown in UI, value is POSIX TZ string
-// UTC offset shown is the standard (non-DST) offset
+// Zones with DST show both offsets (standard/summer) to avoid confusion
 export const TIMEZONE_PRESETS: TimezonePreset[] = [
     { label: "UTC (UTC+0)", tz: "UTC0" },
-    { label: "US Hawaii (UTC-10)", tz: "HST10" },
-    { label: "US Alaska (UTC-9)", tz: "AKST9AKDT,M3.2.0,M11.1.0" },
-    { label: "US Pacific (UTC-8)", tz: "PST8PDT,M3.2.0,M11.1.0" },
-    { label: "US Mountain (UTC-7)", tz: "MST7MDT,M3.2.0,M11.1.0" },
-    { label: "US Central (UTC-6)", tz: "CST6CDT,M3.2.0,M11.1.0" },
-    { label: "US Eastern (UTC-5)", tz: "EST5EDT,M3.2.0,M11.1.0" },
-    { label: "UK / Ireland (UTC+0)", tz: "GMT0BST,M3.5.0/1,M10.5.0" },
-    { label: "Central Europe (UTC+1)", tz: "CET-1CEST,M3.5.0,M10.5.0/3" },
-    { label: "Eastern Europe (UTC+2)", tz: "EET-2EEST,M3.5.0/3,M10.5.0/4" },
-    { label: "Turkey (UTC+3)", tz: "<+03>-3" },
-    { label: "India (UTC+5:30)", tz: "IST-5:30" },
-    { label: "China / Singapore (UTC+8)", tz: "CST-8" },
-    { label: "Japan / Korea (UTC+9)", tz: "JST-9" },
-    { label: "Australia Eastern (UTC+10)", tz: "AEST-10AEDT,M10.1.0,M4.1.0/3" },
-    { label: "New Zealand (UTC+12)", tz: "NZST-12NZDT,M9.5.0,M4.1.0/3" },
+    { label: "US Hawaii (UTC-10)", tz: "HST10", std: "HST" },
+    { label: "US Alaska (UTC-9/-8)", tz: "AKST9AKDT,M3.2.0,M11.1.0", std: "AKST", dst: "AKDT" },
+    { label: "US Pacific (UTC-8/-7)", tz: "PST8PDT,M3.2.0,M11.1.0", std: "PST", dst: "PDT" },
+    { label: "US Mountain (UTC-7/-6)", tz: "MST7MDT,M3.2.0,M11.1.0", std: "MST", dst: "MDT" },
+    { label: "US Central (UTC-6/-5)", tz: "CST6CDT,M3.2.0,M11.1.0", std: "CST", dst: "CDT" },
+    { label: "US Eastern (UTC-5/-4)", tz: "EST5EDT,M3.2.0,M11.1.0", std: "EST", dst: "EDT" },
+    { label: "UK / Ireland (UTC+0/+1)", tz: "GMT0BST,M3.5.0/1,M10.5.0", std: "GMT", dst: "BST" },
+    { label: "Central Europe (UTC+1/+2)", tz: "CET-1CEST,M3.5.0,M10.5.0/3", std: "CET", dst: "CEST" },
+    { label: "Eastern Europe (UTC+2/+3)", tz: "EET-2EEST,M3.5.0/3,M10.5.0/4", std: "EET", dst: "EEST" },
+    { label: "Turkey (UTC+3)", tz: "<+03>-3", std: "TRT" },
+    { label: "India (UTC+5:30)", tz: "IST-5:30", std: "IST" },
+    { label: "China / Singapore (UTC+8)", tz: "CST-8", std: "CST" },
+    { label: "Japan / Korea (UTC+9)", tz: "JST-9", std: "JST" },
+    { label: "Australia Eastern (UTC+10/+11)", tz: "AEST-10AEDT,M10.1.0,M4.1.0/3", std: "AEST", dst: "AEDT" },
+    { label: "New Zealand (UTC+12/+13)", tz: "NZST-12NZDT,M9.5.0,M4.1.0/3", std: "NZST", dst: "NZDT" },
 ];
 
 // WiFi TX power presets — value is in 0.25 dBm units (ESP32 wifi_power_t)

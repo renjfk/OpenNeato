@@ -682,6 +682,10 @@ const routes = {
 
     // System routes
     "GET /api/system": (_req, res) => {
+        const now = new Date();
+        const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const pad = (n) => n.toString().padStart(2, "0");
+        const localTime = `${days[now.getDay()]} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
         jsonResponse(res, {
             heap: rand(160000, 200000),
             heapTotal: 327680,
@@ -693,6 +697,8 @@ const routes = {
             time: Math.floor(Date.now() / 1000),
             timeSource: "ntp",
             tz: state.tz,
+            localTime,
+            isDst: now.getTimezoneOffset() !== new Date(now.getFullYear(), 0, 1).getTimezoneOffset(),
         });
     },
 

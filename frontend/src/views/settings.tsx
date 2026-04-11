@@ -32,7 +32,7 @@ import {
     TX_POWER_PRESETS,
     VACUUM_PRESETS,
 } from "./settings/constants";
-import { findPresetLabel, formatRobotTime } from "./settings/helpers";
+import { findPresetLabel } from "./settings/helpers";
 import { SettingsCategory } from "./settings/settings-category";
 import { useFirmwareUpload } from "./settings/use-firmware-upload";
 import { useReboot } from "./settings/use-reboot";
@@ -415,10 +415,10 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                                 )}
                             </select>
                         </div>
-                        {system?.time && (
+                        {system?.localTime && (
                             <div class="settings-robot-time">
                                 <Icon svg={clockSvg} />
-                                Robot time: {formatRobotTime(system.time, tz)}
+                                Robot time: {system.localTime}
                             </div>
                         )}
                     </div>

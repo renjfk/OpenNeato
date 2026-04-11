@@ -147,6 +147,8 @@ std::vector<Field> SystemHealth::toFields() const {
             {"time", String(static_cast<long>(time)), FIELD_INT},
             {"timeSource", timeSource, FIELD_STRING},
             {"tz", tz, FIELD_STRING},
+            {"localTime", localTime, FIELD_STRING},
+            {"isDst", isDst ? "true" : "false", FIELD_BOOL},
     };
 }
 
@@ -162,5 +164,19 @@ SystemHealth SystemManager::getSystemHealth(const String& tz) const {
     h.time = now();
     h.timeSource = ntpSynced ? "ntp" : (fallbackSet ? "fallback" : "millis");
     h.tz = tz;
+
+    // Compute DST-aware local time string via localtime_r (same conversion the
+    // scheduler uses). The POSIX TZ string applied via configTzTime() handles
+    // DST transitions, so this is always correct for the configured timezone.
+    if (h.time > 1700000000) {
+        struct tm tm;
+        localtime_r(&h.time, &tm);
+        static const char *DAYS[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+        char buf[20];
+        snprintf(buf, sizeof(buf), "%s %02d:%02d:%02d", DAYS[tm.tm_wday], tm.tm_hour, tm.tm_min, tm.tm_sec);
+        h.localTime = buf;
+        h.isDst = tm.tm_isdst > 0;
+    }
+
     return h;
 }

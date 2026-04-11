@@ -28,6 +28,9 @@ Everything you need to set up, configure, and troubleshoot OpenNeato.
     - [Reporting an Issue](#reporting-an-issue)
 - [Multiple Robots](#multiple-robots)
 - [Remote Access](#remote-access)
+- [Serial API](#serial-api)
+    - [Sending Commands](#sending-commands)
+    - [Common Commands](#common-commands)
 
 ---
 
@@ -325,9 +328,6 @@ Go to **Settings -> Diagnostics** and set **Log Level**:
 - **Debug** — everything in Info plus all serial commands with raw responses. Auto-reverts to
   off after 10 minutes.
 
-The raw serial console endpoint (`POST /api/serial?cmd=<command>`) for direct robot
-communication is always available regardless of log level.
-
 > [!NOTE]
 > Logging writes to flash storage (SPIFFS). Higher levels generate more writes, which
 > increases flash wear. Use Info or Debug only when actively diagnosing an issue.
@@ -416,3 +416,63 @@ set up on most routers or a Raspberry Pi.
 > [!TIP]
 > A home VPN solves remote access not just for OpenNeato but for all your local devices and
 > services — NAS, printers, cameras, etc.
+
+---
+
+## Serial API
+
+OpenNeato exposes a serial passthrough endpoint that lets you send any command directly to
+the robot over HTTP. This is useful for advanced diagnostics, maintenance tasks, and
+automation workflows that go beyond what the web UI provides.
+
+> [!CAUTION]
+> This API sends commands directly to the robot with no safety checks or confirmation
+> prompts. Incorrect commands can reset settings, erase data, or interfere with an active
+> cleaning session.
+>
+> The firmware uses optimized caching and priority queues for serial communication - raw commands bypass this and can
+> interfere with normal operation. Only use this if you know what you're doing. If you think a command should be exposed
+> through the web UI instead, please [open an issue](https://github.com/renjfk/OpenNeato/issues).
+
+### Sending Commands
+
+Send a `POST` request to `/api/serial` with the command in the `cmd` query parameter:
+
+```bash
+curl -X POST 'http://neato.local/api/serial?cmd=NewBattery'
+```
+
+The response is the raw text output from the robot, exactly as it would appear over a direct
+serial connection. Replace `neato.local` with your device's IP address if mDNS isn't working
+on your network.
+
+**Response codes:**
+
+| Status | Meaning                                           |
+|--------|---------------------------------------------------|
+| 200    | Command sent, robot response in body (plain text) |
+| 400    | Missing or empty `cmd` parameter                  |
+| 503    | Robot communication busy or unavailable           |
+
+Commands with spaces must be URL-encoded (`%20`), or use `--data-urlencode` with `curl`:
+
+```bash
+curl -X POST -G 'http://neato.local/api/serial' --data-urlencode 'cmd=SetUserSettings Reset'
+```
+
+### Common Commands
+
+A few typical maintenance tasks:
+
+```bash
+# New battery installed (resets fuel gauge calibration)
+curl -X POST 'http://neato.local/api/serial?cmd=NewBattery'
+
+# Reset robot user settings to factory defaults
+curl -X POST 'http://neato.local/api/serial?cmd=SetUserSettings%20Reset'
+
+# Clear all robot log files
+curl -X POST 'http://neato.local/api/serial?cmd=ClearFiles%20All'
+```
+
+Any command the robot supports can be sent this way.

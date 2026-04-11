@@ -9,5 +9,5 @@ export function findPresetLabel(tz: string): string | null {
 export function findCurrentTzAbbrev(tz: string, isDst: boolean): string | null {
     const match = TIMEZONE_PRESETS.find((p) => p.tz === tz);
     if (!match) return null;
-    return isDst && match.dst ? match.dst : (match.std ?? null);
+    return isDst && match.dst ? match.dst : match.std;
 }

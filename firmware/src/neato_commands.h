@@ -184,6 +184,7 @@ struct UserSettingsData : public JsonSerializable {
     bool ecoMode = false;
     bool intenseClean = false;
     bool binFullDetect = true;
+    bool wallEnable = true; // Wall following — robot traces along walls and edges during cleaning
     // Power saving
     bool wifi = true;
     bool stealthLed = false;

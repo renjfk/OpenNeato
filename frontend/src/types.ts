@@ -117,6 +117,7 @@ export interface UserSettingsData {
     ecoMode: boolean;
     intenseClean: boolean;
     binFullDetect: boolean;
+    wallEnable: boolean;
     wifi: boolean;
     stealthLed: boolean;
     filterChange: number; // seconds

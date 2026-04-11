@@ -92,6 +92,7 @@ Robot GND -> ESP GND. The robot provides 3.3V to power the ESP.
   - `EcoMode ON/OFF` — Eco cleaning mode (lower brush/vacuum power)
   - `IntenseClean ON/OFF` — Intense clean (double-pass)
   - `BinFullDetect ON/OFF` — Dust bin full detection
+  - `WallEnable ON/OFF` — Wall following (robot traces along walls and edges during cleaning)
   - `WiFi ON/OFF` — Robot's own WiFi radio (unused with OpenNeato)
   - `StealthLED ON/OFF` — Standby LEDs (ON = hidden, OFF = visible)
   - `FilterChange <seconds>` — Filter change alert interval
@@ -99,7 +100,7 @@ Robot GND -> ESP GND. The robot provides 3.3V to power the ESP.
   - `DirtBin <minutes>` — Dirt bin alert reminder interval
   - `Reset` — Reset all user settings to factory defaults
   - Note: `GetUserSettings` response uses different label names than `SetUserSettings` parameters
-    (e.g. "ClickSounds" vs "ButtonClick", "Melody Sounds" vs "Melodies")
+    (e.g. "ClickSounds" vs "ButtonClick", "Melody Sounds" vs "Melodies", "Wall Enable" vs "WallEnable")
 - `RestoreDefaults` — Restore user settings to default
 - `SetDistanceCal [DropMinimum|DropMiddle|DropMaximum] [WallMinimum|WallMiddle|WallMaximum]` — Set distance sensor calibration values for min and max distances
   - DropMinimum: Take minimum distance drop sensor readings (mutually exclusive of DropMiddle and DropMax)

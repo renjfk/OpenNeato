@@ -540,6 +540,7 @@ std::vector<Field> UserSettingsData::toFields() const {
             {"ecoMode", ecoMode ? "true" : "false", FIELD_BOOL},
             {"intenseClean", intenseClean ? "true" : "false", FIELD_BOOL},
             {"binFullDetect", binFullDetect ? "true" : "false", FIELD_BOOL},
+            {"wallEnable", wallEnable ? "true" : "false", FIELD_BOOL},
             {"wifi", wifi ? "true" : "false", FIELD_BOOL},
             {"stealthLed", stealthLed ? "true" : "false", FIELD_BOOL},
             {"filterChange", String(filterChange), FIELD_INT},
@@ -573,6 +574,10 @@ bool UserSettingsData::fromFields(const std::vector<Field>& fields) {
     }
     if ((f = findField(fields, "binFullDetect"))) {
         binFullDetect = f->value == "true";
+        applied = true;
+    }
+    if ((f = findField(fields, "wallEnable"))) {
+        wallEnable = f->value == "true";
         applied = true;
     }
     if ((f = findField(fields, "wifi"))) {
@@ -627,6 +632,10 @@ bool parseUserSettingsData(const String& raw, UserSettingsData& out) {
     }
     if (findCsvValue(raw, "Bin Full Detect", val)) {
         out.binFullDetect = val.equalsIgnoreCase("ON");
+        found = true;
+    }
+    if (findCsvValue(raw, "Wall Enable", val)) {
+        out.wallEnable = val.equalsIgnoreCase("ON");
         found = true;
     }
     if (findCsvValue(raw, "WiFi", val)) {

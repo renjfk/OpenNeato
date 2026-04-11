@@ -128,6 +128,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
         ecoMode: "EcoMode",
         intenseClean: "IntenseClean",
         binFullDetect: "BinFullDetect",
+        wallEnable: "WallEnable",
         wifi: "WiFi",
         stealthLed: "StealthLED",
     };
@@ -887,6 +888,19 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                                 }
                                 disabled={robotSettingsDisabled}
                                 aria-label="Toggle bin full detection"
+                            />
+                        </div>
+                        <div class="settings-toggle-row">
+                            <div class="settings-toggle-label">
+                                <span class="settings-toggle-title">Wall following</span>
+                                <span class="settings-toggle-desc">Follow walls and edges for thorough cleaning</span>
+                            </div>
+                            <button
+                                type="button"
+                                class={`settings-toggle${robotSettings?.wallEnable ? " on" : ""}${savingRobotSettings ? " pending" : ""}`}
+                                onClick={() => handleRobotSettingsChange("wallEnable", !robotSettings?.wallEnable)}
+                                disabled={robotSettingsDisabled}
+                                aria-label="Toggle wall following"
                             />
                         </div>
                     </div>

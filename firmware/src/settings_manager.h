@@ -7,11 +7,16 @@
 #include "config.h"
 #include "json_fields.h"
 
-// Per-day schedule slot (Mon=0 .. Sun=6)
-struct SchedDay {
+// Single schedule time slot
+struct SchedSlot {
     int hour = 0; // 0-23
     int minute = 0; // 0-59
     bool on = false; // true = house clean at this time
+};
+
+// Per-day schedule (Mon=0 .. Sun=6), two slots per day
+struct SchedDay {
+    SchedSlot slots[SCHEDULE_SLOTS_PER_DAY];
 };
 
 // All user-configurable settings — flat struct, serializable to/from JSON

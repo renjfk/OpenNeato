@@ -97,7 +97,7 @@ export const SIDE_BRUSH_PRESETS: SideBrushPreset[] = [
     { label: "1500 mW (recommended)", value: 1500 },
 ];
 
-export const DEFAULT_SERVER: SettingsData = {
+export const DEFAULT_SERVER = {
     tz: "UTC0",
     logLevel: 0,
     wifiTxPower: 60,

@@ -28,58 +28,71 @@ void Scheduler::tick() {
     int day = toSchedDay(tm.tm_wday);
     int nowMins = tm.tm_hour * 60 + tm.tm_min;
 
-    const SchedDay& slot = s.sched[day];
-    if (!slot.on)
-        return;
+    // Reset fired guards when the day rolls over
+    if (day != firedDay) {
+        firedDay = day;
+        for (int& fs: firedSlots)
+            fs = -1;
+    }
 
-    int schedMins = slot.hour * 60 + slot.minute;
-    int elapsed = nowMins - schedMins;
+    const SchedDay& daySlots = s.sched[day];
 
-    // Fire if we're within 0..SCHEDULE_WINDOW_MINS after the scheduled time
-    if (elapsed < 0 || elapsed > SCHEDULE_WINDOW_MINS)
-        return;
+    for (int si = 0; si < SCHEDULE_SLOTS_PER_DAY; si++) {
+        const SchedSlot& slot = daySlots.slots[si];
+        if (!slot.on)
+            continue;
 
-    // Already fired for this slot today?
-    if (day == firedDay && schedMins == firedSlot)
-        return;
+        int schedMins = slot.hour * 60 + slot.minute;
+        int elapsed = nowMins - schedMins;
 
-    // Build common log fields for this slot
-    String slotStr = String(schedMins / 60) + ":" + (schedMins % 60 < 10 ? "0" : "") + String(schedMins % 60);
+        // Fire if we're within 0..SCHEDULE_WINDOW_MINS after the scheduled time
+        if (elapsed < 0 || elapsed > SCHEDULE_WINDOW_MINS)
+            continue;
 
-    // Check robot state before triggering (uses cached state — no extra serial command)
-    serial.getState([this, day, schedMins, slotStr](bool ok, const RobotState& state) {
-        if (!ok) {
-            LOG("SCHED", "GetState failed, cannot check robot state for slot %s", slotStr.c_str());
-            dataLogger.logGenericEvent("scheduler_state_error",
-                                       {{"day", String(day), FIELD_INT}, {"slot", slotStr, FIELD_STRING}});
-            return;
-        }
+        // Already fired for this slot today?
+        if (schedMins == firedSlots[si])
+            continue;
 
-        // Robot already cleaning — mark slot as fired so we don't retry every 30s
-        if (state.uiState != "UIMGR_STATE_IDLE" && state.uiState != "UIMGR_STATE_STANDBY") {
-            LOG("SCHED", "Robot busy (%s), skipping slot %s", state.uiState.c_str(), slotStr.c_str());
-            dataLogger.logGenericEvent("scheduler_skipped", {{"day", String(day), FIELD_INT},
-                                                             {"slot", slotStr, FIELD_STRING},
-                                                             {"reason", "busy", FIELD_STRING},
-                                                             {"state", state.uiState, FIELD_STRING}});
-            firedDay = day;
-            firedSlot = schedMins;
-            return;
-        }
+        // Build common log fields for this slot
+        String slotStr = String(schedMins / 60) + ":" + (schedMins % 60 < 10 ? "0" : "") + String(schedMins % 60);
 
-        LOG("SCHED", "Triggering scheduled clean (day=%d slot=%s)", day, slotStr.c_str());
-        dataLogger.logGenericEvent("scheduler_trigger",
-                                   {{"day", String(day), FIELD_INT}, {"slot", slotStr, FIELD_STRING}});
-
-        serial.clean("house", [this, day, slotStr](bool ok) {
-            LOG("SCHED", "Scheduled clean %s", ok ? "started" : "FAILED");
+        // Check robot state before triggering (uses cached state — no extra serial command)
+        serial.getState([this, si, day, schedMins, slotStr](bool ok, const RobotState& state) {
             if (!ok) {
-                dataLogger.logGenericEvent("scheduler_trigger_failed",
+                LOG("SCHED", "GetState failed, cannot check robot state for slot %s", slotStr.c_str());
+                dataLogger.logGenericEvent("scheduler_state_error",
                                            {{"day", String(day), FIELD_INT}, {"slot", slotStr, FIELD_STRING}});
+                return;
             }
+
+            // Robot already cleaning — mark slot as fired so we don't retry every 30s
+            if (state.uiState != "UIMGR_STATE_IDLE" && state.uiState != "UIMGR_STATE_STANDBY") {
+                LOG("SCHED", "Robot busy (%s), skipping slot %s", state.uiState.c_str(), slotStr.c_str());
+                dataLogger.logGenericEvent("scheduler_skipped", {{"day", String(day), FIELD_INT},
+                                                                 {"slot", slotStr, FIELD_STRING},
+                                                                 {"reason", "busy", FIELD_STRING},
+                                                                 {"state", state.uiState, FIELD_STRING}});
+                firedSlots[si] = schedMins;
+                return;
+            }
+
+            LOG("SCHED", "Triggering scheduled clean (day=%d slot=%d %s)", day, si, slotStr.c_str());
+            dataLogger.logGenericEvent("scheduler_trigger",
+                                       {{"day", String(day), FIELD_INT}, {"slot", slotStr, FIELD_STRING}});
+
+            serial.clean("house", [this, si, day, slotStr](bool ok) {
+                LOG("SCHED", "Scheduled clean %s", ok ? "started" : "FAILED");
+                if (!ok) {
+                    dataLogger.logGenericEvent("scheduler_trigger_failed",
+                                               {{"day", String(day), FIELD_INT}, {"slot", slotStr, FIELD_STRING}});
+                }
+            });
+
+            firedSlots[si] = schedMins;
         });
 
-        firedDay = day;
-        firedSlot = schedMins;
-    });
+        // Only trigger one slot per tick — let the next tick handle the second slot
+        // if both happen to fall in the same window (unlikely but safe)
+        return;
+    }
 }

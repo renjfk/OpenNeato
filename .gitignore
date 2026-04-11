@@ -1,6 +1,6 @@
 .pio
 .cache
-compile_commands.json
+firmware/compile_commands.json
 firmware/src/web_assets.h
 frontend/node_modules
 frontend/dist

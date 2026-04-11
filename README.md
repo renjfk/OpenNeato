@@ -39,7 +39,7 @@ port, giving you a local web interface that works without any external dependenc
   brush), bumper/wheel-lift/stall safety warnings
 - **Live cleaning map** — watch the robot's path during an active cleaning session in the History view, rendered on a
   canvas with coverage overlay
-- **7-day cleaning scheduler** managed entirely on the ESP32 (doesn't use the robot's built-in schedule commands)
+- **7-day cleaning scheduler** with two slots per day, managed entirely on the ESP32 (doesn't use the robot's built-in schedule commands)
 - **Cleaning history** with recorded robot paths rendered as coverage maps, session stats like duration, distance, area
   covered, and battery usage; individual session import/export for backup and restore
 - **Push notifications** via [ntfy.sh](https://ntfy.sh); get notified when cleaning is done, an error occurs, a

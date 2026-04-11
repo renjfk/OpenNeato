@@ -163,12 +163,7 @@ export const api = {
     importSession: (file: File, onProgress: (pct: number) => void) => importSession(file, onProgress),
     uploadFirmware: (file: File, md5: string, onProgress: (pct: number) => void) =>
         uploadFirmware(file, md5, onProgress),
-    setScheduleDay: (day: number, hour: number, minute: number, on: boolean) =>
-        put<SettingsData>("/api/settings", {
-            [`sched${day}Hour`]: hour,
-            [`sched${day}Min`]: minute,
-            [`sched${day}On`]: on,
-        }),
+    saveSchedule: (patch: Partial<SettingsData>) => put<SettingsData>("/api/settings", patch),
     setScheduleEnabled: (on: boolean) => put<SettingsData>("/api/settings", { scheduleEnabled: on }),
     getUserSettings: () => get<UserSettingsData>("/api/user-settings"),
     setUserSetting: (key: string, value: string) =>

@@ -5,7 +5,6 @@ import backSvg from "../assets/icons/back.svg?raw";
 import bellSvg from "../assets/icons/bell.svg?raw";
 import calendarSvg from "../assets/icons/calendar.svg?raw";
 import chipSvg from "../assets/icons/chip.svg?raw";
-import clockSvg from "../assets/icons/clock.svg?raw";
 import databaseSvg from "../assets/icons/database.svg?raw";
 import gearSvg from "../assets/icons/gear.svg?raw";
 import manualSvg from "../assets/icons/manual.svg?raw";
@@ -430,12 +429,6 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                                 )}
                             </select>
                         </div>
-                        {system?.localTime && (
-                            <div class="settings-robot-time">
-                                <Icon svg={clockSvg} />
-                                Robot time: {system.localTime}
-                            </div>
-                        )}
                     </div>
                     <div class="settings-section">
                         <div class="settings-section-title">UART Pins</div>

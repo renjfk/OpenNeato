@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "preact/hooks";
 import boltSvg from "../../assets/icons/bolt.svg?raw";
 import { Icon } from "../../components/icon";
+import { useMapGestures } from "../../hooks/use-map-gestures";
 import type { HistoryFileInfo, MapData } from "../../types";
 import { formatDuration, renderMap } from "./helpers";
 
@@ -13,23 +14,24 @@ interface HistoryItemViewProps {
 
 export function HistoryItemView({ file, map, mapEmpty, recording }: HistoryItemViewProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const transform = useMapGestures(canvasRef);
 
-    // Render canvas when map data changes
+    // Render canvas when map data or transform changes
     useEffect(() => {
         if (map && canvasRef.current) {
-            renderMap(canvasRef.current, map, recording);
+            renderMap(canvasRef.current, map, recording, transform);
         }
-    }, [map, recording]);
+    }, [map, recording, transform]);
 
     // Re-render on resize
     useEffect(() => {
         if (!map) return;
         const handleResize = () => {
-            if (map && canvasRef.current) renderMap(canvasRef.current, map, recording);
+            if (map && canvasRef.current) renderMap(canvasRef.current, map, recording, transform);
         };
         window.addEventListener("resize", handleResize);
         return () => window.removeEventListener("resize", handleResize);
-    }, [map, recording]);
+    }, [map, recording, transform]);
 
     // Prefer list metadata summary (available immediately), fall back to
     // the summary parsed from the full JSONL data (available after fetch)
@@ -97,6 +99,9 @@ export function HistoryItemView({ file, map, mapEmpty, recording }: HistoryItemV
                         </span>
                     )}
                 </div>
+            )}
+            {map && (
+                <div class="history-map-hint">Pinch or scroll to zoom, drag to pan, double-tap to zoom in or reset</div>
             )}
         </>
     );

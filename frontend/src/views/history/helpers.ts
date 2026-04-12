@@ -4,7 +4,9 @@ import clockSvg from "../../assets/icons/clock.svg?raw";
 import houseSvg from "../../assets/icons/house.svg?raw";
 import manualSvg from "../../assets/icons/manual.svg?raw";
 import spotSvg from "../../assets/icons/spot.svg?raw";
-import type { MapData } from "../../types";
+import type { MapData, MapTransform } from "../../types";
+
+const DEFAULT_TRANSFORM: MapTransform = { panX: 0, panY: 0, zoom: 1 };
 
 export function formatDuration(secs: number): string {
     if (secs < 60) return `${secs}s`;
@@ -30,9 +32,11 @@ export function modeInfo(mode: string): { label: string; icon: string } {
 }
 
 // Canvas renderer for map visualization
-export function renderMap(canvas: HTMLCanvasElement, map: MapData, recording = false) {
+export function renderMap(canvas: HTMLCanvasElement, map: MapData, recording = false, tf?: MapTransform) {
     const ctx = canvas.getContext("2d");
     if (!ctx || !map.bounds) return;
+
+    const { panX, panY, zoom } = tf ?? DEFAULT_TRANSFORM;
 
     const dpr = window.devicePixelRatio || 1;
     const displayW = canvas.clientWidth;
@@ -40,6 +44,11 @@ export function renderMap(canvas: HTMLCanvasElement, map: MapData, recording = f
     canvas.width = displayW * dpr;
     canvas.height = displayH * dpr;
     ctx.scale(dpr, dpr);
+
+    // Apply zoom + pan: zoom from top-left origin, panX/panY computed by
+    // useMapGestures already account for the cursor-relative zoom anchor.
+    ctx.translate(panX, panY);
+    ctx.scale(zoom, zoom);
 
     const { minX, maxX, minY, maxY } = map.bounds;
     const worldW = maxX - minX;

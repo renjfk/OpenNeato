@@ -625,6 +625,11 @@ const routes = {
         }
     },
 
+    "POST /api/clear-errors": (_req, res) => {
+        if (faults.actions) return sendError(res, "UART timeout: robot not responding", 500);
+        sendOk(res);
+    },
+
     "POST /api/sound": (_req, res) => {
         // Accept and ignore — just acknowledge
         sendOk(res);

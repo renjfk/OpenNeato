@@ -40,6 +40,7 @@
 #define CMD_SET_MOTOR "SetMotor"
 #define CMD_SET_SYSTEM_MODE_POWER_CYCLE "SetSystemMode PowerCycle"
 #define CMD_SET_SYSTEM_MODE_SHUTDOWN "SetSystemMode Shutdown"
+#define CMD_SET_UI_ERROR_CLEAR_ALL "SetUIError clearall"
 #define CMD_GET_ROBOT_POS_RAW "GetRobotPos Raw"
 #define CMD_GET_ROBOT_POS_SMOOTH "GetRobotPos Smooth"
 #define CMD_GET_USER_SETTINGS "GetUserSettings"

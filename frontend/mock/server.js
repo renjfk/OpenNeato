@@ -245,6 +245,7 @@ const state = {
     uartRxPin: 4,
     maxGpioPin: 21,
     hostname: "neato",
+    navMode: "Normal",
     stallThreshold: 60,
     brushRpm: 1200,
     vacuumSpeed: 80,
@@ -739,6 +740,7 @@ const routes = {
             "uartRxPin",
             "maxGpioPin",
             "hostname",
+            "navMode",
             "stallThreshold",
             "brushRpm",
             "vacuumSpeed",
@@ -1055,6 +1057,7 @@ const handleRequest = async (req, res) => {
             if (data.uartRxPin !== undefined) state.uartRxPin = data.uartRxPin;
             const hostnameChanged = data.hostname !== undefined && data.hostname !== state.hostname;
             if (data.hostname !== undefined) state.hostname = data.hostname;
+            if (data.navMode !== undefined) state.navMode = data.navMode;
             if (data.stallThreshold !== undefined) state.stallThreshold = data.stallThreshold;
             if (data.brushRpm !== undefined) state.brushRpm = data.brushRpm;
             if (data.vacuumSpeed !== undefined) state.vacuumSpeed = data.vacuumSpeed;

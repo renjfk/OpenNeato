@@ -75,6 +75,10 @@ public:
     // Invalidates the user settings cache.
     bool setUserSetting(const String& key, const String& value, std::function<void(bool)> callback = nullptr);
 
+    // Set robot navigation mode via "SetNavigationMode <mode>".
+    // Valid modes: "Normal", "Gentle", "Deep", "Quick".
+    bool setNavigationMode(const String& mode, std::function<void(bool)> callback = nullptr);
+
     // Power control: sends TestMode On, then SetSystemMode after inter-command delay.
     // action = "restart" (PowerCycle) or "shutdown" (Shutdown).
     bool powerControl(const String& action, std::function<void(bool)> callback = nullptr);
@@ -110,6 +114,11 @@ public:
     // Used by CleaningHistory to switch to active polling immediately.
     void onCleanStart(std::function<void()> cb) { cleanStartCallback = cb; }
 
+    // -- Navigation mode getter ----------------------------------------------
+    // Called from clean() before house clean to send SetNavigationMode.
+    // Returns the stored nav mode string (e.g. "Normal", "Gentle").
+    void setNavModeGetter(std::function<String()> getter) { navModeGetter = getter; }
+
     // -- Status --------------------------------------------------------------
 
     bool isBusy() const { return state != QUEUE_IDLE || !queue.empty(); }
@@ -143,6 +152,9 @@ private:
 
     // Clean start hook
     std::function<void()> cleanStartCallback;
+
+    // Navigation mode getter (reads from SettingsManager)
+    std::function<String()> navModeGetter;
 
     // Current command in flight
     String currentCommand;

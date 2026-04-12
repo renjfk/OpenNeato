@@ -74,6 +74,9 @@ void setup() {
     // immediately when a clean command is sent via API.
     neatoSerial.onCleanStart([&] { cleaningHistory.notifyCleanStart(); });
 
+    // Wire navigation mode getter so clean() sends SetNavigationMode before house cleans
+    neatoSerial.setNavModeGetter([&] { return settingsManager.get().navMode; });
+
     // Wire WiFi events to data logger BEFORE WiFi connects so boot events are captured.
     // DataLogger buffers entries in memory - they get flushed once SPIFFS mounts in begin().
     WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {

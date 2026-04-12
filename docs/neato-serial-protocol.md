@@ -270,6 +270,13 @@ Robot GND -> ESP GND. The robot provides 3.3V to power the ESP.
   - `IEC1mTest` — Run IEC cleaning test
   - `MaxModeEnable` — Enable max cleaning mode
   - `MaxModeDisable` — Disable max cleaning mode
+- `SetNavigationMode [Normal|Gentle|Deep|Quick]` — Set navigation mode for house cleaning
+  - `Normal` — Default navigation behavior
+  - `Gentle` — Extra care: robot avoids pushing objects taller than itself (detected via LIDAR)
+  - `Deep` — Robot drives deep into corners, backs up, and cleans corners in a curve
+  - `Quick` — Faster, less thorough navigation
+  - Mode resets to Normal on robot restart (not persisted by robot firmware)
+  - Only affects house cleaning, not spot cleaning
 - `ClearFiles [BB] [All] [Life]` — Clear log files
   - `BB` — Clear managed logs in BlackBox directory
   - `All` — Additionally clear unmanaged files (crash logs, etc.)

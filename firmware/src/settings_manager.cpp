@@ -58,6 +58,7 @@ void SettingsManager::load() {
     current.wifiTxPower = prefs.getInt(NVS_KEY_WIFI_TX_POWER, WIFI_DEFAULT_TX_POWER);
     current.uartTxPin = prefs.getInt(NVS_KEY_UART_TX_PIN, NEATO_DEFAULT_TX_PIN);
     current.uartRxPin = prefs.getInt(NVS_KEY_UART_RX_PIN, NEATO_DEFAULT_RX_PIN);
+    current.navMode = prefs.getString(NVS_KEY_NAV_MODE, "Normal");
     current.stallThreshold = prefs.getInt(NVS_KEY_MC_STALL_THR, MANUAL_STALL_LOAD_PCT);
     current.brushRpm = prefs.getInt(NVS_KEY_MC_BRUSH_RPM, MANUAL_BRUSH_RPM);
     current.vacuumSpeed = prefs.getInt(NVS_KEY_MC_VACUUM_PCT, MANUAL_VACUUM_SPEED_PCT);
@@ -85,6 +86,7 @@ void SettingsManager::save() {
     prefs.putInt(NVS_KEY_WIFI_TX_POWER, current.wifiTxPower);
     prefs.putInt(NVS_KEY_UART_TX_PIN, current.uartTxPin);
     prefs.putInt(NVS_KEY_UART_RX_PIN, current.uartRxPin);
+    prefs.putString(NVS_KEY_NAV_MODE, current.navMode);
     prefs.putInt(NVS_KEY_MC_STALL_THR, current.stallThreshold);
     prefs.putInt(NVS_KEY_MC_BRUSH_RPM, current.brushRpm);
     prefs.putInt(NVS_KEY_MC_VACUUM_PCT, current.vacuumSpeed);
@@ -208,6 +210,18 @@ ApplyResult SettingsManager::apply(const String& json) {
         LOG("SETTINGS", "UART RX pin -> GPIO%d (reboot required)", current.uartRxPin);
     }
 
+    // Cleaning — navigation mode (sent to robot before each house clean)
+    if (incoming.navMode != current.navMode) {
+        // Validate against known modes
+        if (incoming.navMode == "Normal" || incoming.navMode == "Gentle" || incoming.navMode == "Deep" ||
+            incoming.navMode == "Quick") {
+            current.navMode = incoming.navMode;
+            changed = true;
+            LOG("SETTINGS", "Nav mode -> %s", current.navMode.c_str());
+        }
+        // Silently ignore invalid values (keep current)
+    }
+
     // Manual clean motor settings — clamp to safe hardware ranges
     if (incoming.stallThreshold != current.stallThreshold) {
         current.stallThreshold = constrain(incoming.stallThreshold, 30, 80);
@@ -307,6 +321,7 @@ std::vector<Field> Settings::toFields() const {
             {"uartTxPin", String(uartTxPin), FIELD_INT},
             {"uartRxPin", String(uartRxPin), FIELD_INT},
             {"maxGpioPin", String(MAX_GPIO_PIN), FIELD_INT},
+            {"navMode", navMode, FIELD_STRING},
             {"stallThreshold", String(stallThreshold), FIELD_INT},
             {"brushRpm", String(brushRpm), FIELD_INT},
             {"vacuumSpeed", String(vacuumSpeed), FIELD_INT},
@@ -360,6 +375,10 @@ bool Settings::fromFields(const std::vector<Field>& fields) {
     }
     if ((f = findField(fields, "uartRxPin")) && f->type == FIELD_INT) {
         uartRxPin = f->value.toInt();
+        applied = true;
+    }
+    if ((f = findField(fields, "navMode")) && f->type == FIELD_STRING) {
+        navMode = f->value;
         applied = true;
     }
     if ((f = findField(fields, "stallThreshold")) && f->type == FIELD_INT) {

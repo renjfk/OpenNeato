@@ -7,6 +7,7 @@ import calendarSvg from "../assets/icons/calendar.svg?raw";
 import chipSvg from "../assets/icons/chip.svg?raw";
 import databaseSvg from "../assets/icons/database.svg?raw";
 import gearSvg from "../assets/icons/gear.svg?raw";
+import houseSvg from "../assets/icons/house.svg?raw";
 import manualSvg from "../assets/icons/manual.svg?raw";
 import moonSvg from "../assets/icons/moon.svg?raw";
 import paletteSvg from "../assets/icons/palette.svg?raw";
@@ -25,6 +26,7 @@ import { usePolling } from "../hooks/use-polling";
 import type { FirmwareVersion, SystemData, UserSettingsData } from "../types";
 import {
     BRUSH_PRESETS,
+    NAV_MODE_PRESETS,
     SIDE_BRUSH_PRESETS,
     STALL_PRESETS,
     TIMEZONE_PRESETS,
@@ -85,6 +87,8 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
         maxGpioPin,
         hostname,
         setHostname,
+        navMode,
+        setNavMode,
         stallThreshold,
         setStallThreshold,
         brushRpm,
@@ -572,6 +576,30 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                                 </div>
                             </>
                         )}
+                    </div>
+                </SettingsCategory>
+
+                <SettingsCategory title="House Cleaning" icon={houseSvg} disabled={firmware?.supported === false}>
+                    <div class="settings-section">
+                        <div class="settings-section-title">Navigation</div>
+                        <div class="settings-tz-select-wrap">
+                            <select
+                                class="settings-tz-select"
+                                value={navMode}
+                                onChange={(e) => setNavMode((e.target as HTMLSelectElement).value)}
+                                disabled={saving}
+                            >
+                                {NAV_MODE_PRESETS.map((p) => (
+                                    <option key={p.value} value={p.value}>
+                                        {p.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div class="settings-robot-time">
+                            How the robot navigates during house cleaning. Extra Care avoids obstacles, Deep cleans
+                            corners thoroughly.
+                        </div>
                     </div>
                 </SettingsCategory>
 

@@ -43,6 +43,19 @@ export const TX_POWER_PRESETS: TxPowerPreset[] = [
     { label: "19.5 dBm (max range)", value: 78 },
 ];
 
+// Navigation mode presets — sent to robot before each house clean
+export interface NavModePreset {
+    label: string;
+    value: string;
+}
+
+export const NAV_MODE_PRESETS: NavModePreset[] = [
+    { label: "Normal", value: "Normal" },
+    { label: "Extra Care", value: "Gentle" },
+    { label: "Deep", value: "Deep" },
+    { label: "Quick", value: "Quick" },
+];
+
 // Stall detection presets — wheel load % threshold
 export interface StallPreset {
     label: string;
@@ -107,6 +120,7 @@ export const DEFAULT_SERVER = {
     uartRxPin: 4,
     maxGpioPin: 21,
     hostname: "neato",
+    navMode: "Normal",
     stallThreshold: 60,
     brushRpm: 1200,
     vacuumSpeed: 80,

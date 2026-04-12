@@ -45,6 +45,7 @@
 #define CMD_GET_ROBOT_POS_SMOOTH "GetRobotPos Smooth"
 #define CMD_GET_USER_SETTINGS "GetUserSettings"
 #define CMD_SET_USER_SETTINGS "SetUserSettings"
+#define CMD_SET_NAVIGATION_MODE "SetNavigationMode"
 
 // -- Sound IDs ---------------------------------------------------------------
 

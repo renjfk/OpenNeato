@@ -14,6 +14,7 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
     const [uartRxPin, setUartRxPin] = useState(4);
     const [maxGpioPin, setMaxGpioPin] = useState(21);
     const [hostname, setHostname] = useState("neato");
+    const [navMode, setNavMode] = useState("Normal");
     const [stallThreshold, setStallThreshold] = useState(60);
     const [brushRpm, setBrushRpm] = useState(1200);
     const [vacuumSpeed, setVacuumSpeed] = useState(80);
@@ -46,6 +47,7 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
             setUartRxPin(fetched.uartRxPin);
             setMaxGpioPin(fetched.maxGpioPin);
             setHostname(fetched.hostname);
+            setNavMode(fetched.navMode ?? "Normal");
             setStallThreshold(fetched.stallThreshold);
             setBrushRpm(fetched.brushRpm);
             setVacuumSpeed(fetched.vacuumSpeed);
@@ -70,6 +72,7 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
             uartTxPin !== server.current.uartTxPin ||
             uartRxPin !== server.current.uartRxPin ||
             hostname !== server.current.hostname ||
+            navMode !== (server.current.navMode ?? "Normal") ||
             stallThreshold !== server.current.stallThreshold ||
             brushRpm !== server.current.brushRpm ||
             vacuumSpeed !== server.current.vacuumSpeed ||
@@ -114,6 +117,7 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         if (uartTxPin !== server.current.uartTxPin) patch.uartTxPin = uartTxPin;
         if (uartRxPin !== server.current.uartRxPin) patch.uartRxPin = uartRxPin;
         if (hostname !== server.current.hostname) patch.hostname = hostname;
+        if (navMode !== (server.current.navMode ?? "Normal")) patch.navMode = navMode;
         if (stallThreshold !== server.current.stallThreshold) patch.stallThreshold = stallThreshold;
         if (brushRpm !== server.current.brushRpm) patch.brushRpm = brushRpm;
         if (vacuumSpeed !== server.current.vacuumSpeed) patch.vacuumSpeed = vacuumSpeed;
@@ -132,6 +136,7 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         uartTxPin,
         uartRxPin,
         hostname,
+        navMode,
         stallThreshold,
         brushRpm,
         vacuumSpeed,
@@ -192,6 +197,8 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         maxGpioPin,
         hostname,
         setHostname,
+        navMode,
+        setNavMode,
         stallThreshold,
         setStallThreshold,
         brushRpm,

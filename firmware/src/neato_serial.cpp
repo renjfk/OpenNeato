@@ -531,11 +531,24 @@ bool NeatoSerial::clean(const String& action, std::function<void(bool)> callback
     }
 
     // New clean from idle
-    const char *evt = (action == "spot") ? EVT_START_SPOT : EVT_START_HOUSE;
     invalidateState();
     if (cleanStartCallback)
         cleanStartCallback();
-    return enqueue(buildSetEvent(evt), wrapAction(callback), PRIORITY_HIGH);
+
+    if (action == "spot") {
+        return enqueue(buildSetEvent(EVT_START_SPOT), wrapAction(callback), PRIORITY_HIGH);
+    }
+
+    // House clean — send navigation mode first, then start cleaning.
+    // SetNavigationMode is fire-and-forget; house clean proceeds regardless.
+    if (navModeGetter) {
+        String mode = navModeGetter();
+        if (mode.length() > 0 && mode != "Normal") {
+            String cmd = String(CMD_SET_NAVIGATION_MODE) + " " + mode;
+            enqueue(cmd, nullptr, PRIORITY_HIGH);
+        }
+    }
+    return enqueue(buildSetEvent(EVT_START_HOUSE), wrapAction(callback), PRIORITY_HIGH);
 }
 
 bool NeatoSerial::testMode(bool enable, std::function<void(bool)> callback) {
@@ -638,6 +651,11 @@ bool NeatoSerial::setMotorSideBrush(bool on, int powerMw, std::function<void(boo
 bool NeatoSerial::setUserSetting(const String& key, const String& value, std::function<void(bool)> callback) {
     userSettingsCache.invalidate();
     String cmd = String(CMD_SET_USER_SETTINGS) + " " + key + " " + value;
+    return enqueue(cmd, wrapAction(callback));
+}
+
+bool NeatoSerial::setNavigationMode(const String& mode, std::function<void(bool)> callback) {
+    String cmd = String(CMD_SET_NAVIGATION_MODE) + " " + mode;
     return enqueue(cmd, wrapAction(callback));
 }
 

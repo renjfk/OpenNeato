@@ -53,6 +53,7 @@ export interface SettingsData {
     uartRxPin: number;
     maxGpioPin: number; // Read-only — max valid GPIO for this chip (21 for C3, 39 for ESP32)
     hostname: string;
+    navMode: string; // Navigation mode for house cleaning: "Normal", "Gentle", "Deep", "Quick"
     stallThreshold: number; // Wheel load % for stall detection (30-80)
     brushRpm: number; // Main brush RPM (500-1600)
     vacuumSpeed: number; // Vacuum speed % (40-100)

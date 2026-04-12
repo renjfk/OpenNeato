@@ -2,6 +2,7 @@
 #define CLEANING_HISTORY_H
 
 #include <Arduino.h>
+#include <map>
 #include <memory>
 #include <set>
 #include "config.h"
@@ -147,6 +148,21 @@ private:
 
     // Read first and last lines from a session file (decompresses .hs files)
     static void readFirstLastLines(const String& path, bool compressed, String& firstLine, String& lastLine);
+
+    // -- Metadata cache (avoids repeated decompression for listSessions) ------
+    // Keyed by filename (e.g. "1771683615.jsonl.hs"). Populated on first list
+    // request and after compression/import. Entries are immutable once a session
+    // is finalized — invalidated only by delete/deleteAll/enforceLimits.
+    struct CachedMeta {
+        String session; // Raw JSON of session header line
+        String summary; // Raw JSON of summary line
+    };
+    std::map<String, CachedMeta> metaCache;
+
+    // Session/summary JSON captured during stopCollection for cache insertion
+    // after compression completes (avoids re-decompressing the just-written file).
+    String pendingSessionJson;
+    String pendingSummaryJson;
 
     static bool isCleaningState(const String& uiState);
     static bool isPausedState(const String& uiState);

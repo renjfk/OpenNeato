@@ -1,0 +1,4 @@
+{"type":"session","mode":"house","time":1771670000,"battery":90}
+{"x":0.000,"y":0.000,"t":0.0,"ts":100.0}
+{"x":0.000,"y":0.000,"t":0.0,"ts":102.1}
+{"type":"summary","time":1771670006,"duration":6,"mode":"house","recharges":0,"snapshots":2,"distanceTraveled":0.00,"maxDistFromOrigin":0.00,"totalRotation":0.0,"areaCovered":0.00,"errorsDuringClean":0,"batteryStart":90,"batteryEnd":90}

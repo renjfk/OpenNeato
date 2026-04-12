@@ -21,6 +21,8 @@ struct SystemHealth : public JsonSerializable {
     time_t time = 0;
     String timeSource;
     String tz;
+    String localTime; // DST-aware local time string, e.g. "Sat 17:45:01"
+    bool isDst = false; // true when daylight saving time is active
 
     std::vector<Field> toFields() const override;
 };

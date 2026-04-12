@@ -21,6 +21,7 @@ import { ConfirmDialog } from "../components/confirm-dialog";
 import { ErrorBannerStack, useErrorStack } from "../components/error-banner";
 import { Icon } from "../components/icon";
 import { useNavigate } from "../components/router";
+import { useDirtyGuard } from "../hooks/use-dirty-guard";
 import { usePolling } from "../hooks/use-polling";
 import type { FirmwareVersion, SystemData, UserSettingsData } from "../types";
 import {
@@ -31,7 +32,7 @@ import {
     TX_POWER_PRESETS,
     VACUUM_PRESETS,
 } from "./settings/constants";
-import { findPresetLabel, formatRobotTime } from "./settings/helpers";
+import { findPresetLabel } from "./settings/helpers";
 import { SettingsCategory } from "./settings/settings-category";
 import { useFirmwareUpload } from "./settings/use-firmware-upload";
 import { useReboot } from "./settings/use-reboot";
@@ -168,13 +169,11 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
     }, [ntfyTopic]);
 
     // --- Dialogs ---
-    const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
     const [showRestartConfirm, setShowRestartConfirm] = useState(false);
     const [showFormatConfirm, setShowFormatConfirm] = useState(false);
     const [showResetConfirm, setShowResetConfirm] = useState(false);
     const [showUploadConfirm, setShowUploadConfirm] = useState(false);
     const [restarting, setRestarting] = useState(false);
-    const pendingNav = useRef<string | null>(null);
 
     // --- Robot power control ---
     const [showRobotRestartConfirm, setShowRobotRestartConfirm] = useState(false);
@@ -233,38 +232,23 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
         navigate("/");
     }, [navigate]);
 
+    // --- Clear errors ---
+    const [showClearErrorsConfirm, setShowClearErrorsConfirm] = useState(false);
+    const [clearingErrors, setClearingErrors] = useState(false);
+
+    const handleClearErrors = useCallback(() => {
+        setShowClearErrorsConfirm(false);
+        setClearingErrors(true);
+        api.clearErrors()
+            .catch((e: unknown) => {
+                errorStack.push(e instanceof Error ? e.message : "Failed to clear errors");
+            })
+            .finally(() => setClearingErrors(false));
+    }, [errorStack]);
+
     // --- Unsaved changes guards ---
 
-    const dirtyRef = useRef(false);
-    dirtyRef.current = isDirty;
-
-    useEffect(() => {
-        const handler = (e: BeforeUnloadEvent) => {
-            if (dirtyRef.current) e.preventDefault();
-        };
-        window.addEventListener("beforeunload", handler);
-        return () => window.removeEventListener("beforeunload", handler);
-    }, []);
-
-    const guardedNavigate = useCallback(
-        (to: string) => {
-            if (isDirty) {
-                pendingNav.current = to;
-                setShowDiscardConfirm(true);
-            } else {
-                navigate(to);
-            }
-        },
-        [isDirty, navigate],
-    );
-
-    const handleDiscard = useCallback(() => {
-        setShowDiscardConfirm(false);
-        if (pendingNav.current) {
-            navigate(pendingNav.current);
-            pendingNav.current = null;
-        }
-    }, [navigate]);
+    const { guardedNavigate, showDiscardConfirm, setShowDiscardConfirm, handleDiscard } = useDirtyGuard(isDirty);
 
     // --- Restart / Factory Reset ---
 
@@ -445,10 +429,10 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                                 )}
                             </select>
                         </div>
-                        {system?.time && (
+                        {system?.localTime && (
                             <div class="settings-robot-time">
                                 <Icon svg={clockSvg} />
-                                Robot time: {formatRobotTime(system.time, tz)}
+                                Robot time: {system.localTime}
                             </div>
                         )}
                     </div>
@@ -820,6 +804,19 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                             <span class="settings-nav-chevron">&rsaquo;</span>
                         </button>
                     </div>
+                    <div class="settings-section">
+                        <button
+                            type="button"
+                            class="settings-nav-row"
+                            onClick={() => setShowClearErrorsConfirm(true)}
+                            disabled={clearingErrors || firmware?.supported === false}
+                        >
+                            <div class="settings-nav-row-left">
+                                <Icon svg={alertSvg} />
+                                Clear Robot Errors
+                            </div>
+                        </button>
+                    </div>
                 </SettingsCategory>
 
                 <button
@@ -1055,6 +1052,15 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                         fw.startUpload();
                     }}
                     onCancel={() => setShowUploadConfirm(false)}
+                />
+            )}
+
+            {showClearErrorsConfirm && (
+                <ConfirmDialog
+                    message="Clear all robot errors and warnings? This dismisses any active error state on the robot."
+                    confirmLabel="Clear"
+                    onConfirm={handleClearErrors}
+                    onCancel={() => setShowClearErrorsConfirm(false)}
                 />
             )}
 

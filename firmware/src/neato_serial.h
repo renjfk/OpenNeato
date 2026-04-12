@@ -69,7 +69,7 @@ public:
     bool setMotorBrush(int rpm, std::function<void(bool)> callback = nullptr);
     bool setMotorVacuum(bool on, int speedPercent = 80, std::function<void(bool)> callback = nullptr);
     bool setMotorSideBrush(bool on, int powerMw = 5000, std::function<void(bool)> callback = nullptr);
-    bool setTime(int dayOfWeek, int hour, int min, int sec, std::function<void(bool)> callback = nullptr);
+
 
     // Set a single robot user setting via "SetUserSettings <key> <value>".
     // Invalidates the user settings cache.
@@ -79,12 +79,11 @@ public:
     // action = "restart" (PowerCycle) or "shutdown" (Shutdown).
     bool powerControl(const String& action, std::function<void(bool)> callback = nullptr);
 
+    // Clear all UI errors/warnings via "SetUIError clearall".
+    bool clearErrors(std::function<void(bool)> callback = nullptr);
+
     // -- Raw command (temporary debug endpoint) --------------------------------
     bool sendRaw(const String& cmd, std::function<void(bool, const String&)> callback);
-
-    // -- Time query --------------------------------------------------------------
-
-    bool getTime(std::function<void(bool, const TimeData&)> callback);
 
     // -- Cache invalidation --------------------------------------------------
     // Call after actions that change robot state (cleaning, test mode, etc.)

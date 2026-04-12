@@ -44,17 +44,9 @@ function SessionCard({ session, summary, filename, index, active, onSelect, onDe
                             </span>
                             <span>{summary.distanceTraveled.toFixed(1)}m</span>
                             <span>{summary.areaCovered.toFixed(1)}m&sup2;</span>
-                            <span>
+                            <span class="history-session-battery">
                                 <Icon svg={boltSvg} />
                                 {session?.battery ?? "?"}% &rarr; {summary.batteryEnd ?? "?"}%
-                            </span>
-                        </div>
-                    )}
-                    {active && !summary && (
-                        <div class="history-session-stats">
-                            <span>
-                                <Icon svg={boltSvg} />
-                                {session?.battery ?? "?"}%
                             </span>
                         </div>
                     )}

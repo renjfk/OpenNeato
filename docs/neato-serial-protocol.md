@@ -122,6 +122,11 @@ Robot GND -> ESP GND. The robot provides 3.3V to power the ESP.
   - Hour: 0-23 (required)
   - Min: 0-59 (required)
   - Sec: 0-59 (optional, defaults to 0)
+  - All: YYYY-MM-DD--hh:mm:ss (optional, sets full date/time on RTC instead of scheduler clock)
+  - **D7 4.6.0 quirk:** The Day/Hour/Min/Sec parameters have no effect - the scheduler clock
+    (`GetTime`) is stuck at `Sunday 0:00:00` and cannot be written. Use `SetTime All` instead,
+    which updates the real RTC visible via `GetVersion` `Time Local`/`Time UTC` fields.
+- `SetNTPTime` — Instruct the robot to sync its clock from NTP servers (D7 only, requires robot WiFi)
 - `SetWallFollower [Enable|Disable]` — Enable/disable wall follower
 - `TestMode On/Off` — Enable/disable test mode
 - `DiagTest [TestsOff|DrivePath|DriveForever|MoveAndBump|DropTest|...]` — Execute test modes
@@ -406,6 +411,12 @@ Locale,1,LOCALE_USA, LDS Software,V1.0.0,, LDS Serial,XXX-YYY,, LDS CPU,F2802x/c
 MainBoard Vendor ID,1,, MainBoard Serial Number,99,, MainBoard Version,15,0,
 ChassisRev,-1,, UIPanelRev,-1,,
 ```
+D7 (and possibly D6) also include time fields:
+```
+Time Local,Sat Apr 11 22:26:13 2026
+Time UTC,Sat Apr 11 19:26:13 2026
+```
+These reflect the robot's real RTC and are the reliable source for robot clock readback.
 
 **GetWarranty** — Three hex values, convert with `strtoul(hex, nullptr, 16)`
 
@@ -692,6 +703,8 @@ Wed 00:00 R Thu 00:00 R Fri 00:00 H Sat 00:00 H
 (R = spot clean, H = house clean, None = no cleaning)
 
 **GetTime** — Returns: `DayOfWeek HourOf24:Min:Sec` Example: `Sunday 13:57:09`
+**D7 4.6.0 quirk:** Always returns `Sunday 0:00:00` regardless of `SetTime`. Use `GetVersion`
+`Time UTC` field for reliable robot clock readback instead.
 
 **GetLifeStatLog** — Returns multiple LifeStat logs from oldest to newest, non-zero entries only:
 Format: `runID,statID,count,Min,Max,Sum,SumV*2`

@@ -142,11 +142,12 @@ export const api = {
         post(`/api/manual/motors?brush=${brush ? 1 : 0}&vacuum=${vacuum ? 1 : 0}&sideBrush=${sideBrush ? 1 : 0}`),
     getManualStatus: () => get<ManualStatus>("/api/manual/status"),
     getLidar: () => get<LidarScan>("/api/lidar"),
-    lidarRotate: (enable: boolean) => post(`/api/lidar/rotate?enable=${enable ? 1 : 0}`),
+
     getSettings: () => get<SettingsData>("/api/settings"),
     updateSettings: (patch: Partial<SettingsData>) => put<SettingsData>("/api/settings", patch),
     testNotification: (topic: string) => post(`/api/notifications/test?topic=${encodeURIComponent(topic)}`),
-    playSound: (id: number) => post(`/api/sound?id=${id}`),
+
+    clearErrors: () => post("/api/clear-errors"),
     robotRestart: () => post("/api/power?action=restart"),
     robotShutdown: () => post("/api/power?action=shutdown"),
     restart: () => post("/api/system/restart"),
@@ -163,13 +164,8 @@ export const api = {
     importSession: (file: File, onProgress: (pct: number) => void) => importSession(file, onProgress),
     uploadFirmware: (file: File, md5: string, onProgress: (pct: number) => void) =>
         uploadFirmware(file, md5, onProgress),
-    setScheduleDay: (day: number, hour: number, minute: number, on: boolean) =>
-        put<SettingsData>("/api/settings", {
-            [`sched${day}Hour`]: hour,
-            [`sched${day}Min`]: minute,
-            [`sched${day}On`]: on,
-        }),
-    setScheduleEnabled: (on: boolean) => put<SettingsData>("/api/settings", { scheduleEnabled: on }),
+    saveSchedule: (patch: Partial<SettingsData>) => put<SettingsData>("/api/settings", patch),
+
     getUserSettings: () => get<UserSettingsData>("/api/user-settings"),
     setUserSetting: (key: string, value: string) =>
         post(`/api/user-settings?key=${encodeURIComponent(key)}&value=${encodeURIComponent(value)}`),

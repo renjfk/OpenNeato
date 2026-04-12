@@ -15,6 +15,7 @@ export function HistoryView() {
     const [files, setFiles] = useState<HistoryFileInfo[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedMap, setSelectedMap] = useState<MapData | null>(null);
+    const [mapEmpty, setMapEmpty] = useState(false);
     const [deleting, setDeleting] = useState(false);
 
     // Derive selected filename from URL: /history = list, /history/<name> = detail
@@ -68,12 +69,19 @@ export function HistoryView() {
     useEffect(() => {
         if (!selectedName) {
             setSelectedMap(null);
+            setMapEmpty(false);
             return;
         }
         setSelectedMap(null);
+        setMapEmpty(false);
+        const isRecording = files.find((f) => f.name === selectedName)?.recording === true;
         api.getHistorySession(selectedName)
             .then((maps) => {
-                if (maps.length > 0) setSelectedMap(maps[0]);
+                if (maps.length > 0) {
+                    setSelectedMap(maps[0]);
+                } else if (!isRecording) {
+                    setMapEmpty(true);
+                }
             })
             .catch((e: unknown) => {
                 errorStack.push(e instanceof Error ? e.message : "Failed to load session");
@@ -182,7 +190,12 @@ export function HistoryView() {
                 )}
 
                 {!loading && showDetail && (
-                    <HistoryItemView file={selectedFile} map={selectedMap} recording={selectedRecording} />
+                    <HistoryItemView
+                        file={selectedFile}
+                        map={selectedMap}
+                        mapEmpty={mapEmpty}
+                        recording={selectedRecording}
+                    />
                 )}
             </div>
         </>

@@ -153,6 +153,7 @@ enum CommandStatus {
 // Per-day keys use suffix: "s0h","s0m","s0on" .. "s6h","s6m","s6on" (Mon=0..Sun=6)
 // Built programmatically in SettingsManager — no individual defines needed.
 #define SCHEDULE_DAYS 7
+#define SCHEDULE_SLOTS_PER_DAY 2 // Two time slots per day (e.g. morning + afternoon)
 #define SCHEDULE_CHECK_INTERVAL_MS 30000 // Check schedule against NTP time every 30s
 #define SCHEDULE_WINDOW_MINS 5 // Fire if current time is 0..N minutes after scheduled slot
 
@@ -170,6 +171,7 @@ enum CommandStatus {
 #define HISTORY_MIN_FS_PERCENT 10 // History always gets at least this % of filesystem
 #define HISTORY_MAX_FILES 20 // Maximum number of archived session files to keep
 #define HISTORY_AREA_CELL_M 0.5f // Coarse grid cell size in meters for visited-area estimation
+#define HISTORY_MIN_SNAPSHOTS 3 // Discard sessions with fewer snapshots (too short to render a useful map)
 #define HISTORY_IMPORT_MAX_BYTES 262144 // 256 KB max import file size (2h clean at 2s intervals ~ 180KB)
 
 // Task Watchdog Timer (TWDT) — hardware watchdog that resets the ESP32 if
@@ -192,7 +194,6 @@ enum CommandStatus {
 #define NTP_SERVER_1 "pool.ntp.org"
 #define NTP_SERVER_2 "time.nist.gov"
 #define NTP_DEFAULT_TZ "UTC0" // POSIX TZ string, stored in NVS
-#define ROBOT_TIME_SYNC_INTERVAL_MS 14400000 // Push NTP to robot every 4 hours
 
 // Logging — enabled by default, disable with -DENABLE_LOGGING=0
 #ifndef ENABLE_LOGGING

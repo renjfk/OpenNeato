@@ -28,9 +28,10 @@ private:
     NeatoSerial& serial;
     DataLogger& dataLogger;
 
-    // Duplicate trigger guard: remember the last slot we fired
+    // Duplicate trigger guard: remember fired slots per day.
+    // Key = day * SCHEDULE_SLOTS_PER_DAY + slotIndex, value = minutes-since-midnight.
     int firedDay = -1;
-    int firedSlot = -1; // Minutes-since-midnight of the scheduled slot
+    int firedSlots[SCHEDULE_SLOTS_PER_DAY] = {-1, -1}; // Minutes-since-midnight per slot index
 
     // Convert C library tm_wday (Sun=0..Sat=6) to our index (Mon=0..Sun=6)
     static int toSchedDay(int tmWday);

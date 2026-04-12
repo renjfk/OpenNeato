@@ -99,6 +99,7 @@ void WebServer::registerApiRoutes() {
     registerPostRoute("/api/power", neato, &NeatoSerial::powerControl, {"action"});
     registerPostRoute("/api/lidar/rotate", neato, &NeatoSerial::setLdsRotation, {"enable"});
     registerPostRoute("/api/user-settings", neato, &NeatoSerial::setUserSetting, {"key", "value"});
+    registerPostRoute("/api/clear-errors", neato, &NeatoSerial::clearErrors, {});
 
     // Serial endpoint — send arbitrary serial command, returns raw response.
     // Always available (no debug gate — useful for diagnostics without enabling verbose logging).
@@ -322,6 +323,7 @@ void WebServer::registerFirmwareRoutes() {
                 {"version", fwMgr.getFirmwareVersion(), FIELD_STRING},
                 {"chip", fwMgr.getChipModel(), FIELD_STRING},
                 {"model", neato.getModelName(), FIELD_STRING},
+                {"hostname", settingsMgr.get().hostname, FIELD_STRING},
                 {"supported", isSupportedModel(neato.getModelName()) ? "true" : "false", FIELD_BOOL},
                 {"identifying", neato.isIdentifying() ? "true" : "false", FIELD_BOOL},
         };

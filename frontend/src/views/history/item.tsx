@@ -7,10 +7,11 @@ import { formatDuration, renderMap } from "./helpers";
 interface HistoryItemViewProps {
     file: HistoryFileInfo;
     map: MapData | null;
+    mapEmpty: boolean;
     recording: boolean;
 }
 
-export function HistoryItemView({ file, map, recording }: HistoryItemViewProps) {
+export function HistoryItemView({ file, map, mapEmpty, recording }: HistoryItemViewProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     // Render canvas when map data changes
@@ -69,7 +70,8 @@ export function HistoryItemView({ file, map, recording }: HistoryItemViewProps) 
 
             {/* Map canvas */}
             <div class="history-canvas-wrap">
-                {!map && <div class="history-empty">Loading map...</div>}
+                {!map && !mapEmpty && <div class="history-empty">Loading map...</div>}
+                {mapEmpty && <div class="history-empty">Not enough data to display map</div>}
                 <canvas ref={canvasRef} class="history-canvas" style={map ? undefined : { display: "none" }} />
             </div>
 

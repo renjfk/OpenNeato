@@ -209,6 +209,12 @@ export interface MapRechargePoint {
     y: number;
 }
 
+export interface MapTransform {
+    panX: number;
+    panY: number;
+    zoom: number;
+}
+
 export interface MapData {
     session: MapSession | null;
     summary: MapSummary | null;

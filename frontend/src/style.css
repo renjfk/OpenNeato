@@ -2204,6 +2204,7 @@ body {
     border-radius: 12px;
     overflow: hidden;
     background: var(--surface);
+    touch-action: manipulation;
 }
 
 .history-canvas {
@@ -2211,6 +2212,12 @@ body {
     width: 100%;
     aspect-ratio: 1;
     max-height: 70vh;
+    touch-action: none;
+    cursor: grab;
+}
+
+.history-canvas:active {
+    cursor: grabbing;
 }
 
 .history-legend {
@@ -2279,6 +2286,14 @@ body {
 .history-legend-bolt svg {
     width: 14px;
     height: 14px;
+}
+
+.history-map-hint {
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-dim);
+    opacity: 0.6;
+    margin-top: 6px;
 }
 
 /* Schedule page */

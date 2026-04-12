@@ -79,6 +79,9 @@ public:
     // action = "restart" (PowerCycle) or "shutdown" (Shutdown).
     bool powerControl(const String& action, std::function<void(bool)> callback = nullptr);
 
+    // Clear all UI errors/warnings via "SetUIError clearall".
+    bool clearErrors(std::function<void(bool)> callback = nullptr);
+
     // -- Raw command (temporary debug endpoint) --------------------------------
     bool sendRaw(const String& cmd, std::function<void(bool, const String&)> callback);
 

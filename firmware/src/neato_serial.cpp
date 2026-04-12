@@ -671,6 +671,13 @@ bool NeatoSerial::powerControl(const String& action, std::function<void(bool)> c
     });
 }
 
+// -- Clear errors ------------------------------------------------------------
+
+bool NeatoSerial::clearErrors(std::function<void(bool)> callback) {
+    invalidateState();
+    return enqueue(CMD_SET_UI_ERROR_CLEAR_ALL, wrapAction(callback));
+}
+
 bool NeatoSerial::sendRaw(const String& cmd, std::function<void(bool, const String&)> callback) {
     if (cmd.isEmpty())
         return false;

@@ -232,6 +232,20 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
         navigate("/");
     }, [navigate]);
 
+    // --- Clear errors ---
+    const [showClearErrorsConfirm, setShowClearErrorsConfirm] = useState(false);
+    const [clearingErrors, setClearingErrors] = useState(false);
+
+    const handleClearErrors = useCallback(() => {
+        setShowClearErrorsConfirm(false);
+        setClearingErrors(true);
+        api.clearErrors()
+            .catch((e: unknown) => {
+                errorStack.push(e instanceof Error ? e.message : "Failed to clear errors");
+            })
+            .finally(() => setClearingErrors(false));
+    }, [errorStack]);
+
     // --- Unsaved changes guards ---
 
     const { guardedNavigate, showDiscardConfirm, setShowDiscardConfirm, handleDiscard } = useDirtyGuard(isDirty);
@@ -790,6 +804,19 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                             <span class="settings-nav-chevron">&rsaquo;</span>
                         </button>
                     </div>
+                    <div class="settings-section">
+                        <button
+                            type="button"
+                            class="settings-nav-row"
+                            onClick={() => setShowClearErrorsConfirm(true)}
+                            disabled={clearingErrors || firmware?.supported === false}
+                        >
+                            <div class="settings-nav-row-left">
+                                <Icon svg={alertSvg} />
+                                Clear Robot Errors
+                            </div>
+                        </button>
+                    </div>
                 </SettingsCategory>
 
                 <button
@@ -1025,6 +1052,15 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                         fw.startUpload();
                     }}
                     onCancel={() => setShowUploadConfirm(false)}
+                />
+            )}
+
+            {showClearErrorsConfirm && (
+                <ConfirmDialog
+                    message="Clear all robot errors and warnings? This dismisses any active error state on the robot."
+                    confirmLabel="Clear"
+                    onConfirm={handleClearErrors}
+                    onCancel={() => setShowClearErrorsConfirm(false)}
                 />
             )}
 

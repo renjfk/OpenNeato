@@ -250,6 +250,8 @@ const state = {
     vacuumSpeed: 80,
     sideBrushPower: 1500,
     ntfyTopic: "",
+    ntfyServer: "",
+    ntfyToken: "",
     ntfyEnabled: true,
     ntfyOnDone: true,
     ntfyOnError: true,
@@ -743,6 +745,8 @@ const routes = {
             "vacuumSpeed",
             "sideBrushPower",
             "ntfyTopic",
+            "ntfyServer",
+            "ntfyToken",
             "ntfyEnabled",
             "ntfyOnDone",
             "ntfyOnError",
@@ -1057,6 +1061,8 @@ const handleRequest = async (req, res) => {
             if (data.vacuumSpeed !== undefined) state.vacuumSpeed = data.vacuumSpeed;
             if (data.sideBrushPower !== undefined) state.sideBrushPower = data.sideBrushPower;
             if (data.ntfyTopic !== undefined) state.ntfyTopic = data.ntfyTopic;
+            if (data.ntfyServer !== undefined) state.ntfyServer = data.ntfyServer;
+            if (data.ntfyToken !== undefined) state.ntfyToken = data.ntfyToken;
             if (data.ntfyEnabled !== undefined) state.ntfyEnabled = data.ntfyEnabled;
             if (data.ntfyOnDone !== undefined) state.ntfyOnDone = data.ntfyOnDone;
             if (data.ntfyOnError !== undefined) state.ntfyOnError = data.ntfyOnError;
@@ -1091,6 +1097,8 @@ const handleRequest = async (req, res) => {
                 "vacuumSpeed",
                 "sideBrushPower",
                 "ntfyTopic",
+                "ntfyServer",
+                "ntfyToken",
                 "ntfyEnabled",
                 "ntfyOnDone",
                 "ntfyOnError",

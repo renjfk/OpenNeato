@@ -57,7 +57,9 @@ export interface SettingsData {
     brushRpm: number; // Main brush RPM (500-1600)
     vacuumSpeed: number; // Vacuum speed % (40-100)
     sideBrushPower: number; // Side brush power in mW (500-1500)
-    ntfyTopic: string; // ntfy.sh topic for push notifications (empty = disabled)
+    ntfyTopic: string; // ntfy topic for push notifications (empty = disabled)
+    ntfyServer: string; // Custom ntfy server hostname (empty = ntfy.sh)
+    ntfyToken: string; // Access token for authenticated ntfy servers (empty = no auth)
     ntfyEnabled: boolean; // Global switch — must be on for any notification to fire
     ntfyOnDone: boolean; // Notify when cleaning completes
     ntfyOnError: boolean; // Notify on robot error (UI_ERROR_*, code 243+)

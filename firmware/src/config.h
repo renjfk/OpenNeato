@@ -142,6 +142,8 @@ enum CommandStatus {
 
 // NVS keys — Notifications
 #define NVS_KEY_NTFY_TOPIC "ntfy_topic"
+#define NVS_KEY_NTFY_SERVER "ntfy_server"
+#define NVS_KEY_NTFY_TOKEN "ntfy_token"
 #define NVS_KEY_NTFY_ENABLED "ntfy_enabled"
 #define NVS_KEY_NTFY_ON_DONE "ntfy_on_done"
 #define NVS_KEY_NTFY_ON_ERR "ntfy_on_err"

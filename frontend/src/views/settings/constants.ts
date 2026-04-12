@@ -112,6 +112,8 @@ export const DEFAULT_SERVER = {
     vacuumSpeed: 80,
     sideBrushPower: 1500,
     ntfyTopic: "",
+    ntfyServer: "",
+    ntfyToken: "",
     ntfyEnabled: false,
     ntfyOnDone: true,
     ntfyOnError: true,

@@ -4,8 +4,7 @@ from homeassistant.components.vacuum import VacuumActivity
 
 DOMAIN = "openneato"
 CONF_HOST = "host"
-DEFAULT_FAST_POLL_INTERVAL = 5  # seconds
-DEFAULT_SLOW_POLL_INTERVAL = 30  # seconds
+DEFAULT_POLL_INTERVAL = 5  # seconds
 
 # The firmware returns uiState as full enum strings like "UIMGR_STATE_HOUSECLEANINGRUNNING".
 # We match using substrings (via .includes() style) like the frontend does in dashboard.tsx.

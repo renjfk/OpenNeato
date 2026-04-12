@@ -151,7 +151,7 @@ async def async_setup_entry(
     fw_version = data["fw_version"]
     host = data["host"]
     api = data["api"]
-    coordinator = data["slow_coordinator"]
+    coordinator = data["coordinator"]
 
     entities: list[OpenNeatoNumber] = []
     for description in NUMBER_DESCRIPTIONS:

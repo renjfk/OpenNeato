@@ -43,7 +43,7 @@ async def async_setup_entry(
     async_add_entities(
         [
             OpenNeatoVacuum(
-                coordinator=data["fast_coordinator"],
+                coordinator=data["coordinator"],
                 api=data["api"],
                 serial=data["serial"],
                 model=data["model"],

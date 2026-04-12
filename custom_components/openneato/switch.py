@@ -23,7 +23,6 @@ _LOGGER = logging.getLogger(__name__)
 class OpenNeatoSwitchEntityDescription(SwitchEntityDescription):
     """Describe an OpenNeato switch."""
 
-    coordinator_key: str = "fast_coordinator"
     section: str = ""
     field: str = ""
     # For user_settings switches (POST with key/value)
@@ -37,7 +36,6 @@ SWITCH_DESCRIPTIONS: tuple[OpenNeatoSwitchEntityDescription, ...] = (
         key="eco_mode",
         translation_key="eco_mode",
         name="Eco mode",
-        coordinator_key="fast_coordinator",
         section="user_settings",
         field="ecoMode",
         setting_key="EcoMode",
@@ -47,7 +45,6 @@ SWITCH_DESCRIPTIONS: tuple[OpenNeatoSwitchEntityDescription, ...] = (
         key="intense_clean",
         translation_key="intense_clean",
         name="Intense clean",
-        coordinator_key="fast_coordinator",
         section="user_settings",
         field="intenseClean",
         setting_key="IntenseClean",
@@ -57,7 +54,6 @@ SWITCH_DESCRIPTIONS: tuple[OpenNeatoSwitchEntityDescription, ...] = (
         key="bin_full_detect",
         translation_key="bin_full_detect",
         name="Bin full detect",
-        coordinator_key="fast_coordinator",
         section="user_settings",
         field="binFullDetect",
         setting_key="BinFullDetect",
@@ -67,7 +63,6 @@ SWITCH_DESCRIPTIONS: tuple[OpenNeatoSwitchEntityDescription, ...] = (
         key="schedule",
         translation_key="schedule",
         name="Schedule",
-        coordinator_key="slow_coordinator",
         section="settings",
         field="scheduleEnabled",
         settings_field="scheduleEnabled",
@@ -87,8 +82,6 @@ class OpenNeatoSwitch(OpenNeatoEntity, SwitchEntity):
         serial: str,
         description: OpenNeatoSwitchEntityDescription,
         api: OpenNeatoApiClient,
-        fast_coordinator: DataUpdateCoordinator,
-        slow_coordinator: DataUpdateCoordinator,
         model: str | None = None,
         sw_version: str | None = None,
         fw_version: str | None = None,
@@ -106,8 +99,6 @@ class OpenNeatoSwitch(OpenNeatoEntity, SwitchEntity):
         self.entity_description = description
         self._attr_unique_id = f"{serial}_{description.key}"
         self._api = api
-        self._fast_coordinator = fast_coordinator
-        self._slow_coordinator = slow_coordinator
 
     @property
     def is_on(self) -> bool | None:
@@ -127,20 +118,18 @@ class OpenNeatoSwitch(OpenNeatoEntity, SwitchEntity):
         desc = self.entity_description
         if desc.setting_key is not None:
             await self._api.set_user_setting(desc.setting_key, "ON")
-            await self._fast_coordinator.async_request_refresh()
         elif desc.settings_field is not None:
             await self._api.update_settings({desc.settings_field: True})
-            await self._slow_coordinator.async_request_refresh()
+        await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off."""
         desc = self.entity_description
         if desc.setting_key is not None:
             await self._api.set_user_setting(desc.setting_key, "OFF")
-            await self._fast_coordinator.async_request_refresh()
         elif desc.settings_field is not None:
             await self._api.update_settings({desc.settings_field: False})
-            await self._slow_coordinator.async_request_refresh()
+        await self.coordinator.async_request_refresh()
 
 
 async def async_setup_entry(
@@ -156,20 +145,16 @@ async def async_setup_entry(
     fw_version = data["fw_version"]
     host = data["host"]
     api = data["api"]
-    fast_coordinator = data["fast_coordinator"]
-    slow_coordinator = data["slow_coordinator"]
+    coordinator = data["coordinator"]
 
     entities: list[OpenNeatoSwitch] = []
     for description in SWITCH_DESCRIPTIONS:
-        coordinator = data[description.coordinator_key]
         entities.append(
             OpenNeatoSwitch(
                 coordinator,
                 serial,
                 description,
                 api,
-                fast_coordinator,
-                slow_coordinator,
                 model=model,
                 sw_version=sw_version,
                 fw_version=fw_version,

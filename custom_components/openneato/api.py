@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 import aiohttp
-import async_timeout
+from asyncio import timeout
 
 from homeassistant.exceptions import HomeAssistantError
 
@@ -47,7 +47,7 @@ class OpenNeatoApiClient:
         url = f"{self._base_url}{path}"
         _LOGGER.debug("GET %s", url)
         try:
-            async with async_timeout.timeout(TIMEOUT):
+            async with timeout(TIMEOUT):
                 async with self._session.get(url) as response:
                     _LOGGER.debug(
                         "GET %s -> %s (%s)",
@@ -78,7 +78,7 @@ class OpenNeatoApiClient:
         url = f"{self._base_url}{path}"
         _LOGGER.debug("POST %s params=%s", url, params)
         try:
-            async with async_timeout.timeout(TIMEOUT):
+            async with timeout(TIMEOUT):
                 async with self._session.post(url, params=params) as response:
                     _LOGGER.debug(
                         "POST %s -> %s (%s)",
@@ -110,7 +110,7 @@ class OpenNeatoApiClient:
         url = f"{self._base_url}{path}"
         _LOGGER.debug("PUT %s body=%s", url, json_data)
         try:
-            async with async_timeout.timeout(TIMEOUT):
+            async with timeout(TIMEOUT):
                 async with self._session.put(url, json=json_data) as response:
                     _LOGGER.debug(
                         "PUT %s -> %s (%s)",

@@ -12,7 +12,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import OpenNeatoApiClient, OpenNeatoConnectionError
 from .const import CONF_HOST, DOMAIN
-from .coordinator import OpenNeatoFastCoordinator, OpenNeatoSlowCoordinator
+from .coordinator import OpenNeatoCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,7 +23,6 @@ PLATFORMS: list[Platform] = [
     Platform.SWITCH,
     Platform.NUMBER,
     Platform.BUTTON,
-    Platform.CAMERA,
 ]
 
 
@@ -33,7 +32,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     session = async_get_clientsession(hass)
     api = OpenNeatoApiClient(host, session)
 
-    # Fetch version info for device_info — raises ConfigEntryNotReady on failure
     _LOGGER.debug("Connecting to OpenNeato at %s", host)
     try:
         firmware_info = await api.get_firmware_version()
@@ -62,17 +60,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     sw_version = robot_info.get("softwareVersion", entry.data.get("software_version"))
     fw_version = firmware_info.get("version", entry.data.get("firmware_version"))
 
-    fast_coordinator = OpenNeatoFastCoordinator(hass, api)
-    slow_coordinator = OpenNeatoSlowCoordinator(hass, api)
-
-    await fast_coordinator.async_config_entry_first_refresh()
-    await slow_coordinator.async_config_entry_first_refresh()
+    coordinator = OpenNeatoCoordinator(hass, api)
+    await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
         "api": api,
-        "fast_coordinator": fast_coordinator,
-        "slow_coordinator": slow_coordinator,
+        "coordinator": coordinator,
         "serial": serial,
         "model": model,
         "sw_version": sw_version,

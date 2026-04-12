@@ -29,19 +29,17 @@ from .entity import OpenNeatoEntity
 class OpenNeatoSensorEntityDescription(SensorEntityDescription):
     """Describe an OpenNeato sensor."""
 
-    coordinator_key: str = "fast_coordinator"
     section: str = ""
     field: str = ""
     value_fn: Any = None
 
 
 SENSOR_DESCRIPTIONS: tuple[OpenNeatoSensorEntityDescription, ...] = (
-    # ── Fast coordinator: charger ────────────────────────────────────
+    # ── Charger ─────────────────────────────────────────────────────────
     OpenNeatoSensorEntityDescription(
         key="charger_fuel_percent",
         translation_key="battery_level",
         name="Battery level",
-        coordinator_key="fast_coordinator",
         section="charger",
         field="fuelPercent",
         device_class=SensorDeviceClass.BATTERY,
@@ -52,7 +50,6 @@ SENSOR_DESCRIPTIONS: tuple[OpenNeatoSensorEntityDescription, ...] = (
         key="charger_vbattv",
         translation_key="battery_voltage",
         name="Battery voltage",
-        coordinator_key="fast_coordinator",
         section="charger",
         field="vBattV",
         device_class=SensorDeviceClass.VOLTAGE,
@@ -63,19 +60,17 @@ SENSOR_DESCRIPTIONS: tuple[OpenNeatoSensorEntityDescription, ...] = (
         key="charger_vextv",
         translation_key="external_voltage",
         name="External voltage",
-        coordinator_key="fast_coordinator",
         section="charger",
         field="vExtV",
         device_class=SensorDeviceClass.VOLTAGE,
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
-    # ── Fast coordinator: error ──────────────────────────────────────
+    # ── Error ───────────────────────────────────────────────────────────
     OpenNeatoSensorEntityDescription(
         key="error_code",
         translation_key="error_code",
         name="Error code",
-        coordinator_key="fast_coordinator",
         section="error",
         field="errorCode",
         icon="mdi:alert-circle",
@@ -85,18 +80,16 @@ SENSOR_DESCRIPTIONS: tuple[OpenNeatoSensorEntityDescription, ...] = (
         key="error_message",
         translation_key="error_message",
         name="Error message",
-        coordinator_key="fast_coordinator",
         section="error",
         field="displayMessage",
         icon="mdi:alert-circle-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
-    # ── Slow coordinator: system ─────────────────────────────────────
+    # ── System ──────────────────────────────────────────────────────────
     OpenNeatoSensorEntityDescription(
         key="system_rssi",
         translation_key="wifi_signal",
         name="WiFi signal",
-        coordinator_key="slow_coordinator",
         section="system",
         field="rssi",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
@@ -107,7 +100,6 @@ SENSOR_DESCRIPTIONS: tuple[OpenNeatoSensorEntityDescription, ...] = (
         key="system_uptime",
         translation_key="uptime",
         name="Uptime",
-        coordinator_key="slow_coordinator",
         section="system",
         field="uptime",
         device_class=SensorDeviceClass.DURATION,
@@ -119,7 +111,6 @@ SENSOR_DESCRIPTIONS: tuple[OpenNeatoSensorEntityDescription, ...] = (
         key="system_heap",
         translation_key="free_heap",
         name="Free heap",
-        coordinator_key="slow_coordinator",
         section="system",
         field="heap",
         native_unit_of_measurement="B",
@@ -130,19 +121,17 @@ SENSOR_DESCRIPTIONS: tuple[OpenNeatoSensorEntityDescription, ...] = (
         key="system_fs_used",
         translation_key="storage_used",
         name="Storage used",
-        coordinator_key="slow_coordinator",
         section="system",
         field="fsUsed",
         native_unit_of_measurement="B",
         icon="mdi:harddisk",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
-    # ── Slow coordinator: motors ─────────────────────────────────────
+    # ── Motors ──────────────────────────────────────────────────────────
     OpenNeatoSensorEntityDescription(
         key="motors_brush_rpm",
         translation_key="brush_rpm",
         name="Brush RPM",
-        coordinator_key="slow_coordinator",
         section="motors",
         field="brushRPM",
         native_unit_of_measurement="rpm",
@@ -153,7 +142,6 @@ SENSOR_DESCRIPTIONS: tuple[OpenNeatoSensorEntityDescription, ...] = (
         key="motors_vacuum_rpm",
         translation_key="vacuum_rpm",
         name="Vacuum RPM",
-        coordinator_key="slow_coordinator",
         section="motors",
         field="vacuumRPM",
         native_unit_of_measurement="rpm",
@@ -164,7 +152,6 @@ SENSOR_DESCRIPTIONS: tuple[OpenNeatoSensorEntityDescription, ...] = (
         key="motors_side_brush_ma",
         translation_key="side_brush_current",
         name="Side brush current",
-        coordinator_key="slow_coordinator",
         section="motors",
         field="sideBrushMA",
         native_unit_of_measurement="mA",
@@ -227,10 +214,10 @@ async def async_setup_entry(
     sw_version = data["sw_version"]
     fw_version = data["fw_version"]
     host = data["host"]
+    coordinator = data["coordinator"]
 
     entities: list[OpenNeatoSensor] = []
     for description in SENSOR_DESCRIPTIONS:
-        coordinator = data[description.coordinator_key]
         entities.append(
             OpenNeatoSensor(
                 coordinator,

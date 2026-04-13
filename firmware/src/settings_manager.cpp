@@ -63,6 +63,8 @@ void SettingsManager::load() {
     current.brushRpm = prefs.getInt(NVS_KEY_MC_BRUSH_RPM, MANUAL_BRUSH_RPM);
     current.vacuumSpeed = prefs.getInt(NVS_KEY_MC_VACUUM_PCT, MANUAL_VACUUM_SPEED_PCT);
     current.sideBrushPower = prefs.getInt(NVS_KEY_MC_SBRUSH_MW, MANUAL_SIDE_BRUSH_POWER_MW);
+    current.syslogEnabled = prefs.getBool(NVS_KEY_SYSLOG_ENABLED, false);
+    current.syslogIp = prefs.getString(NVS_KEY_SYSLOG_IP, "");
     current.ntfyTopic = prefs.getString(NVS_KEY_NTFY_TOPIC, "");
     current.ntfyEnabled = prefs.getBool(NVS_KEY_NTFY_ENABLED, false);
     current.ntfyOnDone = prefs.getBool(NVS_KEY_NTFY_ON_DONE, true);
@@ -91,6 +93,8 @@ void SettingsManager::save() {
     prefs.putInt(NVS_KEY_MC_BRUSH_RPM, current.brushRpm);
     prefs.putInt(NVS_KEY_MC_VACUUM_PCT, current.vacuumSpeed);
     prefs.putInt(NVS_KEY_MC_SBRUSH_MW, current.sideBrushPower);
+    prefs.putBool(NVS_KEY_SYSLOG_ENABLED, current.syslogEnabled);
+    prefs.putString(NVS_KEY_SYSLOG_IP, current.syslogIp);
     prefs.putString(NVS_KEY_NTFY_TOPIC, current.ntfyTopic);
     prefs.putBool(NVS_KEY_NTFY_ENABLED, current.ntfyEnabled);
     prefs.putBool(NVS_KEY_NTFY_ON_DONE, current.ntfyOnDone);
@@ -112,7 +116,9 @@ void SettingsManager::save() {
 const Settings& SettingsManager::get() {
     // Auto-revert log level to off after timeout to prevent forgotten verbose
     // logging that fills flash and degrades serial performance.
-    if (current.logLevel > LOG_LEVEL_OFF && logLevelEnabledAt > 0) {
+    // Skip auto-expire when syslog is enabled — syslog sends over UDP so there
+    // is no flash wear concern, and the whole point is long-running capture.
+    if (current.logLevel > LOG_LEVEL_OFF && logLevelEnabledAt > 0 && !current.syslogEnabled) {
         unsigned long timeout =
                 (current.logLevel >= LOG_LEVEL_DEBUG) ? LOG_LEVEL_AUTO_OFF_DEBUG_MS : LOG_LEVEL_AUTO_OFF_INFO_MS;
         if (millis() - logLevelEnabledAt >= timeout) {
@@ -244,6 +250,17 @@ ApplyResult SettingsManager::apply(const String& json) {
         LOG("SETTINGS", "Side brush power -> %d mW", current.sideBrushPower);
     }
 
+    if (incoming.syslogEnabled != current.syslogEnabled) {
+        current.syslogEnabled = incoming.syslogEnabled;
+        changed = true;
+        LOG("SETTINGS", "Syslog -> %s", current.syslogEnabled ? "on" : "off");
+    }
+    if (incoming.syslogIp != current.syslogIp) {
+        current.syslogIp = incoming.syslogIp;
+        changed = true;
+        LOG("SETTINGS", "Syslog host -> %s", current.syslogIp.isEmpty() ? "(empty)" : current.syslogIp.c_str());
+    }
+
     if (incoming.ntfyTopic != current.ntfyTopic) {
         current.ntfyTopic = incoming.ntfyTopic;
         changed = true;
@@ -326,6 +343,8 @@ std::vector<Field> Settings::toFields() const {
             {"brushRpm", String(brushRpm), FIELD_INT},
             {"vacuumSpeed", String(vacuumSpeed), FIELD_INT},
             {"sideBrushPower", String(sideBrushPower), FIELD_INT},
+            {"syslogEnabled", syslogEnabled ? "true" : "false", FIELD_BOOL},
+            {"syslogIp", syslogIp, FIELD_STRING},
             {"ntfyTopic", ntfyTopic, FIELD_STRING},
             {"ntfyEnabled", ntfyEnabled ? "true" : "false", FIELD_BOOL},
             {"ntfyOnDone", ntfyOnDone ? "true" : "false", FIELD_BOOL},
@@ -395,6 +414,14 @@ bool Settings::fromFields(const std::vector<Field>& fields) {
     }
     if ((f = findField(fields, "sideBrushPower")) && f->type == FIELD_INT) {
         sideBrushPower = f->value.toInt();
+        applied = true;
+    }
+    if ((f = findField(fields, "syslogEnabled")) && f->type == FIELD_BOOL) {
+        syslogEnabled = (f->value == "true");
+        applied = true;
+    }
+    if ((f = findField(fields, "syslogIp")) && f->type == FIELD_STRING) {
+        syslogIp = f->value;
         applied = true;
     }
     if ((f = findField(fields, "ntfyTopic")) && f->type == FIELD_STRING) {

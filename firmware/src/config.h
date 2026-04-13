@@ -137,6 +137,12 @@ enum CommandStatus {
 #define NVS_KEY_MC_VACUUM_PCT "mc_vacuum_pct"
 #define NVS_KEY_MC_SBRUSH_MW "mc_sbrush_mw"
 
+// NVS keys — Remote syslog
+#define NVS_KEY_SYSLOG_ENABLED "syslog_on"
+#define NVS_KEY_SYSLOG_IP "syslog_ip"
+#define SYSLOG_DEFAULT_PORT 514
+#define SYSLOG_PRI "<14>" // facility=user (1), severity=info (6) -> 1*8+6=14
+
 // NVS keys — Notifications
 #define NVS_KEY_NTFY_TOPIC "ntfy_topic"
 #define NVS_KEY_NTFY_ENABLED "ntfy_enabled"

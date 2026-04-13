@@ -240,6 +240,8 @@ const state = {
     lidarSlowRotation: false,
     tz: "UTC0",
     logLevel: 0,
+    syslogEnabled: false,
+    syslogIp: "",
     wifiTxPower: 60, // 15 dBm in 0.25 dBm units
     uartTxPin: 3,
     uartRxPin: 4,
@@ -735,6 +737,8 @@ const routes = {
         const keys = [
             "tz",
             "logLevel",
+            "syslogEnabled",
+            "syslogIp",
             "wifiTxPower",
             "uartTxPin",
             "uartRxPin",
@@ -1049,6 +1053,8 @@ const handleRequest = async (req, res) => {
             await new Promise((r) => setTimeout(r, rand(300, 600)));
             if (data.tz !== undefined) state.tz = data.tz;
             if (data.logLevel !== undefined) state.logLevel = data.logLevel;
+            if (data.syslogEnabled !== undefined) state.syslogEnabled = data.syslogEnabled;
+            if (data.syslogIp !== undefined) state.syslogIp = data.syslogIp;
             if (data.wifiTxPower !== undefined) state.wifiTxPower = data.wifiTxPower;
             const pinsChanged =
                 (data.uartTxPin !== undefined && data.uartTxPin !== state.uartTxPin) ||
@@ -1087,6 +1093,8 @@ const handleRequest = async (req, res) => {
             const keys = [
                 "tz",
                 "logLevel",
+                "syslogEnabled",
+                "syslogIp",
                 "wifiTxPower",
                 "uartTxPin",
                 "uartRxPin",

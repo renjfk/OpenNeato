@@ -32,7 +32,9 @@ Three top-level components: `firmware/` (ESP32 C/C++), `frontend/` (Preact SPA),
 Logging is controlled by `logLevel` in settings (0=off, 1=info, 2=debug). Default
 is **off** - nothing written to SPIFFS. Both info and debug auto-revert to off
 after a timeout (1 hour / 10 minutes) to prevent forgotten logging from degrading
-serial performance.
+serial performance. When remote syslog is enabled (`syslogEnabled`), logs are sent
+over UDP (port 514, BSD syslog format) instead of flash, and the auto-expire timer
+is disabled.
 
 All significant events must be logged via `DataLogger` (injected by reference).
 `logEvent` is private — use typed public helpers (`logRequest`, `logWifi`, `logOta`,

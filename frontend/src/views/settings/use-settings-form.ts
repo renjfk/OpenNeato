@@ -9,6 +9,8 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
     // Local form state
     const [tz, setTz] = useState<string>("UTC0");
     const [logLevel, setLogLevel] = useState(0);
+    const [syslogEnabled, setSyslogEnabled] = useState(false);
+    const [syslogIp, setSyslogIp] = useState("");
     const [wifiTxPower, setWifiTxPower] = useState(60);
     const [uartTxPin, setUartTxPin] = useState(3);
     const [uartRxPin, setUartRxPin] = useState(4);
@@ -42,6 +44,8 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
             server.current = { ...fetched };
             setTz(fetched.tz);
             setLogLevel(fetched.logLevel);
+            setSyslogEnabled(fetched.syslogEnabled ?? false);
+            setSyslogIp(fetched.syslogIp ?? "");
             setWifiTxPower(fetched.wifiTxPower);
             setUartTxPin(fetched.uartTxPin);
             setUartRxPin(fetched.uartRxPin);
@@ -68,6 +72,8 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         settingsLoaded &&
         (tz !== server.current.tz ||
             logLevel !== server.current.logLevel ||
+            syslogEnabled !== (server.current.syslogEnabled ?? false) ||
+            syslogIp !== (server.current.syslogIp ?? "") ||
             wifiTxPower !== server.current.wifiTxPower ||
             uartTxPin !== server.current.uartTxPin ||
             uartRxPin !== server.current.uartRxPin ||
@@ -105,7 +111,17 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
                 ? "Only letters, numbers, and hyphens"
                 : null;
 
-    const validationError = pinError || hostnameError;
+    const isValidIpv4 = (ip: string) => /^(\d{1,3}\.){3}\d{1,3}$/.test(ip) && ip.split(".").every((n) => +n <= 255);
+
+    const syslogIpError = syslogEnabled
+        ? syslogIp.trim().length === 0
+            ? "IP address is required when syslog is enabled"
+            : !isValidIpv4(syslogIp.trim())
+              ? "Must be a valid IPv4 address"
+              : null
+        : null;
+
+    const validationError = pinError || hostnameError || syslogIpError;
 
     // --- Unified save ---
 
@@ -113,6 +129,8 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         const patch: Partial<SettingsData> = {};
         if (tz !== server.current.tz) patch.tz = tz;
         if (logLevel !== server.current.logLevel) patch.logLevel = logLevel;
+        if (syslogEnabled !== (server.current.syslogEnabled ?? false)) patch.syslogEnabled = syslogEnabled;
+        if (syslogIp !== (server.current.syslogIp ?? "")) patch.syslogIp = syslogIp;
         if (wifiTxPower !== server.current.wifiTxPower) patch.wifiTxPower = wifiTxPower;
         if (uartTxPin !== server.current.uartTxPin) patch.uartTxPin = uartTxPin;
         if (uartRxPin !== server.current.uartRxPin) patch.uartRxPin = uartRxPin;
@@ -132,6 +150,8 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
     }, [
         tz,
         logLevel,
+        syslogEnabled,
+        syslogIp,
         wifiTxPower,
         uartTxPin,
         uartRxPin,
@@ -188,6 +208,10 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         setTz,
         logLevel,
         setLogLevel,
+        syslogEnabled,
+        setSyslogEnabled,
+        syslogIp,
+        setSyslogIp,
         wifiTxPower,
         setWifiTxPower,
         uartTxPin,
@@ -224,6 +248,7 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         needsReboot,
         pinError,
         hostnameError,
+        syslogIpError,
         validationError,
         // Save flow
         saving,

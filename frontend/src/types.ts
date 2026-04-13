@@ -48,6 +48,8 @@ export interface SystemData {
 export interface SettingsData {
     tz: string;
     logLevel: number; // 0=off, 1=info, 2=debug
+    syslogEnabled: boolean; // When on, logs go to UDP syslog instead of flash
+    syslogIp: string; // IPv4 address of syslog receiver
     wifiTxPower: number; // 0.25 dBm units (e.g. 34 = 8.5 dBm)
     uartTxPin: number;
     uartRxPin: number;

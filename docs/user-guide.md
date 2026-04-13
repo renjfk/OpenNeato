@@ -328,9 +328,17 @@ Go to **Settings -> Diagnostics** and set **Log Level**:
 - **Debug** — everything in Info plus all serial commands with raw responses. Auto-reverts to
   off after 10 minutes.
 
+For long-running diagnostics (e.g. catching an intermittent error that only appears after
+hours of idling), enable **Remote Syslog** in the same section. This sends all log output
+over UDP (port 514) to a syslog receiver on your network instead of writing to flash. The
+auto-expire timer is disabled when remote syslog is active, so logging continues until you
+turn it off. Enter the IPv4 address of your syslog receiver (e.g. a machine running
+`rsyslog`, `syslog-ng`, or any UDP syslog listener).
+
 > [!NOTE]
-> Logging writes to flash storage (SPIFFS). Higher levels generate more writes, which
-> increases flash wear. Use Info or Debug only when actively diagnosing an issue.
+> When remote syslog is off, logging writes to flash storage (SPIFFS). Higher levels generate
+> more writes, which increases flash wear. Use Info or Debug only when actively diagnosing an
+> issue.
 
 ### Collecting Logs
 
@@ -375,9 +383,11 @@ Two ways to factory reset:
 
 Before creating an issue on GitHub:
 
-1. **Set log level to Debug** (Settings -> Diagnostics -> Log Level -> Debug)
+1. **Set log level to Debug** (Settings -> Diagnostics -> Log Level -> Debug). For intermittent
+   issues, enable **Remote Syslog** so logging persists without flash wear or auto-expire.
 2. **Reproduce the problem** while logging is active
-3. **Download the logs** (Settings -> Diagnostics -> Logs)
+3. **Download the logs** (Settings -> Diagnostics -> Logs), or copy the relevant lines from
+   your syslog receiver if using remote syslog
 4. **If the issue involves cleaning**: download the relevant cleaning session from History
 5. Create an issue at [github.com/renjfk/OpenNeato/issues](https://github.com/renjfk/OpenNeato/issues)
    and attach the log files

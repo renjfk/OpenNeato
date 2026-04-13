@@ -411,6 +411,23 @@ void DataLogger::enforceLimits() {
     }
 }
 
+// -- UDP syslog sender -------------------------------------------------------
+
+void DataLogger::sendSyslog(const String& line) {
+    if (!syslogCheck)
+        return;
+    auto cfg = syslogCheck();
+    if (!cfg.enabled || cfg.ip.isEmpty())
+        return;
+
+    // BSD syslog format (RFC 3164): <PRI>HOSTNAME APP: MESSAGE
+    // Keep it minimal — the JSON line is the message payload
+    String packet = String(SYSLOG_PRI) + "openneato: " + line;
+    syslogUdp.beginPacket(cfg.ip.c_str(), SYSLOG_DEFAULT_PORT);
+    syslogUdp.write(reinterpret_cast<const uint8_t *>(packet.c_str()), packet.length());
+    syslogUdp.endPacket();
+}
+
 // -- Public logging methods --------------------------------------------------
 
 void DataLogger::logEvent(const String& type, const std::vector<Field>& fields) {
@@ -421,6 +438,16 @@ void DataLogger::logEvent(const String& type, const std::vector<Field>& fields) 
 
     String line = "{\"t\":" + String(static_cast<long>(sysMgr.now())) + ",\"typ\":\"" + type + "\",\"d\":{" +
                   fieldsToJsonInner(fields) + "}}";
+
+    // Route to syslog (UDP) or flash buffer based on syslog setting.
+    // When syslog is enabled, skip flash writes entirely to avoid wear.
+    if (syslogCheck) {
+        auto cfg = syslogCheck();
+        if (cfg.enabled && !cfg.ip.isEmpty()) {
+            sendSyslog(line);
+            return;
+        }
+    }
     bufferLine(line);
 }
 

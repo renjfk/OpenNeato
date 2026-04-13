@@ -159,6 +159,7 @@ export const api = {
     robotRestart: () => post("/api/power?action=restart"),
     robotShutdown: () => post("/api/power?action=shutdown"),
     restart: () => post("/api/system/restart"),
+    setTime: (epoch: number) => post(`/api/system/time?epoch=${epoch}`),
     formatFs: () => post("/api/system/format-fs"),
     factoryReset: () => post("/api/system/reset"),
     getLogs: () => get<LogFileInfo[]>("/api/logs"),

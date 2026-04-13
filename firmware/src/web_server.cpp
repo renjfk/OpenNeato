@@ -310,6 +310,22 @@ void WebServer::registerSystemRoutes() {
         return 200;
     });
 
+    // POST /api/system/time?epoch=<unix_timestamp> — set system clock from browser when NTP is unavailable
+    loggedRoute("/api/system/time", HTTP_POST, [this](AsyncWebServerRequest *request) -> int {
+        if (!request->hasParam("epoch")) {
+            sendError(request, 400, "missing epoch");
+            return 400;
+        }
+        long epoch = request->getParam("epoch")->value().toInt();
+        if (epoch < 1700000000L) {
+            sendError(request, 400, "invalid epoch");
+            return 400;
+        }
+        sysMgr.setManualTime(static_cast<time_t>(epoch));
+        sendOk(request);
+        return 200;
+    });
+
     LOG("WEB", "System routes registered");
 }
 

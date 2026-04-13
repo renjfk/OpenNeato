@@ -239,6 +239,8 @@ const state = {
     lidarLowQuality: false,
     lidarSlowRotation: false,
     tz: "UTC0",
+    ntpSynced: true,
+    timeSource: "ntp",
     logLevel: 0,
     syslogEnabled: false,
     syslogIp: "",
@@ -724,13 +726,25 @@ const routes = {
             rssi: rand(-65, -40),
             fsUsed: rand(10000, 50000),
             fsTotal: 262144,
-            ntpSynced: true,
+            ntpSynced: state.ntpSynced,
             time: Math.floor(Date.now() / 1000),
-            timeSource: "ntp",
+            timeSource: state.timeSource,
             tz: state.tz,
             localTime,
             isDst: now.getTimezoneOffset() !== new Date(now.getFullYear(), 0, 1).getTimezoneOffset(),
         });
+    },
+
+    "POST /api/system/time": (req, res) => {
+        const epoch = parseInt(new URL(`http://x${req.url}`).searchParams.get("epoch") ?? "0", 10);
+        if (!epoch || epoch < 1700000000) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "invalid epoch" }));
+            return;
+        }
+        state.ntpSynced = false;
+        state.timeSource = "manual";
+        sendOk(res);
     },
 
     "POST /api/system/restart": (_req, res) => {

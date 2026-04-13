@@ -47,6 +47,10 @@ public:
     // External clock fallback (e.g. robot clock parsed from GetTime)
     void setFallbackClock(time_t epoch);
 
+    // Set system clock from an externally supplied Unix timestamp (e.g. from the browser).
+    // Marks timeSource as "manual" and fires the NTP sync callback to push time to the robot.
+    void setManualTime(time_t epoch);
+
     // Apply a timezone string (reconfigures NTP, does NOT store to NVS)
     void applyTimezone(const String& tz);
 
@@ -78,6 +82,7 @@ private:
 
     Preferences& prefs;
     bool ntpSynced = false;
+    bool manualTimeSet = false;
     bool fallbackSet = false;
     time_t fallbackEpoch = 0;
     unsigned long fallbackMillis = 0;

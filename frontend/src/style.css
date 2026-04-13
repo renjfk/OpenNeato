@@ -857,6 +857,10 @@ body {
     opacity: 0.5;
 }
 
+.settings-set-time-row {
+    margin-top: 10px;
+}
+
 /* Settings nav row (link to sub-pages) */
 
 .settings-nav-row {

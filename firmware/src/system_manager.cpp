@@ -2,6 +2,7 @@
 #include <SPIFFS.h>
 #include <WiFi.h>
 #include <ctime>
+#include <sys/time.h>
 
 SystemManager::SystemManager(Preferences& prefs) : LoopTask(5000), prefs(prefs) {
     TaskRegistry::add(this);
@@ -29,8 +30,9 @@ void SystemManager::feedTaskWdt() {
 }
 
 void SystemManager::tick() {
-    // Detect NTP sync transition
-    if (!ntpSynced) {
+    // Detect NTP sync transition — skip if time was already set manually to prevent
+    // the manual timestamp from being mistaken for a successful NTP poll.
+    if (!ntpSynced && !manualTimeSet) {
         time_t t = time(nullptr);
         if (t > 1700000000) {
             ntpSynced = true;
@@ -86,6 +88,16 @@ void SystemManager::setFallbackClock(time_t epoch) {
     fallbackMillis = millis();
     fallbackSet = true;
     LOG("SYS", "Fallback clock set: epoch %ld", static_cast<long>(epoch));
+}
+
+void SystemManager::setManualTime(time_t epoch) {
+    struct timeval tv = {.tv_sec = epoch, .tv_usec = 0};
+    settimeofday(&tv, nullptr);
+    manualTimeSet = true;
+    LOG("SYS", "Manual time set: epoch %ld", static_cast<long>(epoch));
+    if (ntpSyncCallback) {
+        ntpSyncCallback();
+    }
 }
 
 // -- Timezone ----------------------------------------------------------------
@@ -162,7 +174,15 @@ SystemHealth SystemManager::getSystemHealth(const String& tz) const {
     h.fsTotal = SPIFFS.totalBytes();
     h.ntpSynced = ntpSynced;
     h.time = now();
-    h.timeSource = ntpSynced ? "ntp" : (fallbackSet ? "fallback" : "millis");
+    if (ntpSynced) {
+        h.timeSource = "ntp";
+    } else if (manualTimeSet) {
+        h.timeSource = "manual";
+    } else if (fallbackSet) {
+        h.timeSource = "fallback";
+    } else {
+        h.timeSource = "millis";
+    }
     h.tz = tz;
 
     // Compute DST-aware local time string via localtime_r (same conversion the

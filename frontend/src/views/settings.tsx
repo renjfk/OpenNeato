@@ -177,6 +177,26 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
             .finally(() => setTestingNotif(false));
     }, [ntfyTopic]);
 
+    // --- Manual time sync ---
+    const [settingTime, setSettingTime] = useState(false);
+    const [timeSetResult, setTimeSetResult] = useState<string | null>(null);
+
+    const handleSetTime = useCallback(() => {
+        setSettingTime(true);
+        setTimeSetResult(null);
+        const epoch = Math.floor(Date.now() / 1000);
+        api.setTime(epoch)
+            .then(() => {
+                setTimeSetResult("Done");
+                setTimeout(() => setTimeSetResult(null), 3000);
+            })
+            .catch((e: unknown) => {
+                setTimeSetResult(e instanceof Error ? e.message : "Failed");
+                setTimeout(() => setTimeSetResult(null), 3000);
+            })
+            .finally(() => setSettingTime(false));
+    }, []);
+
     // --- Dialogs ---
     const [showRestartConfirm, setShowRestartConfirm] = useState(false);
     const [showFormatConfirm, setShowFormatConfirm] = useState(false);
@@ -438,6 +458,24 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                                 )}
                             </select>
                         </div>
+                        {system?.time && (
+                            <div class="settings-robot-time">
+                                <Icon svg={clockSvg} />
+                                Robot time: {formatRobotTime(system.time, tz)}
+                            </div>
+                        )}
+                        {system && !system.ntpSynced && (
+                            <div class="settings-set-time-row">
+                                <button
+                                    type="button"
+                                    class="settings-ntfy-test-btn"
+                                    onClick={handleSetTime}
+                                    disabled={settingTime}
+                                >
+                                    {settingTime ? "..." : (timeSetResult ?? "Set time from browser")}
+                                </button>
+                            </div>
+                        )}
                     </div>
                     <div class="settings-section">
                         <div class="settings-section-title">UART Pins</div>

@@ -5,6 +5,7 @@ import backSvg from "../assets/icons/back.svg?raw";
 import bellSvg from "../assets/icons/bell.svg?raw";
 import calendarSvg from "../assets/icons/calendar.svg?raw";
 import chipSvg from "../assets/icons/chip.svg?raw";
+import clockSvg from "../assets/icons/clock.svg?raw";
 import databaseSvg from "../assets/icons/database.svg?raw";
 import gearSvg from "../assets/icons/gear.svg?raw";
 import houseSvg from "../assets/icons/house.svg?raw";
@@ -23,7 +24,7 @@ import { Icon } from "../components/icon";
 import { useNavigate } from "../components/router";
 import { useDirtyGuard } from "../hooks/use-dirty-guard";
 import { usePolling } from "../hooks/use-polling";
-import type { FirmwareVersion, SystemData, UserSettingsData } from "../types";
+import type { FirmwareVersion, SystemData, UserSettingsData, WifiStatusData } from "../types";
 import {
     BRUSH_PRESETS,
     NAV_MODE_PRESETS,
@@ -33,7 +34,7 @@ import {
     TX_POWER_PRESETS,
     VACUUM_PRESETS,
 } from "./settings/constants";
-import { findPresetLabel } from "./settings/helpers";
+import { findPresetLabel, formatRobotTime } from "./settings/helpers";
 import { SettingsCategory } from "./settings/settings-category";
 import { useFirmwareUpload } from "./settings/use-firmware-upload";
 import { useReboot } from "./settings/use-reboot";
@@ -51,6 +52,8 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
     const navigate = useNavigate();
     const systemPoll = usePolling<SystemData>(api.getSystem, 10000);
     const system = systemPoll.data;
+    const wifiStatusPoll = usePolling<WifiStatusData>(api.getWifiStatus, 10000);
+    const wifiStatus = wifiStatusPoll.data;
     const userSettingsPoll = usePolling<UserSettingsData>(api.getUserSettings, 30000);
     const [robotSettings, setRobotSettings] = useState<UserSettingsData | null>(null);
     const [savingRobotSettings, setSavingRobotSettings] = useState(false);
@@ -464,7 +467,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                                 Robot time: {formatRobotTime(system.time, tz)}
                             </div>
                         )}
-                        {system && !system.ntpSynced && (
+                        {wifiStatus?.apActive && (
                             <div class="settings-set-time-row">
                                 <button
                                     type="button"

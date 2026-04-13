@@ -85,7 +85,7 @@ export function WifiView() {
     const handleSave = useCallback(() => {
         if (validationError) return;
         setSavingSettings(true);
-        api.updateSettings({ apEnabled, apSsid, apPassword })
+        api.updateSettings({ apEnabled: true, apSsid, apPassword })
             .then((updated) => {
                 setSavedSettings({
                     apEnabled: updated.apEnabled,
@@ -100,7 +100,7 @@ export function WifiView() {
                 errorStack.push(e instanceof Error ? e.message : "Failed to save hotspot settings");
             })
             .finally(() => setSavingSettings(false));
-    }, [validationError, apEnabled, apSsid, apPassword, errorStack]);
+    }, [validationError, apSsid, apPassword, errorStack]);
 
     const handleRuntimeToggle = useCallback(() => {
         if (!status) return;
@@ -219,17 +219,16 @@ export function WifiView() {
                     <div class="settings-section">
                         <div class="settings-toggle-row">
                             <div class="settings-toggle-label">
-                                <span class="settings-toggle-title">Fallback hotspot enabled</span>
+                                <span class="settings-toggle-title">Fallback hotspot always enabled</span>
                                 <span class="settings-toggle-desc">
-                                    Allows the device to create its own WiFi if home WiFi is unavailable
+                                    Safety lock: fallback AP cannot be turned off from the UI
                                 </span>
                             </div>
                             <button
                                 type="button"
-                                class={`settings-toggle${apEnabled ? " on" : ""}`}
-                                onClick={() => setApEnabled(!apEnabled)}
-                                disabled={savingSettings}
-                                aria-label="Toggle fallback hotspot"
+                                class="settings-toggle on"
+                                disabled
+                                aria-label="Fallback hotspot is always enabled"
                             />
                         </div>
                         <div class="settings-section-title">Hotspot name</div>

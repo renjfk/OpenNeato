@@ -29,8 +29,8 @@ Scheduler scheduler(settingsManager, systemManager, neatoSerial, dataLogger);
 ManualCleanManager manualClean(neatoSerial);
 NotificationManager notifMgr(neatoSerial, settingsManager, dataLogger);
 CleaningHistory cleaningHistory(neatoSerial, dataLogger, systemManager);
-WebServer webServer(server, neatoSerial, dataLogger, systemManager, firmwareManager, settingsManager, manualClean,
-                    notifMgr, cleaningHistory);
+WebServer webServer(server, neatoSerial, dataLogger, systemManager, firmwareManager, settingsManager, wifiManager,
+                    manualClean, notifMgr, cleaningHistory);
 
 // Tracks whether web server has been started (may be deferred if WiFi was slow at boot)
 bool webServerStarted = false;
@@ -53,6 +53,8 @@ void setup() {
     LOG("BOOT", "Initializing settings...");
     settingsManager.onTzChange([&](const String& tz) { systemManager.applyTimezone(tz); });
     settingsManager.onTxPowerChange([&](int quarterDbm) { wifiManager.setTxPower(quarterDbm); });
+        settingsManager.onApConfigChange(
+            [&](bool enabled, const String& ssid, const String& password) { wifiManager.setApConfig(enabled, ssid, password); });
     settingsManager.onRebootRequired([&] { systemManager.restart(); });
     settingsManager.begin();
 
@@ -102,6 +104,7 @@ void setup() {
     // Initialize WiFi with provisioning
     LOG("BOOT", "Initializing WiFi...");
     wifiManager.setHostname(settingsManager.get().hostname);
+    wifiManager.setApConfig(settingsManager.get().apEnabled, settingsManager.get().apSsid, settingsManager.get().apPassword);
     wifiManager.begin();
 
     // Initialize system manager (NTP detection, time)
@@ -115,10 +118,9 @@ void setup() {
         dataLogger.logNtp("sync_ok", {{"epoch", String(static_cast<long>(t)), FIELD_INT}});
     });
 
-    // Initialize web server and OTA if WiFi is already connected.
-    // If WiFi is slow (e.g. DHCP timeout after OTA), the web server will be
-    // started later in loop() once WiFi comes up — see deferred start below.
-    if (wifiManager.isConnected()) {
+    // Initialize web server and OTA once either STA or fallback AP is ready.
+    // If WiFi comes up later, the web server will be started in loop().
+    if (wifiManager.isConnected() || wifiManager.isApActive()) {
         LOG("BOOT", "Initializing web server...");
         webServer.begin();
         LOG("BOOT", "Starting HTTP server...");
@@ -129,7 +131,7 @@ void setup() {
         esp_ota_mark_app_valid_cancel_rollback();
         LOG("BOOT", "Firmware marked valid");
     } else {
-        LOG("BOOT", "WiFi not ready — web server will start when connected");
+        LOG("BOOT", "WiFi not ready — web server will start when a network is available");
     }
 
     // Initialize data logger (SPIFFS, serial command hook)
@@ -166,12 +168,16 @@ void setup() {
         SerialMenu::printBanner("OpenNeato", FIRMWARE_VERSION,
                                 "WiFi: " + WiFi.SSID() + " (" + WiFi.localIP().toString() + ")",
                                 "Press 'm' for menu, 's' for status");
+    } else if (wifiManager.isApActive()) {
+        SerialMenu::printBanner("OpenNeato", FIRMWARE_VERSION,
+                                "AP: " + wifiManager.getApSsid() + " (" + wifiManager.getApIp() + ")",
+                                "Open http://" + wifiManager.getApIp() + " or press 'm' for menu");
     } else {
         SerialMenu::printBanner("OpenNeato", FIRMWARE_VERSION, "WiFi: not configured");
     }
 
-    // Show WiFi config menu if needed
-    if (!wifiManager.isConnected()) {
+    // Show WiFi config menu only when no browser-accessible network is available.
+    if (!wifiManager.isConnected() && !wifiManager.isApActive()) {
         wifiManager.showMenu();
     }
 }
@@ -189,10 +195,10 @@ void loop() {
     // WiFi auto-reconnect with exponential backoff
     wifiManager.loop();
 
-    // Deferred web server start — if WiFi was slow at boot (e.g. DHCP timeout
-    // after OTA), start the web server once WiFi eventually connects.
-    if (!webServerStarted && wifiManager.isConnected()) {
-        LOG("MAIN", "WiFi connected late — starting web server now");
+    // Deferred web server start — if STA or fallback AP comes up after boot,
+    // start the web server as soon as the device has a reachable network.
+    if (!webServerStarted && (wifiManager.isConnected() || wifiManager.isApActive())) {
+        LOG("MAIN", "Network became available late — starting web server now");
         dataLogger.logWifi("deferred_start");
         webServer.begin();
         server.begin();

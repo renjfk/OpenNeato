@@ -12,6 +12,8 @@ import type {
     StateData,
     SystemData,
     UserSettingsData,
+    WifiNetwork,
+    WifiStatusData,
 } from "./types";
 
 async function parseError(res: Response): Promise<string> {
@@ -145,6 +147,12 @@ export const api = {
 
     getSettings: () => get<SettingsData>("/api/settings"),
     updateSettings: (patch: Partial<SettingsData>) => put<SettingsData>("/api/settings", patch),
+    getWifiStatus: () => get<WifiStatusData>("/api/wifi/status"),
+    scanWifi: () => get<WifiNetwork[]>("/api/wifi/scan"),
+    connectWifi: (ssid: string, password: string) =>
+        post(`/api/wifi/connect?ssid=${encodeURIComponent(ssid)}&password=${encodeURIComponent(password)}`),
+    disconnectWifi: () => post("/api/wifi/disconnect"),
+    setFallbackApRuntimeEnabled: (enabled: boolean) => post(`/api/wifi/ap/runtime?enabled=${enabled ? 1 : 0}`),
     testNotification: (topic: string) => post(`/api/notifications/test?topic=${encodeURIComponent(topic)}`),
 
     clearErrors: () => post("/api/clear-errors"),

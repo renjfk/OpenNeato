@@ -3,21 +3,29 @@
 #include <esp_task_wdt.h>
 #include <esp_wifi.h>
 
+static String loadOptionalString(Preferences& prefs, const char *key, const String& fallback) {
+    return prefs.isKey(key) ? prefs.getString(key, fallback) : fallback;
+}
+
 WiFiManager::WiFiManager(Preferences& prefs, DataLogger& logger) :
     LoopTask(WIFI_RECONNECT_INTERVAL), prefs(prefs), dataLogger(logger), menu("WiFi Configuration Menu"),
     networkMenu("Available WiFi Networks") {}
 
 void WiFiManager::begin() {
     LOG("WIFI", "Starting WiFi setup...");
+    apEnabled = prefs.getBool(NVS_KEY_AP_ENABLED, true);
+    apSsid = loadOptionalString(prefs, NVS_KEY_AP_SSID, "");
+    apPassword = loadOptionalString(prefs, NVS_KEY_AP_PASS, WIFI_AP_DEFAULT_PASSWORD);
 
     // Try to load and connect with saved credentials
     String ssid, password;
     if (loadCredentials(ssid, password)) {
         LOG("WIFI", "Found saved credentials for: %s", ssid.c_str());
-        if (connectToWiFi(ssid, password)) {
+        if (connectToWiFi(ssid, password, false)) {
             LOG("WIFI", "Connected successfully!");
             LOG("WIFI", "IP: %s", WiFi.localIP().toString().c_str());
             LOG("WIFI", "MAC: %s", WiFi.macAddress().c_str());
+            stopFallbackAp();
 
             // Log successful boot connection with diagnostics
             dataLogger.logWifi("boot_connect", {{"ssid", ssid, FIELD_STRING},
@@ -29,6 +37,7 @@ void WiFiManager::begin() {
             return;
         }
         LOG("WIFI", "Failed to connect with saved credentials");
+        lastStaError = wifiStatusReason(WiFi.status());
 
         // Log boot connection failure
         dataLogger.logWifi("boot_connect_fail",
@@ -37,9 +46,151 @@ void WiFiManager::begin() {
         LOG("WIFI", "No saved credentials found");
     }
 
-    // No credentials or connection failed
-    LOG("WIFI", "WiFi not configured!");
+    // No credentials or connection failed — expose fallback AP if allowed.
+    reevaluateFallbackAp();
+    LOG("WIFI", "%s", apActive ? "Fallback hotspot active" : "WiFi not configured!");
     inConfigMode = true;
+}
+
+void WiFiManager::setApConfig(bool enabled, const String& ssid, const String& password) {
+    apEnabled = enabled;
+    apSsid = ssid;
+    apPassword = password;
+    // Defer: may be called from inside an HTTP handler that's running over the AP.
+    // Tearing down the AP synchronously here causes a load-access fault in the
+    // network stack. tick() will pick this up on the next loop() iteration.
+    pendingApReevaluate = true;
+}
+
+void WiFiManager::setFallbackApRuntimeEnabled(bool enabled) {
+    apRuntimeDisabled = !enabled;
+    // Defer: same reason as setApConfig — must not tear down AP inside its own
+    // request handler. tick() will act on this on the next loop() iteration.
+    pendingApReevaluate = true;
+}
+
+bool WiFiManager::isFallbackApRuntimeEnabled() const {
+    return !apRuntimeDisabled;
+}
+
+bool WiFiManager::isApConfiguredEnabled() const {
+    return apEnabled;
+}
+
+bool WiFiManager::isApActive() const {
+    return apActive;
+}
+
+String WiFiManager::effectiveApSsid() const {
+    return apSsid.isEmpty() ? hostname + WIFI_AP_DEFAULT_SSID_SUFFIX : apSsid;
+}
+
+String WiFiManager::getApSsid() const {
+    return effectiveApSsid();
+}
+
+String WiFiManager::getApIp() const {
+    return apActive ? WiFi.softAPIP().toString() : String("");
+}
+
+int WiFiManager::getApClientCount() const {
+    return apActive ? WiFi.softAPgetStationNum() : 0;
+}
+
+bool WiFiManager::isStaConfigured() {
+    String ssid;
+    String password;
+    return loadCredentials(ssid, password);
+}
+
+String WiFiManager::getSavedSsid() {
+    String ssid;
+    String password;
+    return loadCredentials(ssid, password) ? ssid : String("");
+}
+
+bool WiFiManager::isReconnecting() const {
+    return reconnecting;
+}
+
+String WiFiManager::getLastStaError() const {
+    return lastStaError;
+}
+
+bool WiFiManager::shouldAllowFallbackAp() const {
+    return apEnabled && !apRuntimeDisabled;
+}
+
+String WiFiManager::authModeName(wifi_auth_mode_t mode) {
+    switch (mode) {
+        case WIFI_AUTH_OPEN:
+            return "Open";
+        case WIFI_AUTH_WEP:
+            return "WEP";
+        case WIFI_AUTH_WPA_PSK:
+            return "WPA";
+        case WIFI_AUTH_WPA2_PSK:
+            return "WPA2";
+        case WIFI_AUTH_WPA_WPA2_PSK:
+            return "WPA/WPA2";
+        case WIFI_AUTH_WPA2_ENTERPRISE:
+            return "WPA2-E";
+        case WIFI_AUTH_WPA3_PSK:
+            return "WPA3";
+        case WIFI_AUTH_WPA2_WPA3_PSK:
+            return "WPA2/WPA3";
+        default:
+            return "Unknown";
+    }
+}
+
+bool WiFiManager::startFallbackAp() {
+    if (!shouldAllowFallbackAp()) {
+        stopFallbackAp();
+        return false;
+    }
+    if (apActive)
+        return true;
+
+    bool keepSta = isStaConfigured();
+    WiFi.mode(keepSta ? WIFI_AP_STA : WIFI_AP);
+    bool ok = apPassword.isEmpty() ? WiFi.softAP(effectiveApSsid().c_str())
+                                   : WiFi.softAP(effectiveApSsid().c_str(), apPassword.c_str());
+    if (!ok) {
+        LOG("WIFI", "Failed to start fallback hotspot");
+        return false;
+    }
+
+    apActive = true;
+    LOG("WIFI", "Fallback hotspot active: %s (%s)", effectiveApSsid().c_str(), WiFi.softAPIP().toString().c_str());
+    dataLogger.logWifi("ap_start", {{"ssid", effectiveApSsid(), FIELD_STRING},
+                                     {"ip", WiFi.softAPIP().toString(), FIELD_STRING},
+                                     {"open", apPassword.isEmpty() ? "true" : "false", FIELD_BOOL}});
+    return true;
+}
+
+void WiFiManager::stopFallbackAp() {
+    if (!apActive)
+        return;
+
+    WiFi.softAPdisconnect(true);
+    apActive = false;
+    if (WiFi.status() == WL_CONNECTED || isStaConfigured()) {
+        WiFi.setHostname(hostname.c_str());
+        WiFi.mode(WIFI_STA);
+    } else {
+        WiFi.mode(WIFI_OFF);
+    }
+    LOG("WIFI", "Fallback hotspot stopped");
+    dataLogger.logWifi("ap_stop");
+}
+
+void WiFiManager::reevaluateFallbackAp() {
+    if (WiFi.status() == WL_CONNECTED || !shouldAllowFallbackAp()) {
+        stopFallbackAp();
+        return;
+    }
+    startFallbackAp();
 }
 
 void WiFiManager::showMenu() {
@@ -108,7 +259,8 @@ void WiFiManager::handleSerialInput() {
 
 void WiFiManager::scanNetworks() {
     menu.printStatus("Scanning WiFi networks...");
-    scannedNetworkCount = WiFi.scanNetworks();
+    scannedNetworks = scanForNetworks();
+    scannedNetworkCount = static_cast<int>(scannedNetworks.size());
 
     if (scannedNetworkCount == 0) {
         menu.printError("No networks found!");
@@ -120,36 +272,8 @@ void WiFiManager::scanNetworks() {
     networkMenu.clearItems();
 
     for (int i = 0; i < scannedNetworkCount && i < 20; ++i) {
-        String encryption = "";
-        switch (WiFi.encryptionType(i)) {
-            case WIFI_AUTH_OPEN:
-                encryption = "Open";
-                break;
-            case WIFI_AUTH_WEP:
-                encryption = "WEP";
-                break;
-            case WIFI_AUTH_WPA_PSK:
-                encryption = "WPA";
-                break;
-            case WIFI_AUTH_WPA2_PSK:
-                encryption = "WPA2";
-                break;
-            case WIFI_AUTH_WPA_WPA2_PSK:
-                encryption = "WPA/WPA2";
-                break;
-            case WIFI_AUTH_WPA2_ENTERPRISE:
-                encryption = "WPA2-E";
-                break;
-            default:
-                encryption = "Unknown";
-                break;
-        }
-
-        // Format: "SSID (signal, encryption)"
-        String ssid = WiFi.SSID(i);
-        int rssi = WiFi.RSSI(i);
-
-        String label = ssid + " (" + String(rssi) + " dBm, " + encryption + ")";
+        const WifiNetworkInfo& network = scannedNetworks[i];
+        String label = network.ssid + " (" + String(network.rssi) + " dBm, " + network.auth + ")";
 
         // Capture index for lambda
         int index = i;
@@ -166,25 +290,21 @@ void WiFiManager::scanNetworks() {
 }
 
 void WiFiManager::handleNetworkSelection(int index) {
-    if (index < 0 || index >= scannedNetworkCount) {
+    if (index < 0 || index >= scannedNetworkCount || index >= static_cast<int>(scannedNetworks.size())) {
         networkMenu.printError("Invalid selection!");
         menu.show();
         return;
     }
 
-    selectedSSID = WiFi.SSID(index);
+    selectedSSID = scannedNetworks[index].ssid;
     networkMenu.printStatus("Selected: " + selectedSSID);
 
     // Check if open network
-    if (WiFi.encryptionType(index) == WIFI_AUTH_OPEN) {
+    if (scannedNetworks[index].open) {
         networkMenu.hide();
         networkMenu.printStatus("Open network - connecting...");
-        if (connectToWiFi(selectedSSID, "")) {
-            saveCredentials(selectedSSID, "");
+        if (connectToNetwork(selectedSSID, "")) {
             networkMenu.printSuccess("Connected successfully!");
-            networkMenu.printStatus("Restarting...");
-            delay(2000);
-            ESP.restart();
         } else {
             networkMenu.printError("Connection failed: " + wifiStatusReason(WiFi.status()));
             menu.show();
@@ -194,12 +314,8 @@ void WiFiManager::handleNetworkSelection(int index) {
         networkMenu.promptPassword("Enter password for " + selectedSSID, [this](String password) {
             networkMenu.hide();
             networkMenu.printStatus("Connecting...");
-            if (connectToWiFi(selectedSSID, password)) {
-                saveCredentials(selectedSSID, password);
+            if (connectToNetwork(selectedSSID, password)) {
                 networkMenu.printSuccess("Connected successfully!");
-                networkMenu.printStatus("Restarting...");
-                delay(2000);
-                ESP.restart();
             } else {
                 networkMenu.printError("Connection failed: " + wifiStatusReason(WiFi.status()));
                 menu.show();
@@ -215,12 +331,8 @@ void WiFiManager::manualSSID() {
 
         menu.promptPassword("Enter password (leave empty for open network)", [this](String password) {
             menu.printStatus("Connecting...");
-            if (connectToWiFi(selectedSSID, password)) {
-                saveCredentials(selectedSSID, password);
+            if (connectToNetwork(selectedSSID, password)) {
                 menu.printSuccess("Connected successfully!");
-                menu.printStatus("Restarting...");
-                delay(2000);
-                ESP.restart();
             } else {
                 menu.printError("Connection failed: " + wifiStatusReason(WiFi.status()));
                 menu.show();
@@ -239,6 +351,11 @@ void WiFiManager::showStatus() {
         menu.printKeyValue("IP", WiFi.localIP().toString());
         menu.printKeyValue("MAC", WiFi.macAddress());
         menu.printKeyValue("Signal", String(WiFi.RSSI()) + " dBm");
+        menu.printKeyValue("Fallback AP", "standby");
+    } else if (apActive) {
+        menu.printKeyValue("Fallback AP", "active");
+        menu.printKeyValue("AP SSID", effectiveApSsid());
+        menu.printKeyValue("AP IP", WiFi.softAPIP().toString());
     }
 
     String ssid, pass;
@@ -267,13 +384,13 @@ void WiFiManager::resetCredentials() {
     });
 }
 
-bool WiFiManager::connectToWiFi(const String& ssid, const String& password) {
+bool WiFiManager::connectToWiFi(const String& ssid, const String& password, bool keepApActive) {
     // Clean disconnect before attempting new connection
-    WiFi.disconnect(true);
+    WiFi.setHostname(hostname.c_str());
+    WiFi.mode(keepApActive ? WIFI_AP_STA : WIFI_STA);
+    WiFi.disconnect(false, false);
     delay(100);
 
-    WiFi.setHostname(hostname.c_str());
-    WiFi.mode(WIFI_STA);
     // Enable modem sleep — radio powers down between AP beacons (~100ms),
     // reducing idle current from ~120mA to ~15-20mA. WiFi association stays
     // active; AP buffers frames during sleep. TX power is unaffected.
@@ -287,6 +404,7 @@ bool WiFiManager::connectToWiFi(const String& ssid, const String& password) {
     // weak signal) don't trigger a TWDT reset when called from loop().
     unsigned long connectStart = millis();
     int attempts = 0;
+    reconnecting = true;
     while (WiFi.status() != WL_CONNECTED && attempts < 60) {
         esp_task_wdt_reset();
         delay(500);
@@ -298,14 +416,19 @@ bool WiFiManager::connectToWiFi(const String& ssid, const String& password) {
     if (WiFi.status() == WL_CONNECTED) {
         LOG("WIFI", "Connected in %lu ms (%d attempts)", connectMs, attempts);
         wasConnected = true;
+        reconnecting = false;
+        lastStaError = "";
         reconnectBackoff = WIFI_RECONNECT_INTERVAL;
         reconnectAttemptCount = 0;
+        stopFallbackAp();
     } else {
         LOG("WIFI", "Connect failed after %lu ms (%d attempts), status=%d", connectMs, attempts, WiFi.status());
         // Enable auto-reconnect even if boot connect timed out (e.g. slow DHCP).
         // WiFi may still be associating in the background — let loop() handle
         // reconnection so the deferred web server start can pick it up.
         wasConnected = true;
+        reconnecting = false;
+        lastStaError = wifiStatusReason(WiFi.status());
     }
 
     return WiFi.status() == WL_CONNECTED;
@@ -323,21 +446,39 @@ void WiFiManager::setTxPower(int quarterDbm) {
 }
 
 void WiFiManager::tick() {
-    // Only attempt auto-reconnect if we were previously connected and are not
-    // in config mode (user is actively setting up WiFi through the serial menu)
-    if (inConfigMode || !wasConnected || WiFi.status() == WL_CONNECTED)
+    if (pendingApReevaluate) {
+        pendingApReevaluate = false;
+        reevaluateFallbackAp();
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
+        if (apActive)
+            stopFallbackAp();
+        reconnecting = false;
+        lastStaError = "";
+        wasConnected = true;
         return;
+    }
+
+    String ssid, password;
+    bool hasCredentials = loadCredentials(ssid, password);
+    if (!hasCredentials) {
+        wasConnected = false;
+        reconnecting = false;
+        reevaluateFallbackAp();
+        return;
+    }
 
     reconnectAttemptCount++;
+    reconnecting = true;
     LOG("WIFI", "Connection lost — reconnecting (attempt %lu, backoff %lu ms)...", reconnectAttemptCount,
         reconnectBackoff);
 
-    String ssid, password;
-    if (!loadCredentials(ssid, password))
-        return;
-
-    WiFi.disconnect(true);
+    WiFi.setHostname(hostname.c_str());
+    WiFi.mode(apActive ? WIFI_AP_STA : WIFI_STA);
+    WiFi.disconnect(false, false);
     delay(100);
+    applyTxPower();
     WiFi.begin(ssid.c_str(), password.c_str());
 
     // Brief wait — shorter than initial connect but still blocks loop().
@@ -354,6 +495,9 @@ void WiFiManager::tick() {
         applyTxPower();
         LOG("WIFI", "Reconnected! IP: %s, RSSI: %d, attempt: %lu", WiFi.localIP().toString().c_str(), WiFi.RSSI(),
             reconnectAttemptCount);
+        reconnecting = false;
+        lastStaError = "";
+        stopFallbackAp();
 
         dataLogger.logWifi("reconnect_ok", {{"ssid", ssid, FIELD_STRING},
                                             {"ip", WiFi.localIP().toString(), FIELD_STRING},
@@ -370,6 +514,9 @@ void WiFiManager::tick() {
         reconnectBackoff = min(reconnectBackoff * 2, static_cast<unsigned long>(WIFI_MAX_RECONNECT_BACKOFF));
         setInterval(reconnectBackoff);
         LOG("WIFI", "Reconnect failed (status=%d), next attempt in %lu ms", WiFi.status(), reconnectBackoff);
+        reconnecting = false;
+        lastStaError = wifiStatusReason(WiFi.status());
+        reevaluateFallbackAp();
 
         dataLogger.logWifi("reconnect_fail", {{"ssid", ssid, FIELD_STRING},
                                               {"status", String(WiFi.status()), FIELD_INT},
@@ -412,6 +559,56 @@ bool WiFiManager::loadCredentials(String& ssid, String& password) {
     ssid = prefs.getString(NVS_KEY_WIFI_SSID, "");
     password = prefs.getString(NVS_KEY_WIFI_PASS, "");
     return ssid.length() > 0;
+}
+
+void WiFiManager::clearCredentials() {
+    prefs.remove(NVS_KEY_WIFI_SSID);
+    prefs.remove(NVS_KEY_WIFI_PASS);
+}
+
+std::vector<WifiNetworkInfo> WiFiManager::scanForNetworks() {
+    std::vector<WifiNetworkInfo> networks;
+
+    wl_status_t currentStatus = WiFi.status();
+    wifi_mode_t mode = currentStatus == WL_CONNECTED ? (apActive ? WIFI_AP_STA : WIFI_STA)
+                                                     : (apActive ? WIFI_AP_STA : WIFI_STA);
+    WiFi.mode(mode);
+    int count = WiFi.scanNetworks();
+    for (int i = 0; i < count; ++i) {
+        WifiNetworkInfo network;
+        network.ssid = WiFi.SSID(i);
+        network.rssi = WiFi.RSSI(i);
+        network.open = WiFi.encryptionType(i) == WIFI_AUTH_OPEN;
+        network.auth = authModeName(WiFi.encryptionType(i));
+        if (!network.ssid.isEmpty())
+            networks.push_back(network);
+    }
+    WiFi.scanDelete();
+    return networks;
+}
+
+bool WiFiManager::connectToNetwork(const String& ssid, const String& password) {
+    bool ok = connectToWiFi(ssid, password, apActive);
+    if (ok) {
+        saveCredentials(ssid, password);
+        inConfigMode = false;
+        stopFallbackAp();
+    } else {
+        reevaluateFallbackAp();
+    }
+    return ok;
+}
+
+void WiFiManager::disconnectFromNetwork(bool clearSavedCredentials) {
+    if (clearSavedCredentials)
+        clearCredentials();
+
+    WiFi.disconnect(false, false);
+    wasConnected = false;
+    reconnecting = false;
+    if (clearSavedCredentials)
+        lastStaError = "network disconnected";
+    reevaluateFallbackAp();
 }
 
 bool WiFiManager::isConnected() const {

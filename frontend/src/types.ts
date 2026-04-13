@@ -51,6 +51,9 @@ export interface SettingsData {
     syslogEnabled: boolean; // When on, logs go to UDP syslog instead of flash
     syslogIp: string; // IPv4 address of syslog receiver
     wifiTxPower: number; // 0.25 dBm units (e.g. 34 = 8.5 dBm)
+    apEnabled: boolean;
+    apSsid: string;
+    apPassword: string;
     uartTxPin: number;
     uartRxPin: number;
     maxGpioPin: number; // Read-only — max valid GPIO for this chip (21 for C3, 39 for ESP32)
@@ -111,6 +114,29 @@ export interface SettingsData {
     sched6Slot1Hour: number;
     sched6Slot1Min: number;
     sched6Slot1On: boolean;
+}
+
+export interface WifiNetwork {
+    ssid: string;
+    rssi: number;
+    auth: string;
+    open: boolean;
+}
+
+export interface WifiStatusData {
+    apConfiguredEnabled: boolean;
+    apRuntimeEnabled: boolean;
+    apActive: boolean;
+    apSsid: string;
+    apIp: string;
+    apClients: number;
+    staConfigured: boolean;
+    staConnected: boolean;
+    staSsid: string;
+    staIp: string;
+    staRssi: number;
+    reconnecting: boolean;
+    lastError: string;
 }
 
 export interface UserSettingsData {

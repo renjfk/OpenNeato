@@ -243,6 +243,18 @@ const state = {
     syslogEnabled: false,
     syslogIp: "",
     wifiTxPower: 60, // 15 dBm in 0.25 dBm units
+    apEnabled: true,
+    apSsid: "",
+    apPassword: "",
+    apRuntimeEnabled: true,
+    staConfigured: true,
+    staConnected: true,
+    staSsid: "HomeNetwork",
+    staPassword: "password123",
+    staIp: "192.168.1.42",
+    staRssi: -58,
+    staLastError: "",
+    staReconnecting: false,
     uartTxPin: 3,
     uartRxPin: 4,
     maxGpioPin: 21,
@@ -326,6 +338,16 @@ let bootTime = Date.now();
 // --- Derived helpers ---
 
 const vBattFromFuel = (fuel) => parseFloat((12.0 + (fuel / 100) * 4.6).toFixed(2));
+
+const effectiveApSsid = () => state.apSsid || `${state.hostname}-ap`;
+
+const updateWifiFallbackState = () => {
+    state.apActive = state.apEnabled && state.apRuntimeEnabled && !state.staConnected;
+    if (state.staConnected) {
+        state.staReconnecting = false;
+        state.staLastError = "";
+    }
+};
 
 // --- LIDAR captured scans (real data from Neato D7) ---
 
@@ -740,6 +762,9 @@ const routes = {
             "syslogEnabled",
             "syslogIp",
             "wifiTxPower",
+            "apEnabled",
+            "apSsid",
+            "apPassword",
             "uartTxPin",
             "uartRxPin",
             "maxGpioPin",
@@ -767,6 +792,68 @@ const routes = {
             s[`sched${d}Slot1On`] = state[`sched${d}Slot1On`];
         }
         jsonResponse(res, s);
+    },
+
+    "GET /api/wifi/status": (_req, res) => {
+        updateWifiFallbackState();
+        jsonResponse(res, {
+            apConfiguredEnabled: state.apEnabled,
+            apRuntimeEnabled: state.apRuntimeEnabled,
+            apActive: state.apActive,
+            apSsid: effectiveApSsid(),
+            apIp: state.apActive ? "192.168.4.1" : "",
+            apClients: state.apActive ? 1 : 0,
+            staConfigured: state.staConfigured,
+            staConnected: state.staConnected,
+            staSsid: state.staConnected || state.staConfigured ? state.staSsid : "",
+            staIp: state.staConnected ? state.staIp : "",
+            staRssi: state.staConnected ? state.staRssi : 0,
+            reconnecting: state.staReconnecting,
+            lastError: state.staLastError,
+        });
+    },
+
+    "GET /api/wifi/scan": (_req, res) => {
+        jsonResponse(res, [
+            { ssid: "HomeNetwork", rssi: -52, auth: "WPA2", open: false },
+            { ssid: "OfficeMesh", rssi: -67, auth: "WPA2/WPA3", open: false },
+            { ssid: "GuestWifi", rssi: -74, auth: "WPA2", open: false },
+            { ssid: "OpenCafe", rssi: -81, auth: "Open", open: true },
+        ]);
+    },
+
+    "POST /api/wifi/connect": async (_req, res, query) => {
+        if (!query.ssid) return sendError(res, "missing ssid", 400);
+        await new Promise((r) => setTimeout(r, rand(400, 900)));
+        state.staConfigured = true;
+        state.staConnected = true;
+        state.staSsid = query.ssid;
+        state.staPassword = query.password || "";
+        state.staIp = "192.168.1.42";
+        state.staRssi = rand(-68, -45);
+        state.staLastError = "";
+        state.staReconnecting = false;
+        updateWifiFallbackState();
+        sendOk(res);
+    },
+
+    "POST /api/wifi/disconnect": (_req, res) => {
+        state.staConfigured = false;
+        state.staConnected = false;
+        state.staSsid = "";
+        state.staPassword = "";
+        state.staIp = "";
+        state.staLastError = "network disconnected";
+        state.staReconnecting = false;
+        updateWifiFallbackState();
+        sendOk(res);
+    },
+
+    "POST /api/wifi/ap/runtime": (_req, res, query) => {
+        if (query.enabled === undefined) return sendError(res, "missing enabled", 400);
+        state.apRuntimeEnabled = query.enabled === "1" || query.enabled === "true";
+        updateWifiFallbackState();
+        sendOk(res);
     },
 
     "POST /api/notifications/test": (_req, res, query) => {
@@ -1056,6 +1143,9 @@ const handleRequest = async (req, res) => {
             if (data.syslogEnabled !== undefined) state.syslogEnabled = data.syslogEnabled;
             if (data.syslogIp !== undefined) state.syslogIp = data.syslogIp;
             if (data.wifiTxPower !== undefined) state.wifiTxPower = data.wifiTxPower;
+            if (data.apEnabled !== undefined) state.apEnabled = data.apEnabled;
+            if (data.apSsid !== undefined) state.apSsid = data.apSsid;
+            if (data.apPassword !== undefined) state.apPassword = data.apPassword;
             const pinsChanged =
                 (data.uartTxPin !== undefined && data.uartTxPin !== state.uartTxPin) ||
                 (data.uartRxPin !== undefined && data.uartRxPin !== state.uartRxPin);
@@ -1075,6 +1165,7 @@ const handleRequest = async (req, res) => {
             if (data.ntfyOnAlert !== undefined) state.ntfyOnAlert = data.ntfyOnAlert;
             if (data.ntfyOnDocking !== undefined) state.ntfyOnDocking = data.ntfyOnDocking;
             if (data.scheduleEnabled !== undefined) state.scheduleEnabled = data.scheduleEnabled;
+            updateWifiFallbackState();
             for (let d = 0; d < 7; d++) {
                 if (data[`sched${d}Hour`] !== undefined) state[`sched${d}Hour`] = data[`sched${d}Hour`];
                 if (data[`sched${d}Min`] !== undefined) state[`sched${d}Min`] = data[`sched${d}Min`];
@@ -1096,6 +1187,9 @@ const handleRequest = async (req, res) => {
                 "syslogEnabled",
                 "syslogIp",
                 "wifiTxPower",
+                "apEnabled",
+                "apSsid",
+                "apPassword",
                 "uartTxPin",
                 "uartRxPin",
                 "maxGpioPin",

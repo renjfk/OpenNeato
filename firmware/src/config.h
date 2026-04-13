@@ -13,6 +13,8 @@
 
 // WiFi Configuration
 #define DEFAULT_HOSTNAME "neato"
+#define WIFI_AP_DEFAULT_SSID_SUFFIX "-ap"
+#define WIFI_AP_DEFAULT_PASSWORD ""
 #define WIFI_DEFAULT_TX_POWER                                                                                          \
     60 // WiFi TX power in 0.25 dBm units (60 = 15 dBm, ~32 mW)
        // Lower values caused boot connection failures (4-way handshake
@@ -110,6 +112,9 @@ enum CommandStatus {
 // NVS keys — WiFi
 #define NVS_KEY_WIFI_SSID "wifi_ssid"
 #define NVS_KEY_WIFI_PASS "wifi_pass"
+#define NVS_KEY_AP_ENABLED "ap_enabled"
+#define NVS_KEY_AP_SSID "ap_ssid"
+#define NVS_KEY_AP_PASS "ap_pass"
 
 // NVS keys — Time/NTP
 #define NVS_KEY_TIMEZONE "tz"

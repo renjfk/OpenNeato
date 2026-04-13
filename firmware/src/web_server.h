@@ -17,11 +17,12 @@ class SettingsManager;
 class ManualCleanManager;
 class NotificationManager;
 class CleaningHistory;
+class WiFiManager;
 
 class WebServer {
 public:
     WebServer(AsyncWebServer& server, NeatoSerial& neato, DataLogger& logger, SystemManager& sys, FirmwareManager& fw,
-              SettingsManager& settings, ManualCleanManager& manual, NotificationManager& notif,
+              SettingsManager& settings, WiFiManager& wifi, ManualCleanManager& manual, NotificationManager& notif,
               CleaningHistory& history);
     void begin();
 
@@ -36,6 +37,7 @@ private:
     SystemManager& sysMgr;
     FirmwareManager& fwMgr;
     SettingsManager& settingsMgr;
+    WiFiManager& wifiMgr;
     ManualCleanManager& manualMgr;
     NotificationManager& notifMgr;
     CleaningHistory& historyMgr;
@@ -45,6 +47,7 @@ private:
     void registerLogRoutes();
     void registerSystemRoutes();
     void registerSettingsRoutes();
+    void registerWifiRoutes();
     void registerFirmwareRoutes();
     void registerMapRoutes();
     static void sendGzipAsset(AsyncWebServerRequest *request, const uint8_t *data, size_t len, const char *contentType);

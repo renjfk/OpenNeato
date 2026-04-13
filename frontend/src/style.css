@@ -1006,6 +1006,7 @@ body {
     color: var(--text);
     font-size: 14px;
     font-family: inherit;
+    appearance: none;
     -webkit-appearance: none;
     -moz-appearance: textfield;
     box-sizing: border-box;
@@ -1033,6 +1034,7 @@ body {
     color: var(--text);
     font-size: 14px;
     font-family: inherit;
+    appearance: none;
     -webkit-appearance: none;
     box-sizing: border-box;
 }
@@ -1074,6 +1076,150 @@ body {
 
 .settings-ntfy-test-btn:not(:disabled):active {
     opacity: 0.7;
+}
+
+/* WiFi view */
+
+.wifi-page {
+    padding-bottom: 28px;
+}
+
+.wifi-status-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 10px;
+    border: 1px solid rgba(90, 200, 250, 0.25);
+    border-radius: 999px;
+    background: rgba(90, 200, 250, 0.1);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.wifi-status-pill.secondary {
+    border-color: var(--border);
+    background: var(--surface);
+}
+
+.wifi-subtle-copy {
+    margin-top: 10px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text);
+    opacity: 0.6;
+}
+
+.wifi-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 14px;
+}
+
+.wifi-meta-grid > div {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+}
+
+.wifi-meta-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.wifi-action-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+}
+
+.wifi-action-btn {
+    min-width: 0;
+    padding: 10px 14px;
+    border: 1px solid var(--text);
+    border-radius: 12px;
+    background: var(--text);
+    color: var(--bg);
+    font-size: 13px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.wifi-action-btn.subtle {
+    border-color: var(--border);
+    background: var(--surface);
+    color: var(--text);
+}
+
+.wifi-action-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.wifi-network-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.wifi-network-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+}
+
+.wifi-network-btn span:last-child {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.wifi-connect-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface);
+}
+
+.wifi-connect-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+@media (max-width: 640px) {
+    .wifi-meta-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .wifi-network-btn {
+        flex-direction: column;
+        align-items: flex-start;
+    }
 }
 
 /* Firmware update section */

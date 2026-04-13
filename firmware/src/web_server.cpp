@@ -5,6 +5,7 @@
 #include "system_manager.h"
 #include "settings_manager.h"
 #include "firmware_manager.h"
+#include "wifi_manager.h"
 #include "manual_clean_manager.h"
 #include "notification_manager.h"
 #include "cleaning_history.h"
@@ -13,10 +14,42 @@
 unsigned long WebServer::lastApiActivity = 0;
 
 WebServer::WebServer(AsyncWebServer& server, NeatoSerial& neato, DataLogger& logger, SystemManager& sys,
-                     FirmwareManager& fw, SettingsManager& settings, ManualCleanManager& manual,
+                     FirmwareManager& fw, SettingsManager& settings, WiFiManager& wifi, ManualCleanManager& manual,
                      NotificationManager& notif, CleaningHistory& history) :
-    server(server), neato(neato), logger(logger), sysMgr(sys), fwMgr(fw), settingsMgr(settings), manualMgr(manual),
-    notifMgr(notif), historyMgr(history) {}
+    server(server), neato(neato), logger(logger), sysMgr(sys), fwMgr(fw), settingsMgr(settings), wifiMgr(wifi),
+    manualMgr(manual), notifMgr(notif), historyMgr(history) {}
+
+static bool isTruthyParam(const String& value) {
+    return value == "1" || value == "true" || value == "on";
+}
+
+static String wifiScanListJson(const std::vector<WifiNetworkInfo>& networks) {
+    String json = "[";
+    for (size_t i = 0; i < networks.size(); i++) {
+        if (i > 0)
+            json += ",";
+        json += fieldsToJson({{"ssid", networks[i].ssid, FIELD_STRING},
+                              {"rssi", String(networks[i].rssi), FIELD_INT},
+                              {"auth", networks[i].auth, FIELD_STRING},
+                              {"open", networks[i].open ? "true" : "false", FIELD_BOOL}});
+    }
+    json += "]";
+    return json;
+}
+
+static bool isFrontendPageRequest(AsyncWebServerRequest *request) {
+    if (request->method() != HTTP_GET) {
+        return false;
+    }
+
+    const String& path = request->url();
+    if (path == "/" || path.startsWith("/api/")) {
+        return false;
+    }
+
+    // Treat extensionless paths as SPA routes and let the frontend router handle them.
+    return path.indexOf('.') < 0;
+}
 
 void WebServer::loggedRoute(const char *path, WebRequestMethodComposite httpMethod, SyncHandler handler) {
     server.on(path, httpMethod, [this, handler](AsyncWebServerRequest *request) {
@@ -69,8 +102,23 @@ void WebServer::begin() {
     registerLogRoutes();
     registerSystemRoutes();
     registerSettingsRoutes();
+    registerWifiRoutes();
     registerFirmwareRoutes();
     registerMapRoutes();
+
+    server.onNotFound([this](AsyncWebServerRequest *request) {
+        if (isFrontendPageRequest(request)) {
+            request->redirect(String("/#") + request->url());
+            return;
+        }
+
+        if (request->url().startsWith("/api/")) {
+            sendError(request, 404, "not found");
+            return;
+        }
+
+        request->send(404, "text/plain", "Not found");
+    });
 
     LOG("WEB", "Frontend and API routes registered");
 }
@@ -312,6 +360,70 @@ void WebServer::registerSettingsRoutes() {
     });
 
     LOG("WEB", "Settings routes registered");
+}
+
+void WebServer::registerWifiRoutes() {
+    loggedRoute("/api/wifi/status", HTTP_GET, [this](AsyncWebServerRequest *request) -> int {
+        std::vector<Field> fields = {
+                {"apConfiguredEnabled", wifiMgr.isApConfiguredEnabled() ? "true" : "false", FIELD_BOOL},
+                {"apRuntimeEnabled", wifiMgr.isFallbackApRuntimeEnabled() ? "true" : "false", FIELD_BOOL},
+                {"apActive", wifiMgr.isApActive() ? "true" : "false", FIELD_BOOL},
+                {"apSsid", wifiMgr.getApSsid(), FIELD_STRING},
+                {"apIp", wifiMgr.getApIp(), FIELD_STRING},
+                {"apClients", String(wifiMgr.getApClientCount()), FIELD_INT},
+                {"staConfigured", wifiMgr.isStaConfigured() ? "true" : "false", FIELD_BOOL},
+                {"staConnected", wifiMgr.isConnected() ? "true" : "false", FIELD_BOOL},
+                {"staSsid", wifiMgr.isConnected() ? WiFi.SSID() : wifiMgr.getSavedSsid(), FIELD_STRING},
+                {"staIp", wifiMgr.isConnected() ? WiFi.localIP().toString() : String(""), FIELD_STRING},
+                {"staRssi", String(wifiMgr.isConnected() ? WiFi.RSSI() : 0), FIELD_INT},
+                {"reconnecting", wifiMgr.isReconnecting() ? "true" : "false", FIELD_BOOL},
+                {"lastError", wifiMgr.getLastStaError(), FIELD_STRING},
+        };
+        request->send(200, "application/json", fieldsToJson(fields));
+        return 200;
+    });
+
+    loggedRoute("/api/wifi/scan", HTTP_GET, [this](AsyncWebServerRequest *request) -> int {
+        request->send(200, "application/json", wifiScanListJson(wifiMgr.scanForNetworks()));
+        return 200;
+    });
+
+    loggedRoute("/api/wifi/connect", HTTP_POST, [this](AsyncWebServerRequest *request) -> int {
+        if (!request->hasParam("ssid")) {
+            sendError(request, 400, "missing ssid");
+            return 400;
+        }
+        String ssid = request->getParam("ssid")->value();
+        String password = request->hasParam("password") ? request->getParam("password")->value() : String("");
+        if (ssid.isEmpty()) {
+            sendError(request, 400, "empty ssid");
+            return 400;
+        }
+        if (!wifiMgr.connectToNetwork(ssid, password)) {
+            sendError(request, 400, wifiMgr.getLastStaError().isEmpty() ? "connection failed" : wifiMgr.getLastStaError());
+            return 400;
+        }
+        sendOk(request);
+        return 200;
+    });
+
+    loggedRoute("/api/wifi/disconnect", HTTP_POST, [this](AsyncWebServerRequest *request) -> int {
+        wifiMgr.disconnectFromNetwork(true);
+        sendOk(request);
+        return 200;
+    });
+
+    loggedRoute("/api/wifi/ap/runtime", HTTP_POST, [this](AsyncWebServerRequest *request) -> int {
+        if (!request->hasParam("enabled")) {
+            sendError(request, 400, "missing enabled");
+            return 400;
+        }
+        wifiMgr.setFallbackApRuntimeEnabled(isTruthyParam(request->getParam("enabled")->value()));
+        sendOk(request);
+        return 200;
+    });
+
+    LOG("WEB", "WiFi routes registered");
 }
 
 // -- Firmware endpoints -------------------------------------------------------

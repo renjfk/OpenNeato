@@ -3,6 +3,14 @@
 // Day-name labels for JSON responses (Mon=0 .. Sun=6)
 static const char *DAY_NAMES[SCHEDULE_DAYS] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
 
+static String defaultApSsid(const String& hostname) {
+    return hostname + WIFI_AP_DEFAULT_SSID_SUFFIX;
+}
+
+static String loadOptionalString(Preferences& prefs, const char *key, const String& fallback) {
+    return prefs.isKey(key) ? prefs.getString(key, fallback) : fallback;
+}
+
 // Build NVS key for a per-day, per-slot schedule field.
 // Slot 0 (legacy): "s0h", "s0m", "s0on" (backwards compatible with single-slot firmware)
 // Slot 1: "s0h1", "s0m1", "s0on1"
@@ -30,16 +38,18 @@ static const char *logLevelStr(int level) {
 
 void SettingsManager::begin() {
     load();
-    LOG("SETTINGS", "Loaded: hostname=%s tz=%s logLevel=%s txPower=%d (%.1f dBm) uart=TX%d/RX%d sched=%s",
+    LOG("SETTINGS", "Loaded: hostname=%s tz=%s logLevel=%s txPower=%d (%.1f dBm) ap=%s apSsid=%s uart=TX%d/RX%d sched=%s",
         current.hostname.c_str(), current.tz.c_str(), logLevelStr(current.logLevel), current.wifiTxPower,
-        current.wifiTxPower * 0.25f, current.uartTxPin, current.uartRxPin, current.scheduleEnabled ? "on" : "off");
+        current.wifiTxPower * 0.25f, current.apEnabled ? "on" : "off",
+        (current.apSsid.isEmpty() ? defaultApSsid(current.hostname) : current.apSsid).c_str(), current.uartTxPin,
+        current.uartRxPin, current.scheduleEnabled ? "on" : "off");
 }
 
 // -- Persistence -------------------------------------------------------------
 
 void SettingsManager::load() {
-    current.hostname = prefs.getString(NVS_KEY_HOSTNAME, DEFAULT_HOSTNAME);
-    current.tz = prefs.getString(NVS_KEY_TIMEZONE, NTP_DEFAULT_TZ);
+    current.hostname = loadOptionalString(prefs, NVS_KEY_HOSTNAME, DEFAULT_HOSTNAME);
+    current.tz = loadOptionalString(prefs, NVS_KEY_TIMEZONE, NTP_DEFAULT_TZ);
 
     // TODO: Remove this migration block after v0.5 — all devices will have migrated by then.
     // Migrate legacy "debug" bool to "log_level" int on first boot after upgrade.
@@ -56,6 +66,9 @@ void SettingsManager::load() {
     if (current.logLevel > LOG_LEVEL_OFF)
         logLevelEnabledAt = millis(); // Start auto-expire timer for persisted log level
     current.wifiTxPower = prefs.getInt(NVS_KEY_WIFI_TX_POWER, WIFI_DEFAULT_TX_POWER);
+    current.apEnabled = prefs.getBool(NVS_KEY_AP_ENABLED, true);
+    current.apSsid = loadOptionalString(prefs, NVS_KEY_AP_SSID, "");
+    current.apPassword = loadOptionalString(prefs, NVS_KEY_AP_PASS, WIFI_AP_DEFAULT_PASSWORD);
     current.uartTxPin = prefs.getInt(NVS_KEY_UART_TX_PIN, NEATO_DEFAULT_TX_PIN);
     current.uartRxPin = prefs.getInt(NVS_KEY_UART_RX_PIN, NEATO_DEFAULT_RX_PIN);
     current.navMode = prefs.getString(NVS_KEY_NAV_MODE, "Normal");
@@ -65,7 +78,7 @@ void SettingsManager::load() {
     current.sideBrushPower = prefs.getInt(NVS_KEY_MC_SBRUSH_MW, MANUAL_SIDE_BRUSH_POWER_MW);
     current.syslogEnabled = prefs.getBool(NVS_KEY_SYSLOG_ENABLED, false);
     current.syslogIp = prefs.getString(NVS_KEY_SYSLOG_IP, "");
-    current.ntfyTopic = prefs.getString(NVS_KEY_NTFY_TOPIC, "");
+    current.ntfyTopic = loadOptionalString(prefs, NVS_KEY_NTFY_TOPIC, "");
     current.ntfyEnabled = prefs.getBool(NVS_KEY_NTFY_ENABLED, false);
     current.ntfyOnDone = prefs.getBool(NVS_KEY_NTFY_ON_DONE, true);
     current.ntfyOnError = prefs.getBool(NVS_KEY_NTFY_ON_ERR, true);
@@ -86,6 +99,9 @@ void SettingsManager::save() {
     prefs.putString(NVS_KEY_TIMEZONE, current.tz);
     prefs.putInt(NVS_KEY_LOG_LEVEL, current.logLevel);
     prefs.putInt(NVS_KEY_WIFI_TX_POWER, current.wifiTxPower);
+    prefs.putBool(NVS_KEY_AP_ENABLED, current.apEnabled);
+    prefs.putString(NVS_KEY_AP_SSID, current.apSsid);
+    prefs.putString(NVS_KEY_AP_PASS, current.apPassword);
     prefs.putInt(NVS_KEY_UART_TX_PIN, current.uartTxPin);
     prefs.putInt(NVS_KEY_UART_RX_PIN, current.uartRxPin);
     prefs.putString(NVS_KEY_NAV_MODE, current.navMode);
@@ -141,6 +157,7 @@ ApplyResult SettingsManager::apply(const String& json) {
 
     bool changed = false;
     bool needReboot = false;
+    bool apConfigChanged = false;
 
     if (incoming.hostname != current.hostname) {
         // Validate: non-empty, max 32 chars, alphanumeric + hyphens only
@@ -191,6 +208,40 @@ ApplyResult SettingsManager::apply(const String& json) {
         if (txPowerChangeCb)
             txPowerChangeCb(current.wifiTxPower);
         LOG("SETTINGS", "WiFi TX power -> %d (%.1f dBm)", current.wifiTxPower, current.wifiTxPower * 0.25f);
+    }
+
+    if (incoming.apEnabled != current.apEnabled) {
+        current.apEnabled = incoming.apEnabled;
+        changed = true;
+        apConfigChanged = true;
+        LOG("SETTINGS", "Fallback hotspot -> %s", current.apEnabled ? "enabled" : "disabled");
+    }
+
+    if (incoming.apSsid != current.apSsid) {
+        String apSsid = incoming.apSsid;
+        bool valid = apSsid.length() <= 32;
+        for (unsigned int i = 0; valid && i < apSsid.length(); i++) {
+            char c = apSsid.charAt(i);
+            if (static_cast<unsigned char>(c) < 32 || static_cast<unsigned char>(c) > 126)
+                valid = false;
+        }
+        if (!valid)
+            return APPLY_INVALID;
+        current.apSsid = apSsid;
+        changed = true;
+        apConfigChanged = true;
+        LOG("SETTINGS", "Fallback hotspot SSID -> %s",
+            (current.apSsid.isEmpty() ? defaultApSsid(current.hostname) : current.apSsid).c_str());
+    }
+
+    if (incoming.apPassword != current.apPassword) {
+        String apPassword = incoming.apPassword;
+        if (!apPassword.isEmpty() && (apPassword.length() < 8 || apPassword.length() > 63))
+            return APPLY_INVALID;
+        current.apPassword = apPassword;
+        changed = true;
+        apConfigChanged = true;
+        LOG("SETTINGS", "Fallback hotspot password -> %s", current.apPassword.isEmpty() ? "open" : "updated");
     }
 
     // UART pin changes require reboot — hardware UART can't be reconfigured at runtime
@@ -320,6 +371,9 @@ ApplyResult SettingsManager::apply(const String& json) {
     if (changed)
         save();
 
+    if (apConfigChanged && apConfigChangeCb)
+        apConfigChangeCb(current.apEnabled, current.apSsid, current.apPassword);
+
     // Trigger reboot after save so the new pin config takes effect on next boot
     if (needReboot && rebootCb)
         rebootCb();
@@ -335,6 +389,9 @@ std::vector<Field> Settings::toFields() const {
             {"tz", tz, FIELD_STRING},
             {"logLevel", String(logLevel), FIELD_INT},
             {"wifiTxPower", String(wifiTxPower), FIELD_INT},
+            {"apEnabled", apEnabled ? "true" : "false", FIELD_BOOL},
+            {"apSsid", apSsid, FIELD_STRING},
+            {"apPassword", apPassword, FIELD_STRING},
             {"uartTxPin", String(uartTxPin), FIELD_INT},
             {"uartRxPin", String(uartRxPin), FIELD_INT},
             {"maxGpioPin", String(MAX_GPIO_PIN), FIELD_INT},
@@ -386,6 +443,18 @@ bool Settings::fromFields(const std::vector<Field>& fields) {
     }
     if ((f = findField(fields, "wifiTxPower")) && f->type == FIELD_INT) {
         wifiTxPower = f->value.toInt();
+        applied = true;
+    }
+    if ((f = findField(fields, "apEnabled")) && f->type == FIELD_BOOL) {
+        apEnabled = (f->value == "true");
+        applied = true;
+    }
+    if ((f = findField(fields, "apSsid")) && f->type == FIELD_STRING) {
+        apSsid = f->value;
+        applied = true;
+    }
+    if ((f = findField(fields, "apPassword")) && f->type == FIELD_STRING) {
+        apPassword = f->value;
         applied = true;
     }
     if ((f = findField(fields, "uartTxPin")) && f->type == FIELD_INT) {

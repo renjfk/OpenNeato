@@ -25,6 +25,9 @@ struct Settings : public JsonSerializable {
     String tz = NTP_DEFAULT_TZ;
     int logLevel = LOG_LEVEL_OFF; // 0=off, 1=info, 2=debug (auto-expires back to off)
     int wifiTxPower = WIFI_DEFAULT_TX_POWER; // 0.25 dBm units (34 = 8.5 dBm)
+    bool apEnabled = true; // Allow fallback hotspot when STA is unavailable
+    String apSsid; // Empty = derive from hostname + suffix
+    String apPassword = WIFI_AP_DEFAULT_PASSWORD; // Empty = open network
     int uartTxPin = NEATO_DEFAULT_TX_PIN; // ESP GPIO -> Robot RX
     int uartRxPin = NEATO_DEFAULT_RX_PIN; // ESP GPIO <- Robot TX
     // House cleaning — sent to robot before each house clean starts
@@ -77,6 +80,10 @@ public:
     using TxPowerChangeCallback = std::function<void(int quarterDbm)>;
     void onTxPowerChange(TxPowerChangeCallback cb) { txPowerChangeCb = cb; }
 
+    // Callback fired when fallback hotspot settings change so WiFiManager can apply them live.
+    using ApConfigChangeCallback = std::function<void(bool enabled, const String& ssid, const String& password)>;
+    void onApConfigChange(ApConfigChangeCallback cb) { apConfigChangeCb = cb; }
+
     // Callback fired when a setting change requires reboot (e.g. UART pins)
     using RebootCallback = std::function<void()>;
     void onRebootRequired(RebootCallback cb) { rebootCb = cb; }
@@ -86,6 +93,7 @@ private:
     Settings current;
     TzChangeCallback tzChangeCb;
     TxPowerChangeCallback txPowerChangeCb;
+    ApConfigChangeCallback apConfigChangeCb;
     RebootCallback rebootCb;
     unsigned long logLevelEnabledAt = 0; // millis() when log level was changed from off (0 = off/never)
 

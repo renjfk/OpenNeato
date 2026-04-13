@@ -10,6 +10,7 @@ import { LogsView } from "./views/logs";
 import { ManualView } from "./views/manual";
 import { ScheduleView } from "./views/schedule";
 import { SettingsView } from "./views/settings";
+import { WifiView } from "./views/wifi";
 
 type Theme = "system" | "dark" | "light";
 
@@ -153,6 +154,9 @@ export function App() {
             </Route>
             <Route path="/settings">
                 <SettingsView theme={theme} onThemeChange={setTheme} firmware={firmware.data} />
+            </Route>
+            <Route path="/wifi">
+                <WifiView />
             </Route>
             {robotReady && (
                 <Route path="/manual">

@@ -474,6 +474,15 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                         {pinError && <div class="settings-field-error">{pinError}</div>}
                     </div>
                     <div class="settings-section">
+                        <button type="button" class="settings-nav-row" onClick={() => guardedNavigate("/wifi")}>
+                            <div class="settings-nav-row-left">
+                                <Icon svg={wifiSvg} />
+                                WiFi Network
+                            </div>
+                            <span class="settings-nav-chevron">&rsaquo;</span>
+                        </button>
+                    </div>
+                    <div class="settings-section">
                         <button type="button" class="settings-nav-row" onClick={() => guardedNavigate("/schedule")}>
                             <div class="settings-nav-row-left">
                                 <Icon svg={calendarSvg} />

@@ -136,6 +136,13 @@ void setup() {
     // Note: WiFi/OTA events buffered in memory above get flushed once SPIFFS mounts here.
     LOG("BOOT", "Initializing data logger...");
     dataLogger.setLogLevelCheck([&]() { return settingsManager.get().logLevel; });
+    dataLogger.setSyslogCheck([&]() -> DataLogger::SyslogConfig {
+        const auto& cfg = settingsManager.get();
+        DataLogger::SyslogConfig sc;
+        sc.enabled = cfg.syslogEnabled;
+        sc.ip = cfg.syslogIp;
+        return sc;
+    });
     dataLogger.begin();
 
     // Fetch robot time as fallback clock (parsed from "Time UTC" in GetVersion)

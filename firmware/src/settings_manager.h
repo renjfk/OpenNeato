@@ -35,6 +35,10 @@ struct Settings : public JsonSerializable {
     int vacuumSpeed = MANUAL_VACUUM_SPEED_PCT; // Vacuum speed % (40-100)
     int sideBrushPower = MANUAL_SIDE_BRUSH_POWER_MW; // Side brush power in mW (500-1500)
 
+    // Remote syslog (UDP) — when enabled, logs go to network instead of flash
+    bool syslogEnabled = false;
+    String syslogIp; // IPv4 address of syslog receiver
+
     // Notifications (ntfy.sh)
     String ntfyTopic; // Empty = disabled
     bool ntfyEnabled = false; // Global switch — must be on for any notification to fire

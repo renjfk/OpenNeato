@@ -78,6 +78,10 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
         setTz,
         logLevel,
         setLogLevel,
+        syslogEnabled,
+        setSyslogEnabled,
+        syslogIp,
+        setSyslogIp,
         wifiTxPower,
         setWifiTxPower,
         uartTxPin,
@@ -112,6 +116,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
         isDirty,
         pinError,
         hostnameError,
+        syslogIpError,
         validationError,
         saving,
         showSaveConfirm,
@@ -808,14 +813,45 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                                 disabled={saving}
                             >
                                 <option value={0}>Off (default)</option>
-                                <option value={1}>Info (auto-off after 1 hour)</option>
-                                <option value={2}>Debug (auto-off after 10 min)</option>
+                                <option value={1}>{syslogEnabled ? "Info" : "Info (auto-off after 1 hour)"}</option>
+                                <option value={2}>{syslogEnabled ? "Debug" : "Debug (auto-off after 10 min)"}</option>
                             </select>
                         </div>
                         <div class="settings-robot-time">
-                            Logging writes to flash storage. Higher levels increase wear and can slow serial
-                            communication.
+                            {syslogEnabled
+                                ? "Logs are sent to the remote syslog server over UDP."
+                                : "Logging writes to flash storage. Higher levels increase wear and can slow serial communication."}
                         </div>
+                    </div>
+                    <div class="settings-section">
+                        <div class="settings-toggle-row">
+                            <div class="settings-toggle-label">
+                                <span class="settings-toggle-title">Remote syslog</span>
+                                <span class="settings-toggle-desc">Send logs over UDP instead of writing to flash</span>
+                            </div>
+                            <button
+                                type="button"
+                                class={`settings-toggle${syslogEnabled ? " on" : ""}`}
+                                onClick={() => setSyslogEnabled(!syslogEnabled)}
+                                disabled={saving}
+                                aria-label="Toggle remote syslog"
+                            />
+                        </div>
+                        {syslogEnabled && (
+                            <>
+                                <div class="settings-ntfy-row">
+                                    <input
+                                        type="text"
+                                        class="settings-text-input"
+                                        value={syslogIp}
+                                        onInput={(e) => setSyslogIp((e.target as HTMLInputElement).value)}
+                                        disabled={saving}
+                                        placeholder="e.g. 192.168.1.100"
+                                    />
+                                </div>
+                                {syslogIpError && <div class="settings-field-error">{syslogIpError}</div>}
+                            </>
+                        )}
                     </div>
                     <div class="settings-section">
                         <button type="button" class="settings-nav-row" onClick={() => guardedNavigate("/logs")}>

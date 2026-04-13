@@ -39,7 +39,8 @@ port, giving you a local web interface that works without any external dependenc
   brush), bumper/wheel-lift/stall safety warnings
 - **Live cleaning map** — watch the robot's path during an active cleaning session in the History view, rendered on a
   canvas with coverage overlay
-- **7-day cleaning scheduler** with two slots per day, managed entirely on the ESP32 (doesn't use the robot's built-in schedule commands)
+- **7-day cleaning scheduler** with two slots per day, managed entirely on the ESP32 (doesn't use the robot's built-in
+  schedule commands)
 - **Cleaning history** with recorded robot paths rendered as coverage maps, session stats like duration, distance, area
   covered, and battery usage; individual session import/export for backup and restore
 - **Push notifications** via [ntfy.sh](https://ntfy.sh); get notified when cleaning is done, an error occurs, a
@@ -50,7 +51,8 @@ port, giving you a local web interface that works without any external dependenc
 - **Settings page** for hostname, timezone, motor presets, notification topics, UART pins, theme (dark/light/auto), and
   more
 - **Event logging** with configurable log levels (off/info/debug), compressed JSONL files on SPIFFS, browsable and
-  downloadable from the UI; logging is off by default to minimize flash wear
+  downloadable from the UI; optional remote syslog (UDP) for long-running diagnostics without flash wear; logging is
+  off by default
 - **Factory reset** via 5-second button hold on the ESP32 or from the settings page
 - **Robot clock sync** — pushes NTP time to the robot automatically, re-syncs every 4 hours
 - **Flash tool** — standalone CLI that auto-detects the USB port, downloads the correct firmware from GitHub Releases,

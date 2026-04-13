@@ -115,6 +115,8 @@ export const SIDE_BRUSH_PRESETS: SideBrushPreset[] = [
 export const DEFAULT_SERVER = {
     tz: "UTC0",
     logLevel: 0,
+    syslogEnabled: false,
+    syslogIp: "",
     wifiTxPower: 60,
     uartTxPin: 3,
     uartRxPin: 4,

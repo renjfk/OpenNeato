@@ -464,9 +464,16 @@ curl -X POST -G 'http://neato.local/api/serial' --data-urlencode 'cmd=SetUserSet
 
 A few typical maintenance tasks:
 
+> [!WARNING]
+> Some commands (like `NewBattery`) require TestMode. Leaving TestMode enabled bypasses the robot's safety
+> checks and can cause unexpected behavior - no scheduled cleanings, charging issues, and unpredictable
+> button responses. Always disable it immediately after use.
+
 ```bash
-# New battery installed (resets fuel gauge calibration)
+# New battery installed (resets fuel gauge calibration, requires TestMode)
+curl -X POST 'http://neato.local/api/testmode?enable=1'
 curl -X POST 'http://neato.local/api/serial?cmd=NewBattery'
+curl -X POST 'http://neato.local/api/testmode?enable=0'
 
 # Reset robot user settings to factory defaults
 curl -X POST 'http://neato.local/api/serial?cmd=SetUserSettings%20Reset'

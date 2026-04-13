@@ -113,7 +113,7 @@ export function LidarMap({ scan, size, moving }: LidarMapProps) {
 
         // Helper: angle to canvas coordinates
         const toCanvas = (angleDeg: number, dist: number): [number, number] => {
-            const rad = ((90 - angleDeg) * Math.PI) / 180;
+            const rad = ((90 + angleDeg) * Math.PI) / 180;
             return [cx + dist * scale * Math.cos(rad), cy - dist * scale * Math.sin(rad)];
         };
 

@@ -18,7 +18,8 @@ Botvac robots (D3-D7) over UART and exposes a local web UI over WiFi — no clou
 > or [issue](https://github.com/renjfk/OpenNeato/issues) is always welcome.
 
 > [!IMPORTANT]
-> **Now in development:** [Guided Clean - zone cleaning, no-go lines, and map-based navigation](https://github.com/renjfk/OpenNeato/issues/68).
+> **Now in development:
+** [Guided Clean - zone cleaning, no-go lines, and map-based navigation](https://github.com/renjfk/OpenNeato/issues/68).
 >
 > Select zones on a previously recorded map, draw no-go lines, and let the robot clean exactly where you want.
 > Follow the issue for progress updates and sub-task tracking.
@@ -118,9 +119,15 @@ OpenNeato is open to contributions and ideas! Whether you're a developer wanting
 suggestions, your input is valuable.
 
 > [!TIP]
-> Before opening an issue, consider starting a
-> [Discussion](https://github.com/renjfk/OpenNeato/discussions) first — many questions,
-> setup troubles, and ideas are easier to resolve through conversation.
+> Before opening an issue, consider starting a [Discussion](https://github.com/renjfk/OpenNeato/discussions) first —
+> many questions, setup troubles, and ideas are easier to resolve through conversation.
+
+> [!IMPORTANT]
+> For anything beyond a small bug fix, please open an issue
+> or [Discussion](https://github.com/renjfk/OpenNeato/discussions) first to align on the design before writing code.
+> This is an embedded project with tight resource constraints (single-core MCU, 320 KB RAM, 1.6 MB flash per OTA slot)
+> and strict architectural rules (non-blocking event loop, zero external dependencies). A quick design conversation
+> upfront avoids large rewrites during review.
 
 ### Issue Conventions
 

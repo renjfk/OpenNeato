@@ -1,6 +1,5 @@
 .pio
 .cache
-.vscode/
 firmware/compile_commands.json
 firmware/src/web_assets.h
 frontend/node_modules
@@ -8,4 +7,3 @@ frontend/dist
 flash/openneato-flash
 release/
 dist/
-.vscode/

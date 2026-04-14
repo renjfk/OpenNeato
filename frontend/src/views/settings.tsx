@@ -152,6 +152,22 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
         [robotSettings, userSettingsPoll.data, errorStack],
     );
 
+    // --- Wall follower (dedicated endpoint, not SetUserSettings) ---
+    const handleWallFollowerChange = useCallback(
+        (value: boolean) => {
+            if (!robotSettings) return;
+            setRobotSettings({ ...robotSettings, wallEnable: value });
+            setSavingRobotSettings(true);
+            api.setWallFollower(value)
+                .catch((e: unknown) => {
+                    errorStack.push(e instanceof Error ? e.message : "Failed to update wall follower");
+                    if (userSettingsPoll.data) setRobotSettings(userSettingsPoll.data);
+                })
+                .finally(() => setSavingRobotSettings(false));
+        },
+        [robotSettings, userSettingsPoll.data, errorStack],
+    );
+
     // --- Notification test ---
     const [testingNotif, setTestingNotif] = useState(false);
     const [notifTestResult, setNotifTestResult] = useState<string | null>(null);
@@ -936,6 +952,19 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                                 }
                                 disabled={robotSettingsDisabled}
                                 aria-label="Toggle bin full detection"
+                            />
+                        </div>
+                        <div class="settings-toggle-row">
+                            <div class="settings-toggle-label">
+                                <span class="settings-toggle-title">Wall follower</span>
+                                <span class="settings-toggle-desc">Follow walls closely during cleaning</span>
+                            </div>
+                            <button
+                                type="button"
+                                class={`settings-toggle${robotSettings?.wallEnable ? " on" : ""}${savingRobotSettings ? " pending" : ""}`}
+                                onClick={() => handleWallFollowerChange(!robotSettings?.wallEnable)}
+                                disabled={robotSettingsDisabled}
+                                aria-label="Toggle wall follower"
                             />
                         </div>
                     </div>

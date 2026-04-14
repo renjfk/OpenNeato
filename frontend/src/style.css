@@ -1053,6 +1053,7 @@ body {
     display: flex;
     gap: 8px;
     align-items: stretch;
+    margin-bottom: 12px;
 }
 
 .settings-ntfy-row .settings-text-input {
@@ -1140,14 +1141,24 @@ body {
     color: var(--text-muted);
 }
 
+.wifi-input-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
 .wifi-action-row {
     display: flex;
+    width: 100%;
     gap: 10px;
     margin-top: 14px;
-    flex-wrap: wrap;
 }
 
 .wifi-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 0;
     min-width: 0;
     padding: 10px 14px;
     border: 1px solid var(--text);

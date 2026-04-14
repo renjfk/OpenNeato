@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "preact/hooks";
 import { api } from "../api";
 import backSvg from "../assets/icons/back.svg?raw";
 import wifiSvg from "../assets/icons/wifi.svg?raw";
+import { ConfirmDialog } from "../components/confirm-dialog";
 import { ErrorBannerStack, useErrorStack } from "../components/error-banner";
 import { Icon } from "../components/icon";
 import { useNavigate } from "../components/router";
@@ -40,6 +41,7 @@ export function WifiView() {
     const [apPassword, setApPassword] = useState("");
     const [savingSettings, setSavingSettings] = useState(false);
     const [runtimeBusy, setRuntimeBusy] = useState(false);
+    const [showApShutdownConfirm, setShowApShutdownConfirm] = useState(false);
     const [disconnecting, setDisconnecting] = useState(false);
     const [scanning, setScanning] = useState(false);
     const [networks, setNetworks] = useState<WifiNetwork[]>([]);
@@ -102,14 +104,17 @@ export function WifiView() {
             .finally(() => setSavingSettings(false));
     }, [validationError, apSsid, apPassword, errorStack]);
 
-    const handleRuntimeToggle = useCallback(() => {
-        if (!status) return;
+    const handleRuntimeShutdown = useCallback(() => {
+        if (!status || !status.apRuntimeEnabled) return;
         setRuntimeBusy(true);
-        api.setFallbackApRuntimeEnabled(!status.apRuntimeEnabled)
+        api.setFallbackApRuntimeEnabled(false)
             .catch((e: unknown) => {
                 errorStack.push(e instanceof Error ? e.message : "Failed to update runtime hotspot state");
             })
-            .finally(() => setRuntimeBusy(false));
+            .finally(() => {
+                setRuntimeBusy(false);
+                setShowApShutdownConfirm(false);
+            });
     }, [status, errorStack]);
 
     const handleScan = useCallback(() => {
@@ -217,38 +222,24 @@ export function WifiView() {
                         </div>
                     </div>
                     <div class="settings-section">
-                        <div class="settings-toggle-row">
-                            <div class="settings-toggle-label">
-                                <span class="settings-toggle-title">Fallback hotspot always enabled</span>
-                                <span class="settings-toggle-desc">
-                                    Safety lock: fallback AP cannot be turned off from the UI
-                                </span>
-                            </div>
-                            <button
-                                type="button"
-                                class="settings-toggle on"
-                                disabled
-                                aria-label="Fallback hotspot is always enabled"
+                        <div class="wifi-input-stack">
+                            <input
+                                type="text"
+                                class="settings-text-input"
+                                value={apSsid}
+                                onInput={(e) => setApSsid((e.target as HTMLInputElement).value)}
+                                disabled={savingSettings}
+                                placeholder="Leave empty to use hostname-ap"
+                            />
+                            <input
+                                type="text"
+                                class="settings-text-input"
+                                value={apPassword}
+                                onInput={(e) => setApPassword((e.target as HTMLInputElement).value)}
+                                disabled={savingSettings}
+                                placeholder="Leave empty for open network"
                             />
                         </div>
-                        <div class="settings-section-title">Hotspot name</div>
-                        <input
-                            type="text"
-                            class="settings-text-input"
-                            value={apSsid}
-                            onInput={(e) => setApSsid((e.target as HTMLInputElement).value)}
-                            disabled={savingSettings}
-                            placeholder="Leave empty to use hostname-ap"
-                        />
-                        <div class="settings-section-title">Hotspot password</div>
-                        <input
-                            type="text"
-                            class="settings-text-input"
-                            value={apPassword}
-                            onInput={(e) => setApPassword((e.target as HTMLInputElement).value)}
-                            disabled={savingSettings}
-                            placeholder="Leave empty for open network"
-                        />
                         {validationError ? (
                             <div class="settings-field-error">{validationError}</div>
                         ) : (
@@ -269,21 +260,21 @@ export function WifiView() {
                         </div>
                     </div>
                     <div class="settings-section">
-                        <div class="settings-toggle-row">
-                            <div class="settings-toggle-label">
-                                <span class="settings-toggle-title">Disable hotspot until reboot</span>
-                                <span class="settings-toggle-desc">
-                                    Stops the fallback hotspot now and blocks it from auto-starting until the next
-                                    restart
-                                </span>
-                            </div>
+                        <div class="settings-toggle-label">
+                            <span class="settings-toggle-title">Turn off hotspot until reboot</span>
+                            <span class="settings-toggle-desc">
+                                Stops the fallback hotspot now and blocks it from auto-starting until the next restart
+                            </span>
+                        </div>
+                        <div class="wifi-action-row">
                             <button
                                 type="button"
-                                class={`settings-toggle${status && !status.apRuntimeEnabled ? "" : " on"}`}
-                                onClick={handleRuntimeToggle}
-                                disabled={!status || runtimeBusy}
-                                aria-label="Toggle hotspot until reboot"
-                            />
+                                class="wifi-action-btn"
+                                onClick={() => setShowApShutdownConfirm(true)}
+                                disabled={!status || !status.apRuntimeEnabled || runtimeBusy}
+                            >
+                                {runtimeBusy ? "Turning off..." : "Turn off hotspot until reboot"}
+                            </button>
                         </div>
                     </div>
                 </SettingsCategory>
@@ -400,6 +391,16 @@ export function WifiView() {
                     )}
                 </SettingsCategory>
             </div>
+
+            {showApShutdownConfirm && (
+                <ConfirmDialog
+                    message="Turn off the fallback hotspot until the next reboot? Connected clients will be disconnected immediately."
+                    confirmLabel="Turn Off"
+                    disabled={runtimeBusy}
+                    onConfirm={handleRuntimeShutdown}
+                    onCancel={() => setShowApShutdownConfirm(false)}
+                />
+            )}
         </>
     );
 }

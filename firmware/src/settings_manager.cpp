@@ -71,14 +71,14 @@ void SettingsManager::load() {
     current.apPassword = loadOptionalString(prefs, NVS_KEY_AP_PASS, WIFI_AP_DEFAULT_PASSWORD);
     current.uartTxPin = prefs.getInt(NVS_KEY_UART_TX_PIN, NEATO_DEFAULT_TX_PIN);
     current.uartRxPin = prefs.getInt(NVS_KEY_UART_RX_PIN, NEATO_DEFAULT_RX_PIN);
-    current.navMode = prefs.getString(NVS_KEY_NAV_MODE, "Normal");
+    current.navMode = loadOptionalString(prefs, NVS_KEY_NAV_MODE, "Normal");
     current.stallThreshold = prefs.getInt(NVS_KEY_MC_STALL_THR, MANUAL_STALL_LOAD_PCT);
     current.brushRpm = prefs.getInt(NVS_KEY_MC_BRUSH_RPM, MANUAL_BRUSH_RPM);
     current.vacuumSpeed = prefs.getInt(NVS_KEY_MC_VACUUM_PCT, MANUAL_VACUUM_SPEED_PCT);
     current.sideBrushPower = prefs.getInt(NVS_KEY_MC_SBRUSH_MW, MANUAL_SIDE_BRUSH_POWER_MW);
     current.syslogEnabled = prefs.getBool(NVS_KEY_SYSLOG_ENABLED, false);
-    current.syslogIp = prefs.getString(NVS_KEY_SYSLOG_IP, "");
-    current.ntfyTopic = prefs.getString(NVS_KEY_NTFY_TOPIC, "");
+    current.syslogIp = loadOptionalString(prefs, NVS_KEY_SYSLOG_IP, "");
+    current.ntfyTopic = loadOptionalString(prefs, NVS_KEY_NTFY_TOPIC, "");
     current.ntfyEnabled = prefs.getBool(NVS_KEY_NTFY_ENABLED, false);
     current.ntfyOnDone = prefs.getBool(NVS_KEY_NTFY_ON_DONE, true);
     current.ntfyOnError = prefs.getBool(NVS_KEY_NTFY_ON_ERR, true);

@@ -78,7 +78,7 @@ void SettingsManager::load() {
     current.sideBrushPower = prefs.getInt(NVS_KEY_MC_SBRUSH_MW, MANUAL_SIDE_BRUSH_POWER_MW);
     current.syslogEnabled = prefs.getBool(NVS_KEY_SYSLOG_ENABLED, false);
     current.syslogIp = prefs.getString(NVS_KEY_SYSLOG_IP, "");
-    current.ntfyTopic = loadOptionalString(prefs, NVS_KEY_NTFY_TOPIC, "");
+    current.ntfyTopic = prefs.getString(NVS_KEY_NTFY_TOPIC, "");
     current.ntfyEnabled = prefs.getBool(NVS_KEY_NTFY_ENABLED, false);
     current.ntfyOnDone = prefs.getBool(NVS_KEY_NTFY_ON_DONE, true);
     current.ntfyOnError = prefs.getBool(NVS_KEY_NTFY_ON_ERR, true);

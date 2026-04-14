@@ -263,7 +263,9 @@ export function WifiView() {
                         <div class="settings-toggle-label">
                             <span class="settings-toggle-title">Turn off hotspot until reboot</span>
                             <span class="settings-toggle-desc">
-                                Stops the fallback hotspot now and blocks it from auto-starting until the next restart
+                                {status?.staConnected
+                                    ? "Not available — hotspot is already off because home WiFi is connected"
+                                    : "Stops the fallback hotspot now and blocks it from auto-starting until the next restart"}
                             </span>
                         </div>
                         <div class="wifi-action-row">
@@ -271,7 +273,7 @@ export function WifiView() {
                                 type="button"
                                 class="wifi-action-btn"
                                 onClick={() => setShowApShutdownConfirm(true)}
-                                disabled={!status || !status.apRuntimeEnabled || runtimeBusy}
+                                disabled={!status || !status.apRuntimeEnabled || status.staConnected || runtimeBusy}
                             >
                                 {runtimeBusy ? "Turning off..." : "Turn off hotspot until reboot"}
                             </button>

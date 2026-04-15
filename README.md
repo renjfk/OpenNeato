@@ -18,8 +18,8 @@ Botvac robots (D3-D7) over UART and exposes a local web UI over WiFi — no clou
 > or [issue](https://github.com/renjfk/OpenNeato/issues) is always welcome.
 
 > [!IMPORTANT]
-> **Now in development:
-** [Guided Clean - zone cleaning, no-go lines, and map-based navigation](https://github.com/renjfk/OpenNeato/issues/68).
+> **Now in development:** 
+[Guided Clean - zone cleaning, no-go lines, and map-based navigation](https://github.com/renjfk/OpenNeato/issues/68).
 >
 > Select zones on a previously recorded map, draw no-go lines, and let the robot clean exactly where you want.
 > Follow the issue for progress updates and sub-task tracking.

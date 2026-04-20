@@ -3,6 +3,7 @@ import { api } from "../../api";
 import type { ErrorStackHandle } from "../../components/error-banner";
 import { useFetch } from "../../hooks/use-fetch";
 import type { SettingsData } from "../../types";
+import { normalizeError } from "../../utils";
 import { DEFAULT_SERVER } from "./constants";
 
 export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: () => void) {
@@ -185,7 +186,7 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
                     setShowSaveConfirm(false);
                     startRebootFlow();
                 } else {
-                    errorStack.push(e instanceof Error ? e.message : "Failed to save settings");
+                    errorStack.push(normalizeError(e, "Failed to save settings"));
                     setShowSaveConfirm(false);
                 }
             })

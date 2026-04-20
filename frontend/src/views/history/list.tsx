@@ -7,6 +7,7 @@ import trashSvg from "../../assets/icons/trash.svg?raw";
 import { ConfirmDialog } from "../../components/confirm-dialog";
 import { Icon } from "../../components/icon";
 import type { HistoryFileInfo, MapSession, MapSummary } from "../../types";
+import { normalizeError } from "../../utils";
 import { formatDate, formatDuration, modeInfo } from "./helpers";
 
 // Session card component
@@ -163,7 +164,7 @@ export function HistoryListView({
                 })
                 .catch((e: unknown) => {
                     setImportStatus("error");
-                    onError(e instanceof Error ? e.message : "Import failed");
+                    onError(normalizeError(e, "Import failed"));
                     setTimeout(() => setImportStatus("idle"), 2000);
                 })
                 .finally(() => {

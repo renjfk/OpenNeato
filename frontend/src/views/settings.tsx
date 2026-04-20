@@ -24,6 +24,7 @@ import { useNavigate } from "../components/router";
 import { useDirtyGuard } from "../hooks/use-dirty-guard";
 import { usePolling } from "../hooks/use-polling";
 import type { FirmwareVersion, SystemData, UserSettingsData } from "../types";
+import { normalizeError } from "../utils";
 import {
     BRUSH_PRESETS,
     NAV_MODE_PRESETS,
@@ -149,7 +150,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
             const serialValue = value ? "ON" : "OFF";
             api.setUserSetting(robotSettingKeys[field], serialValue)
                 .catch((e: unknown) => {
-                    errorStack.push(e instanceof Error ? e.message : "Failed to update robot settings");
+                    errorStack.push(normalizeError(e, "Failed to update robot settings"));
                     if (userSettingsPoll.data) setRobotSettings(userSettingsPoll.data);
                 })
                 .finally(() => setSavingRobotSettings(false));
@@ -171,7 +172,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                 setTimeout(() => setNotifTestResult(null), 2000);
             })
             .catch((e: unknown) => {
-                setNotifTestResult(e instanceof Error ? e.message : "Failed");
+                setNotifTestResult(normalizeError(e, "Failed"));
                 setTimeout(() => setNotifTestResult(null), 3000);
             })
             .finally(() => setTestingNotif(false));
@@ -229,7 +230,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                 if (robotRestartTimeout.current) clearTimeout(robotRestartTimeout.current);
                 robotRestartTimeout.current = null;
                 setRobotRestarting(false);
-                errorStack.push(e instanceof Error ? e.message : "Failed to restart robot");
+                errorStack.push(normalizeError(e, "Failed to restart robot"));
             });
     }, [errorStack]);
 
@@ -250,7 +251,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
         setClearingErrors(true);
         api.clearErrors()
             .catch((e: unknown) => {
-                errorStack.push(e instanceof Error ? e.message : "Failed to clear errors");
+                errorStack.push(normalizeError(e, "Failed to clear errors"));
             })
             .finally(() => setClearingErrors(false));
     }, [errorStack]);
@@ -273,7 +274,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                     setShowRestartConfirm(false);
                     startRebootFlow();
                 } else {
-                    errorStack.push(e instanceof Error ? e.message : "Failed to restart");
+                    errorStack.push(normalizeError(e, "Failed to restart"));
                     setShowRestartConfirm(false);
                 }
             })
@@ -292,7 +293,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                     setShowFormatConfirm(false);
                     startRebootFlow();
                 } else {
-                    errorStack.push(e instanceof Error ? e.message : "Failed to format storage");
+                    errorStack.push(normalizeError(e, "Failed to format storage"));
                     setShowFormatConfirm(false);
                 }
             })
@@ -311,7 +312,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                     setShowResetConfirm(false);
                     startRebootFlow();
                 } else {
-                    errorStack.push(e instanceof Error ? e.message : "Failed to factory reset");
+                    errorStack.push(normalizeError(e, "Failed to factory reset"));
                     setShowResetConfirm(false);
                 }
             })

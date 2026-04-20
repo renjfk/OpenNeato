@@ -2296,6 +2296,154 @@ body {
     margin-top: 6px;
 }
 
+/* Motion player — playback controls + scrubber for the session replay */
+
+.history-player {
+    margin-top: 10px;
+}
+
+.history-player-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+
+.history-player-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.history-player-btn:hover:not(:disabled) {
+    background: var(--bg-hover, rgba(255, 255, 255, 0.05));
+}
+
+.history-player-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.history-player-btn span {
+    display: flex;
+}
+
+.history-player-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.history-player-time {
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    color: var(--text-dim);
+    min-width: 42px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.history-player-scrubber {
+    flex: 1;
+    min-width: 0;
+    height: 18px;
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
+    cursor: pointer;
+    margin: 0;
+    --track: var(--border);
+    --played: 0%;
+    /* Dim the portion after the playhead to make progress visible on top
+       of the colored timeline. Composed: dim overlay (future half) over
+       the cleaning/recharge gradient. */
+    --dim: linear-gradient(
+        to right,
+        transparent 0,
+        transparent var(--played),
+        rgba(0, 0, 0, 0.45) var(--played),
+        rgba(0, 0, 0, 0.45) 100%
+    );
+}
+
+.history-player-scrubber::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--dim), var(--track);
+    background-color: var(--border);
+}
+
+.history-player-scrubber::-moz-range-track {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--dim), var(--track);
+    background-color: var(--border);
+    border: none;
+}
+
+.light .history-player-scrubber {
+    --dim: linear-gradient(
+        to right,
+        transparent 0,
+        transparent var(--played),
+        rgba(255, 255, 255, 0.55) var(--played),
+        rgba(255, 255, 255, 0.55) 100%
+    );
+}
+
+@media (prefers-color-scheme: light) {
+    .system-theme .history-player-scrubber {
+        --dim: linear-gradient(
+            to right,
+            transparent 0,
+            transparent var(--played),
+            rgba(255, 255, 255, 0.55) var(--played),
+            rgba(255, 255, 255, 0.55) 100%
+        );
+    }
+}
+
+.history-player-scrubber::-webkit-slider-thumb {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: rgba(52, 199, 89, 0.95);
+    border: 2px solid var(--surface);
+    cursor: grab;
+    margin-top: -4px; /* center 14px thumb over 6px track */
+}
+
+.history-player-scrubber::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: rgba(52, 199, 89, 0.95);
+    border: 2px solid var(--surface);
+    cursor: grab;
+}
+
+.history-player-scrubber:active::-webkit-slider-thumb {
+    cursor: grabbing;
+}
+
+.history-player-scrubber:active::-moz-range-thumb {
+    cursor: grabbing;
+}
+
 /* Schedule page */
 
 .schedule-page {

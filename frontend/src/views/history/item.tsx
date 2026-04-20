@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import boltSvg from "../../assets/icons/bolt.svg?raw";
 import { Icon } from "../../components/icon";
 import { useMapGestures } from "../../hooks/use-map-gestures";
 import type { HistoryFileInfo, MapData } from "../../types";
 import { formatDuration, renderMap } from "./helpers";
+import { MotionPlayer } from "./motion-player";
 
 interface HistoryItemViewProps {
     file: HistoryFileInfo;
@@ -16,22 +17,37 @@ export function HistoryItemView({ file, map, mapEmpty, recording }: HistoryItemV
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const transform = useMapGestures(canvasRef);
 
-    // Render canvas when map data or transform changes
+    // Expose the live canvas element so MotionPlayer can drive the renderer
+    // without duplicating gesture handling or the ref plumbing.
+    const [canvasEl, setCanvasEl] = useState<HTMLCanvasElement | null>(null);
     useEffect(() => {
+        setCanvasEl(canvasRef.current);
+    }, [map]);
+
+    // Motion playback is only available for finished sessions. While
+    // recording we fall back to the live static render (with its pulsing
+    // end marker) so the existing behaviour is unchanged.
+    const showPlayer = !recording && map !== null && map.path.length > 0;
+
+    // When the player is visible it owns all canvas draws. Otherwise we
+    // render the static map here so recording sessions and loading states
+    // keep working exactly as before.
+    useEffect(() => {
+        if (showPlayer) return;
         if (map && canvasRef.current) {
             renderMap(canvasRef.current, map, recording, transform);
         }
-    }, [map, recording, transform]);
+    }, [map, recording, transform, showPlayer]);
 
-    // Re-render on resize
     useEffect(() => {
+        if (showPlayer) return;
         if (!map) return;
         const handleResize = () => {
             if (map && canvasRef.current) renderMap(canvasRef.current, map, recording, transform);
         };
         window.addEventListener("resize", handleResize);
         return () => window.removeEventListener("resize", handleResize);
-    }, [map, recording, transform]);
+    }, [map, recording, transform, showPlayer]);
 
     // Prefer list metadata summary (available immediately), fall back to
     // the summary parsed from the full JSONL data (available after fetch)
@@ -77,6 +93,9 @@ export function HistoryItemView({ file, map, mapEmpty, recording }: HistoryItemV
                 <canvas ref={canvasRef} class="history-canvas" style={map ? undefined : { display: "none" }} />
             </div>
 
+            {/* Motion player (finished sessions only) */}
+            {showPlayer && map && <MotionPlayer canvas={canvasEl} map={map} transform={transform} />}
+
             {/* Legend */}
             {map && (
                 <div class="history-legend">
@@ -102,6 +121,11 @@ export function HistoryItemView({ file, map, mapEmpty, recording }: HistoryItemV
             )}
             {map && (
                 <div class="history-map-hint">Pinch or scroll to zoom, drag to pan, double-tap to zoom in or reset</div>
+            )}
+            {showPlayer && (
+                <div class="history-map-hint">
+                    Space to play or pause, arrow keys to seek, hold shift for a larger jump
+                </div>
             )}
         </>
     );

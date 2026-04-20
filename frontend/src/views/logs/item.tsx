@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "preact/hooks";
 import { api } from "../../api";
 import databaseSvg from "../../assets/icons/database.svg?raw";
 import { Icon } from "../../components/icon";
+import { normalizeError } from "../../utils";
 import type { LogEntry } from "./helpers";
 import { DETAIL_KEY, formatTimestamp, parseLogLine, typeBadge } from "./helpers";
 
@@ -96,7 +97,7 @@ export function LogsItemView({ filename, onError }: LogsItemViewProps) {
                 setLoading(false);
             })
             .catch((e: unknown) => {
-                onError(e instanceof Error ? e.message : "Failed to load log");
+                onError(normalizeError(e, "Failed to load log"));
                 setLoading(false);
             });
     }, [filename, onError]);

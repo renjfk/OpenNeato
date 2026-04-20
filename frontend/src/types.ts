@@ -210,7 +210,19 @@ export interface MapBounds {
 export interface MapRechargePoint {
     x: number;
     y: number;
+    // Session-relative timestamp when the robot returned to base to charge,
+    // derived from the last pose snapshot before collection paused.
+    ts: number;
+    // Session-relative timestamp when cleaning resumed after the charge —
+    // taken from the first pose snapshot written once collection restarted.
+    // Falls back to `ts` when the session ended before resuming.
+    endTs: number;
 }
+
+// Coverage cell with the session-relative timestamp (seconds) at which the
+// cell was first stamped. Used by the motion player to reveal coverage
+// progressively during playback.
+export type MapCoverageCell = [cx: number, cy: number, ts: number];
 
 export interface MapTransform {
     panX: number;
@@ -222,7 +234,7 @@ export interface MapData {
     session: MapSession | null;
     summary: MapSummary | null;
     path: MapPathPoint[];
-    coverage: [number, number][];
+    coverage: MapCoverageCell[];
     recharges: MapRechargePoint[];
     bounds: MapBounds | null;
     cellSize: number;

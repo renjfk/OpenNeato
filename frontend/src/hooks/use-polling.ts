@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
+import { normalizeError } from "../utils";
 
 export interface PollResult<T> {
     data: T | null;
@@ -39,7 +40,7 @@ export function usePolling<T>(fetcher: () => Promise<T>, intervalMs: number): Po
             } catch (e) {
                 if (active) {
                     setData(null);
-                    setError(e instanceof Error ? e.message : "fetch failed");
+                    setError(normalizeError(e, "fetch failed"));
                 }
             }
             polling = false;

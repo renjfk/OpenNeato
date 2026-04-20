@@ -4,7 +4,8 @@ import clockSvg from "../../assets/icons/clock.svg?raw";
 import houseSvg from "../../assets/icons/house.svg?raw";
 import manualSvg from "../../assets/icons/manual.svg?raw";
 import spotSvg from "../../assets/icons/spot.svg?raw";
-import type { MapData, MapTransform } from "../../types";
+import type { MapData, MapPathPoint, MapTransform } from "../../types";
+import { pad2 } from "../../utils";
 
 const DEFAULT_TRANSFORM: MapTransform = { panX: 0, panY: 0, zoom: 1 };
 
@@ -15,13 +16,18 @@ export function formatDuration(secs: number): string {
     return s > 0 ? `${m}m ${s}s` : `${m}m`;
 }
 
+// Playback clock format — M:SS, or H:MM:SS past the hour mark.
+export function formatClock(secs: number): string {
+    const total = Math.max(0, Math.floor(secs));
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    return h > 0 ? `${h}:${pad2(m)}:${pad2(s)}` : `${m}:${pad2(s)}`;
+}
+
 export function formatDate(epoch: number): string {
     const d = new Date(epoch * 1000);
-    const mon = (d.getMonth() + 1).toString().padStart(2, "0");
-    const day = d.getDate().toString().padStart(2, "0");
-    const h = d.getHours().toString().padStart(2, "0");
-    const min = d.getMinutes().toString().padStart(2, "0");
-    return `${mon}/${day} ${h}:${min}`;
+    return `${pad2(d.getMonth() + 1)}/${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
 export function modeInfo(mode: string): { label: string; icon: string } {
@@ -31,12 +37,70 @@ export function modeInfo(mode: string): { label: string; icon: string } {
     return { label: mode, icon: clockSvg };
 }
 
-// Canvas renderer for map visualization
-export function renderMap(canvas: HTMLCanvasElement, map: MapData, recording = false, tf?: MapTransform) {
+// Total session duration derived from the map data. Prefers the summary
+// value written by the firmware, falls back to the last pose timestamp.
+export function sessionDuration(map: MapData): number {
+    if (map.summary?.duration && map.summary.duration > 0) return map.summary.duration;
+    if (map.path.length > 0) return map.path[map.path.length - 1].ts;
+    return 0;
+}
+
+// Shortest-arc interpolation between two headings in degrees.
+function lerpAngleDeg(a: number, b: number, f: number): number {
+    const delta = ((b - a + 540) % 360) - 180;
+    return a + delta * f;
+}
+
+// Interpolate robot pose at a given session-relative timestamp. Returns
+// null when the path is empty. Uses linear interpolation for x/y and
+// shortest-arc interpolation for the heading so the sprite never snaps.
+export function interpolatePose(
+    path: MapPathPoint[],
+    ts: number,
+): { x: number; y: number; t: number; ts: number } | null {
+    if (path.length === 0) return null;
+    if (ts <= path[0].ts) return { ...path[0] };
+    const last = path[path.length - 1];
+    if (ts >= last.ts) return { ...last };
+
+    // Binary search for the segment containing ts
+    let lo = 0;
+    let hi = path.length - 1;
+    while (hi - lo > 1) {
+        const mid = (lo + hi) >> 1;
+        if (path[mid].ts <= ts) lo = mid;
+        else hi = mid;
+    }
+
+    const a = path[lo];
+    const b = path[hi];
+    const span = b.ts - a.ts;
+    const f = span > 0 ? (ts - a.ts) / span : 0;
+    return {
+        x: a.x + (b.x - a.x) * f,
+        y: a.y + (b.y - a.y) * f,
+        t: lerpAngleDeg(a.t, b.t, f),
+        ts,
+    };
+}
+
+// Canvas renderer for map visualization. When `currentTime` is provided the
+// renderer draws only the portion of the session up to that timestamp and
+// shows the interpolated robot pose as a directional sprite — used by the
+// motion player. Without `currentTime` the full static map is drawn.
+export function renderMap(
+    canvas: HTMLCanvasElement,
+    map: MapData,
+    recording = false,
+    tf?: MapTransform,
+    currentTime?: number,
+) {
     const ctx = canvas.getContext("2d");
     if (!ctx || !map.bounds) return;
 
     const { panX, panY, zoom } = tf ?? DEFAULT_TRANSFORM;
+    const playing = currentTime !== undefined;
+    const tNow = currentTime ?? Number.POSITIVE_INFINITY;
 
     const dpr = window.devicePixelRatio || 1;
     const displayW = canvas.clientWidth;
@@ -93,21 +157,40 @@ export function renderMap(canvas: HTMLCanvasElement, map: MapData, recording = f
         ctx.stroke();
     }
 
-    // Coverage cells
+    // Coverage cells — filtered by timestamp during playback
     const cellPx = map.cellSize * scale;
     ctx.fillStyle = isDark ? "rgba(52, 199, 89, 0.15)" : "rgba(22, 130, 50, 0.22)";
-    for (const [cx, cy] of map.coverage) {
+    for (const cell of map.coverage) {
+        const [cx, cy, ts] = cell;
+        if (ts > tNow) continue;
         const wx = cx * map.cellSize;
         const wy = cy * map.cellSize;
         ctx.fillRect(toX(wx) - cellPx / 2, toY(wy) - cellPx / 2, cellPx, cellPx);
     }
 
+    // Resolve the subset of path points to draw and the current robot pose
+    // when playing. During playback we cut the path at `tNow` and append
+    // an interpolated endpoint so the line keeps up with the robot sprite.
+    let pathEnd = map.path.length;
+    let liveHead: { x: number; y: number; t: number; ts: number } | null = null;
+    if (playing) {
+        pathEnd = 0;
+        while (pathEnd < map.path.length && map.path[pathEnd].ts <= tNow) pathEnd++;
+        liveHead = interpolatePose(map.path, tNow);
+    }
+
     // Path line
-    if (map.path.length > 1) {
+    const drawnPath: { x: number; y: number; ts: number }[] = [];
+    for (let i = 0; i < pathEnd; i++) drawnPath.push(map.path[i]);
+    if (playing && liveHead && (drawnPath.length === 0 || drawnPath[drawnPath.length - 1].ts !== liveHead.ts)) {
+        drawnPath.push(liveHead);
+    }
+
+    if (drawnPath.length > 1) {
         ctx.beginPath();
-        ctx.moveTo(toX(map.path[0].x), toY(map.path[0].y));
-        for (let i = 1; i < map.path.length; i++) {
-            ctx.lineTo(toX(map.path[i].x), toY(map.path[i].y));
+        ctx.moveTo(toX(drawnPath[0].x), toY(drawnPath[0].y));
+        for (let i = 1; i < drawnPath.length; i++) {
+            ctx.lineTo(toX(drawnPath[i].x), toY(drawnPath[i].y));
         }
         ctx.strokeStyle = isDark ? "rgba(249, 235, 178, 0.6)" : "rgba(180, 140, 40, 0.5)";
         ctx.lineWidth = 2;
@@ -125,8 +208,10 @@ export function renderMap(canvas: HTMLCanvasElement, map: MapData, recording = f
         ctx.fill();
     }
 
-    // End point - open ring with glow when recording, solid dot when finished
-    if (map.path.length > 1) {
+    // End point / animated robot sprite
+    if (playing && liveHead) {
+        drawRobotSprite(ctx, toX(liveHead.x), toY(liveHead.y), liveHead.t);
+    } else if (map.path.length > 1) {
         const end = map.path[map.path.length - 1];
         const ex = toX(end.x);
         const ey = toY(end.y);
@@ -148,8 +233,9 @@ export function renderMap(canvas: HTMLCanvasElement, map: MapData, recording = f
         }
     }
 
-    // Recharge points (bolt icon with glow)
+    // Recharge points (bolt icon with glow) — hidden until reached during playback
     for (const rp of map.recharges) {
+        if (rp.ts > tNow) continue;
         const rx = toX(rp.x);
         const ry = toY(rp.y);
         const s = 10;
@@ -175,4 +261,43 @@ export function renderMap(canvas: HTMLCanvasElement, map: MapData, recording = f
         ctx.lineWidth = 1.5;
         ctx.stroke();
     }
+}
+
+// Draws the animated robot sprite: a filled circle with a small nose pointing
+// in the heading direction. Theta is in degrees, 0 = +X axis (canvas right),
+// increasing counter-clockwise in world coordinates, so we flip the sign when
+// applying it to screen coordinates (Y axis is inverted by toY).
+function drawRobotSprite(ctx: CanvasRenderingContext2D, x: number, y: number, thetaDeg: number) {
+    const radius = 7;
+    const screenAngle = -(thetaDeg * Math.PI) / 180;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(screenAngle);
+
+    // Heading wedge behind the body so it reads as a direction arrow
+    ctx.beginPath();
+    ctx.moveTo(radius + 5, 0);
+    ctx.lineTo(radius * 0.6, -radius * 0.7);
+    ctx.lineTo(radius * 0.6, radius * 0.7);
+    ctx.closePath();
+    ctx.fillStyle = "rgba(52, 199, 89, 0.95)";
+    ctx.fill();
+
+    // Body
+    ctx.shadowColor = "rgba(52, 199, 89, 0.6)";
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(52, 199, 89, 0.95)";
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Inner dot for contrast
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.35, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.fill();
+
+    ctx.restore();
 }

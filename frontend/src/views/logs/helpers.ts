@@ -1,5 +1,7 @@
 // Shared helpers for logs views
 
+import { pad2 } from "../../utils";
+
 export function formatBytes(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
     const kb = bytes / 1024;
@@ -14,11 +16,7 @@ export function filenameToDate(name: string): string {
     if (match) {
         const epoch = parseInt(match[1], 10);
         const d = new Date(epoch * 1000);
-        const mon = (d.getMonth() + 1).toString().padStart(2, "0");
-        const day = d.getDate().toString().padStart(2, "0");
-        const h = d.getHours().toString().padStart(2, "0");
-        const m = d.getMinutes().toString().padStart(2, "0");
-        return `${mon}/${day} ${h}:${m}`;
+        return `${pad2(d.getMonth() + 1)}/${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
     }
     return name;
 }
@@ -52,10 +50,7 @@ export function typeBadge(type: string): TypeBadge {
 
 export function formatTimestamp(ts: number): string {
     const d = new Date(ts * 1000);
-    const h = d.getHours().toString().padStart(2, "0");
-    const m = d.getMinutes().toString().padStart(2, "0");
-    const s = d.getSeconds().toString().padStart(2, "0");
-    return `${h}:${m}:${s}`;
+    return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
 }
 
 function formatResp(raw: string): string {

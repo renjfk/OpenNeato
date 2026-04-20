@@ -28,6 +28,7 @@ import type { PollResult } from "../hooks/use-polling";
 import { usePolling } from "../hooks/use-polling";
 import type { ChargerData, ErrorData, FirmwareVersion, StateData, SystemData } from "../types";
 import type { UpdateInfo } from "../update";
+import { normalizeError } from "../utils";
 
 // -- Helpers --
 
@@ -158,7 +159,7 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
                     clearTimeout(pendingTimer.current);
                     pendingTimer.current = null;
                 }
-                actionErrorStack.push(e instanceof Error ? e.message : "Action failed");
+                actionErrorStack.push(normalizeError(e, "Action failed"));
             });
         },
         [actionErrorStack],

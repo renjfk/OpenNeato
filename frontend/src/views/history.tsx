@@ -5,6 +5,7 @@ import { ErrorBannerStack, useErrorStack } from "../components/error-banner";
 import { Icon } from "../components/icon";
 import { useNavigate, usePath } from "../components/router";
 import type { HistoryFileInfo, MapData } from "../types";
+import { normalizeError } from "../utils";
 import { HistoryItemView } from "./history/item";
 import { HistoryListView } from "./history/list";
 
@@ -37,7 +38,7 @@ export function HistoryView() {
         api.getHistoryList()
             .then((fileList) => setFiles(sortByDateDesc(fileList)))
             .catch((e: unknown) => {
-                errorStack.push(e instanceof Error ? e.message : "Failed to load map data");
+                errorStack.push(normalizeError(e, "Failed to load map data"));
             })
             .finally(() => setLoading(false));
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -84,7 +85,7 @@ export function HistoryView() {
                 }
             })
             .catch((e: unknown) => {
-                errorStack.push(e instanceof Error ? e.message : "Failed to load session");
+                errorStack.push(normalizeError(e, "Failed to load session"));
             });
     }, [selectedName, errorStack]);
 
@@ -118,7 +119,7 @@ export function HistoryView() {
                     if (selectedName === file.name) navigate("/history");
                 })
                 .catch((e: unknown) => {
-                    errorStack.push(e instanceof Error ? e.message : "Failed to delete");
+                    errorStack.push(normalizeError(e, "Failed to delete"));
                 })
                 .finally(() => setDeleting(false));
         },
@@ -133,7 +134,7 @@ export function HistoryView() {
                 if (selectedName) navigate("/history");
             })
             .catch((e: unknown) => {
-                errorStack.push(e instanceof Error ? e.message : "Failed to delete");
+                errorStack.push(normalizeError(e, "Failed to delete"));
             })
             .finally(() => setDeleting(false));
     }, [selectedName, navigate, errorStack]);
@@ -142,7 +143,7 @@ export function HistoryView() {
         api.getHistoryList()
             .then((fileList) => setFiles(sortByDateDesc(fileList)))
             .catch((e: unknown) => {
-                errorStack.push(e instanceof Error ? e.message : "Failed to refresh list");
+                errorStack.push(normalizeError(e, "Failed to refresh list"));
             });
     }, [errorStack]);
 

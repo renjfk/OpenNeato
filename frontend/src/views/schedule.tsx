@@ -8,6 +8,7 @@ import { Icon } from "../components/icon";
 import { useDirtyGuard } from "../hooks/use-dirty-guard";
 import { useFetch } from "../hooks/use-fetch";
 import type { SettingsData, SystemData } from "../types";
+import { normalizeError, pad2 } from "../utils";
 import { findCurrentTzAbbrev, findPresetLabel } from "./settings/helpers";
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -65,7 +66,7 @@ function buildSchedulePatch(days: DayState[], server: DayState[]): Partial<Setti
 }
 
 function fmtTime(h: number, m: number): string {
-    return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+    return `${pad2(h)}:${pad2(m)}`;
 }
 
 function parseTime(value: string): { hour: number; minute: number } | null {
@@ -230,7 +231,7 @@ export function ScheduleView() {
                 setEnabled(res.scheduleEnabled);
             })
             .catch((e: unknown) => {
-                errorStack.push(e instanceof Error ? e.message : "Failed to save schedule");
+                errorStack.push(normalizeError(e, "Failed to save schedule"));
             })
             .finally(() => setSaving(false));
     }, [days, drafts, enabled, errorStack]);

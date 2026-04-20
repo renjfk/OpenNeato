@@ -7,6 +7,7 @@ import { ConfirmDialog } from "../../components/confirm-dialog";
 import { Icon } from "../../components/icon";
 import { useNavigate } from "../../components/router";
 import type { LogFileInfo } from "../../types";
+import { normalizeError } from "../../utils";
 import { filenameToDate, formatBytes } from "./helpers";
 
 interface LogsListViewProps {
@@ -35,7 +36,7 @@ export function LogsListView({ onError }: LogsListViewProps) {
                 setLoading(false);
             })
             .catch((e: unknown) => {
-                onError(e instanceof Error ? e.message : "Failed to load logs");
+                onError(normalizeError(e, "Failed to load logs"));
                 setLoading(false);
             });
     }, [onError]);
@@ -53,7 +54,7 @@ export function LogsListView({ onError }: LogsListViewProps) {
             api.deleteAllLogs()
                 .then(() => setFiles([]))
                 .catch((e: unknown) => {
-                    onError(e instanceof Error ? e.message : "Failed to delete logs");
+                    onError(normalizeError(e, "Failed to delete logs"));
                 })
                 .finally(() => setDeletingAll(false));
         } else {
@@ -64,7 +65,7 @@ export function LogsListView({ onError }: LogsListViewProps) {
                     setFiles((prev) => prev.filter((f) => f.name !== name));
                 })
                 .catch((e: unknown) => {
-                    onError(e instanceof Error ? e.message : "Failed to delete log");
+                    onError(normalizeError(e, "Failed to delete log"));
                 })
                 .finally(() => setDeleting(null));
         }

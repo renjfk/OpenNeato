@@ -1,4 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
+import { normalizeError } from "../utils";
 
 export interface FetchResult<T> {
     data: T | null;
@@ -22,7 +23,7 @@ export function useFetch<T>(fetcher: () => Promise<T>, deps: unknown[] = []): Fe
                 if (active) setData(result);
             })
             .catch((e: unknown) => {
-                if (active) setError(e instanceof Error ? e.message : "Fetch failed");
+                if (active) setError(normalizeError(e, "Fetch failed"));
             })
             .finally(() => {
                 if (active) setLoading(false);

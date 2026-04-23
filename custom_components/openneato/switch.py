@@ -77,7 +77,7 @@ SWITCH_DESCRIPTIONS: tuple[OpenNeatoSwitchEntityDescription, ...] = (
         name="Wall follower",
         section="user_settings",
         field="wallEnable",
-        api_method="set_wall_follower",
+        setting_key="WallEnable",
         icon="mdi:wall",
     ),
     OpenNeatoSwitchEntityDescription(
@@ -169,6 +169,16 @@ SWITCH_DESCRIPTIONS: tuple[OpenNeatoSwitchEntityDescription, ...] = (
         field="ntfyOnDocking",
         settings_field="ntfyOnDocking",
         icon="mdi:bell-plus",
+        entity_category=EntityCategory.CONFIG,
+    ),
+    OpenNeatoSwitchEntityDescription(
+        key="remote_syslog",
+        translation_key="remote_syslog",
+        name="Remote syslog",
+        section="settings",
+        field="syslogEnabled",
+        settings_field="syslogEnabled",
+        icon="mdi:console-network",
         entity_category=EntityCategory.CONFIG,
     ),
 )

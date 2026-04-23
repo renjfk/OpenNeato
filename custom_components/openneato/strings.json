@@ -69,7 +69,8 @@
       "notify_on_done": { "name": "Notify on clean done" },
       "notify_on_error": { "name": "Notify on error" },
       "notify_on_alert": { "name": "Notify on alert" },
-      "notify_on_docking": { "name": "Notify on docking" }
+      "notify_on_docking": { "name": "Notify on docking" },
+      "remote_syslog": { "name": "Remote syslog" }
     },
     "button": {
       "restart": { "name": "Restart device" },
@@ -87,6 +88,12 @@
     },
     "camera": {
       "lidar_map": { "name": "LIDAR map" }
+    },
+    "select": {
+      "navigation_mode": { "name": "Navigation mode" }
+    },
+    "text": {
+      "syslog_ip": { "name": "Syslog server IP" }
     }
   }
 }

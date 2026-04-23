@@ -233,12 +233,6 @@ class OpenNeatoApiClient:
         result = await self._post("/api/serial", params={"cmd": cmd})
         return str(result)
 
-    async def set_wall_follower(self, enable: bool) -> dict[str, Any] | str:
-        """Enable or disable wall following mode."""
-        return await self._post(
-            "/api/wall-follower", params={"enable": "1" if enable else "0"}
-        )
-
     async def clear_errors(self) -> dict[str, Any] | str:
         """Clear all UI errors and alerts."""
         return await self._post("/api/clear-errors")

@@ -92,6 +92,7 @@ Robot GND -> ESP GND. The robot provides 3.3V to power the ESP.
   - `EcoMode ON/OFF` — Eco cleaning mode (lower brush/vacuum power)
   - `IntenseClean ON/OFF` — Intense clean (double-pass)
   - `BinFullDetect ON/OFF` — Dust bin full detection
+  - `WallEnable ON/OFF` — Wall following (robot traces along walls and edges during cleaning)
   - `WiFi ON/OFF` — Robot's own WiFi radio (unused with OpenNeato)
   - `StealthLED ON/OFF` — Standby LEDs (ON = hidden, OFF = visible)
   - `FilterChange <seconds>` — Filter change alert interval
@@ -99,7 +100,7 @@ Robot GND -> ESP GND. The robot provides 3.3V to power the ESP.
   - `DirtBin <minutes>` — Dirt bin alert reminder interval
   - `Reset` — Reset all user settings to factory defaults
   - Note: `GetUserSettings` response uses different label names than `SetUserSettings` parameters
-    (e.g. "ClickSounds" vs "ButtonClick", "Melody Sounds" vs "Melodies")
+    (e.g. "ClickSounds" vs "ButtonClick", "Melody Sounds" vs "Melodies", "Wall Enable" vs "WallEnable")
 - `RestoreDefaults` — Restore user settings to default
 - `SetDistanceCal [DropMinimum|DropMiddle|DropMaximum] [WallMinimum|WallMiddle|WallMaximum]` — Set distance sensor calibration values for min and max distances
   - DropMinimum: Take minimum distance drop sensor readings (mutually exclusive of DropMiddle and DropMax)
@@ -127,7 +128,6 @@ Robot GND -> ESP GND. The robot provides 3.3V to power the ESP.
     (`GetTime`) is stuck at `Sunday 0:00:00` and cannot be written. Use `SetTime All` instead,
     which updates the real RTC visible via `GetVersion` `Time Local`/`Time UTC` fields.
 - `SetNTPTime` — Instruct the robot to sync its clock from NTP servers (D7 only, requires robot WiFi)
-- `SetWallFollower [Enable|Disable]` — Enable/disable wall follower
 - `TestMode On/Off` — Enable/disable test mode
 - `DiagTest [TestsOff|DrivePath|DriveForever|MoveAndBump|DropTest|...]` — Execute test modes
 - `Upload [dump|code|sound|LDS] [xmodem] [size N] [noburn] [readflash] [reboot]` — Upload new firmware
@@ -269,6 +269,13 @@ Robot GND -> ESP GND. The robot provides 3.3V to power the ESP.
   - `IEC1mTest` — Run IEC cleaning test
   - `MaxModeEnable` — Enable max cleaning mode
   - `MaxModeDisable` — Disable max cleaning mode
+- `SetNavigationMode [Normal|Gentle|Deep|Quick]` — Set navigation mode for house cleaning
+  - `Normal` — Default navigation behavior
+  - `Gentle` — Extra care: robot avoids pushing objects taller than itself (detected via LIDAR)
+  - `Deep` — Robot drives deep into corners, backs up, and cleans corners in a curve
+  - `Quick` — Faster, less thorough navigation
+  - Mode resets to Normal on robot restart (not persisted by robot firmware)
+  - Only affects house cleaning, not spot cleaning
 - `ClearFiles [BB] [All] [Life]` — Clear log files
   - `BB` — Clear managed logs in BlackBox directory
   - `All` — Additionally clear unmanaged files (crash logs, etc.)

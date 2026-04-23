@@ -13,9 +13,16 @@ Open-source replacement for Neato's discontinued cloud and mobile app. An ESP32 
 Botvac robots (D3-D7) over UART and exposes a local web UI over WiFi — no cloud, no app, no account required.
 
 > [!NOTE]
-> This is an early beta — things may break, rough edges are expected, and the API may change.
+> This is an early beta - things may break, rough edges are expected, and the API may change.
 > If you run into problems, a [Discussion](https://github.com/renjfk/OpenNeato/discussions)
 > or [issue](https://github.com/renjfk/OpenNeato/issues) is always welcome.
+
+> [!IMPORTANT]
+> **Now in development:** 
+[Guided Clean - zone cleaning, no-go lines, and map-based navigation](https://github.com/renjfk/OpenNeato/issues/68).
+>
+> Select zones on a previously recorded map, draw no-go lines, and let the robot clean exactly where you want.
+> Follow the issue for progress updates and sub-task tracking.
 
 |                Dashboard                 |                  Manual Drive                  |                    Cleaning History                    |
 |:----------------------------------------:|:----------------------------------------------:|:------------------------------------------------------:|
@@ -39,7 +46,8 @@ port, giving you a local web interface that works without any external dependenc
   brush), bumper/wheel-lift/stall safety warnings
 - **Live cleaning map** — watch the robot's path during an active cleaning session in the History view, rendered on a
   canvas with coverage overlay
-- **7-day cleaning scheduler** with two slots per day, managed entirely on the ESP32 (doesn't use the robot's built-in schedule commands)
+- **7-day cleaning scheduler** with two slots per day, managed entirely on the ESP32 (doesn't use the robot's built-in
+  schedule commands)
 - **Cleaning history** with recorded robot paths rendered as coverage maps, session stats like duration, distance, area
   covered, and battery usage; individual session import/export for backup and restore
 - **Push notifications** via [ntfy.sh](https://ntfy.sh); get notified when cleaning is done, an error occurs, a
@@ -50,7 +58,8 @@ port, giving you a local web interface that works without any external dependenc
 - **Settings page** for hostname, timezone, motor presets, notification topics, UART pins, theme (dark/light/auto), and
   more
 - **Event logging** with configurable log levels (off/info/debug), compressed JSONL files on SPIFFS, browsable and
-  downloadable from the UI; logging is off by default to minimize flash wear
+  downloadable from the UI; optional remote syslog (UDP) for long-running diagnostics without flash wear; logging is
+  off by default
 - **Factory reset** via 5-second button hold on the ESP32 or from the settings page
 - **Robot clock sync** — pushes NTP time to the robot automatically, re-syncs every 4 hours
 - **Flash tool** — standalone CLI that auto-detects the USB port, downloads the correct firmware from GitHub Releases,
@@ -109,10 +118,20 @@ cd flash && go build -o openneato-flash . && cd ..
 OpenNeato is open to contributions and ideas! Whether you're a developer wanting to add features or a user with
 suggestions, your input is valuable.
 
+The most useful contributions are testing prereleases on your hardware, filing clear bug reports, and opening PRs.
+If you'd rather just say thanks, there's a [Ko-fi](https://ko-fi.com/renjfk). Optional, doesn't influence the
+roadmap, the project stays free and community-driven either way.
+
 > [!TIP]
-> Before opening an issue, consider starting a
-> [Discussion](https://github.com/renjfk/OpenNeato/discussions) first — many questions,
-> setup troubles, and ideas are easier to resolve through conversation.
+> Before opening an issue, consider starting a [Discussion](https://github.com/renjfk/OpenNeato/discussions) first —
+> many questions, setup troubles, and ideas are easier to resolve through conversation.
+
+> [!IMPORTANT]
+> For anything beyond a small bug fix, please open an issue
+> or [Discussion](https://github.com/renjfk/OpenNeato/discussions) first to align on the design before writing code.
+> This is an embedded project with tight resource constraints (single-core MCU, 320 KB RAM, 1.6 MB flash per OTA slot)
+> and strict architectural rules (non-blocking event loop, zero external dependencies). A quick design conversation
+> upfront avoids large rewrites during review.
 
 ### Issue Conventions
 

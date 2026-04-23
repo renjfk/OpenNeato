@@ -3,6 +3,7 @@ import { api } from "../../api";
 import type { ErrorStackHandle } from "../../components/error-banner";
 import { md5 } from "../../md5";
 import { sha256 } from "../../sha256";
+import { normalizeError } from "../../utils";
 
 type UploadStatus = "idle" | "hashing" | "uploading" | "done";
 
@@ -204,7 +205,7 @@ export function useFirmwareUpload(
         } catch (e: unknown) {
             stopProgressAnim();
             setStatus("idle");
-            errorStack.push(e instanceof Error ? e.message : "Firmware upload failed");
+            errorStack.push(normalizeError(e, "Firmware upload failed"));
         }
     }, [file, errorStack, startRebootFlow, startProgressAnim, stopProgressAnim, onUploadProgress]);
 

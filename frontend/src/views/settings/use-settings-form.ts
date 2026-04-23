@@ -3,17 +3,21 @@ import { api } from "../../api";
 import type { ErrorStackHandle } from "../../components/error-banner";
 import { useFetch } from "../../hooks/use-fetch";
 import type { SettingsData } from "../../types";
+import { normalizeError } from "../../utils";
 import { DEFAULT_SERVER } from "./constants";
 
 export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: () => void) {
     // Local form state
     const [tz, setTz] = useState<string>("UTC0");
     const [logLevel, setLogLevel] = useState(0);
+    const [syslogEnabled, setSyslogEnabled] = useState(false);
+    const [syslogIp, setSyslogIp] = useState("");
     const [wifiTxPower, setWifiTxPower] = useState(60);
     const [uartTxPin, setUartTxPin] = useState(3);
     const [uartRxPin, setUartRxPin] = useState(4);
     const [maxGpioPin, setMaxGpioPin] = useState(21);
     const [hostname, setHostname] = useState("neato");
+    const [navMode, setNavMode] = useState("Normal");
     const [stallThreshold, setStallThreshold] = useState(60);
     const [brushRpm, setBrushRpm] = useState(1200);
     const [vacuumSpeed, setVacuumSpeed] = useState(80);
@@ -43,11 +47,14 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
             server.current = { ...fetched };
             setTz(fetched.tz);
             setLogLevel(fetched.logLevel);
+            setSyslogEnabled(fetched.syslogEnabled ?? false);
+            setSyslogIp(fetched.syslogIp ?? "");
             setWifiTxPower(fetched.wifiTxPower);
             setUartTxPin(fetched.uartTxPin);
             setUartRxPin(fetched.uartRxPin);
             setMaxGpioPin(fetched.maxGpioPin);
             setHostname(fetched.hostname);
+            setNavMode(fetched.navMode ?? "Normal");
             setStallThreshold(fetched.stallThreshold);
             setBrushRpm(fetched.brushRpm);
             setVacuumSpeed(fetched.vacuumSpeed);
@@ -70,10 +77,13 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         settingsLoaded &&
         (tz !== server.current.tz ||
             logLevel !== server.current.logLevel ||
+            syslogEnabled !== (server.current.syslogEnabled ?? false) ||
+            syslogIp !== (server.current.syslogIp ?? "") ||
             wifiTxPower !== server.current.wifiTxPower ||
             uartTxPin !== server.current.uartTxPin ||
             uartRxPin !== server.current.uartRxPin ||
             hostname !== server.current.hostname ||
+            navMode !== (server.current.navMode ?? "Normal") ||
             stallThreshold !== server.current.stallThreshold ||
             brushRpm !== server.current.brushRpm ||
             vacuumSpeed !== server.current.vacuumSpeed ||
@@ -108,7 +118,17 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
                 ? "Only letters, numbers, and hyphens"
                 : null;
 
-    const validationError = pinError || hostnameError;
+    const isValidIpv4 = (ip: string) => /^(\d{1,3}\.){3}\d{1,3}$/.test(ip) && ip.split(".").every((n) => +n <= 255);
+
+    const syslogIpError = syslogEnabled
+        ? syslogIp.trim().length === 0
+            ? "IP address is required when syslog is enabled"
+            : !isValidIpv4(syslogIp.trim())
+              ? "Must be a valid IPv4 address"
+              : null
+        : null;
+
+    const validationError = pinError || hostnameError || syslogIpError;
 
     // --- Unified save ---
 
@@ -116,10 +136,13 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         const patch: Partial<SettingsData> = {};
         if (tz !== server.current.tz) patch.tz = tz;
         if (logLevel !== server.current.logLevel) patch.logLevel = logLevel;
+        if (syslogEnabled !== (server.current.syslogEnabled ?? false)) patch.syslogEnabled = syslogEnabled;
+        if (syslogIp !== (server.current.syslogIp ?? "")) patch.syslogIp = syslogIp;
         if (wifiTxPower !== server.current.wifiTxPower) patch.wifiTxPower = wifiTxPower;
         if (uartTxPin !== server.current.uartTxPin) patch.uartTxPin = uartTxPin;
         if (uartRxPin !== server.current.uartRxPin) patch.uartRxPin = uartRxPin;
         if (hostname !== server.current.hostname) patch.hostname = hostname;
+        if (navMode !== (server.current.navMode ?? "Normal")) patch.navMode = navMode;
         if (stallThreshold !== server.current.stallThreshold) patch.stallThreshold = stallThreshold;
         if (brushRpm !== server.current.brushRpm) patch.brushRpm = brushRpm;
         if (vacuumSpeed !== server.current.vacuumSpeed) patch.vacuumSpeed = vacuumSpeed;
@@ -136,10 +159,13 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
     }, [
         tz,
         logLevel,
+        syslogEnabled,
+        syslogIp,
         wifiTxPower,
         uartTxPin,
         uartRxPin,
         hostname,
+        navMode,
         stallThreshold,
         brushRpm,
         vacuumSpeed,
@@ -170,7 +196,7 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
                     setShowSaveConfirm(false);
                     startRebootFlow();
                 } else {
-                    errorStack.push(e instanceof Error ? e.message : "Failed to save settings");
+                    errorStack.push(normalizeError(e, "Failed to save settings"));
                     setShowSaveConfirm(false);
                 }
             })
@@ -193,6 +219,10 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         setTz,
         logLevel,
         setLogLevel,
+        syslogEnabled,
+        setSyslogEnabled,
+        syslogIp,
+        setSyslogIp,
         wifiTxPower,
         setWifiTxPower,
         uartTxPin,
@@ -202,6 +232,8 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         maxGpioPin,
         hostname,
         setHostname,
+        navMode,
+        setNavMode,
         stallThreshold,
         setStallThreshold,
         brushRpm,
@@ -231,6 +263,7 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         needsReboot,
         pinError,
         hostnameError,
+        syslogIpError,
         validationError,
         // Save flow
         saving,

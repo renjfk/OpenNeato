@@ -169,6 +169,5 @@ export const api = {
     getUserSettings: () => get<UserSettingsData>("/api/user-settings"),
     setUserSetting: (key: string, value: string) =>
         post(`/api/user-settings?key=${encodeURIComponent(key)}&value=${encodeURIComponent(value)}`),
-    setWallFollower: (enable: boolean) => post(`/api/wall-follower?enable=${enable ? 1 : 0}`),
     sendSerial: (cmd: string) => sendSerial(cmd),
 };

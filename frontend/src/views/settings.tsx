@@ -5,9 +5,9 @@ import backSvg from "../assets/icons/back.svg?raw";
 import bellSvg from "../assets/icons/bell.svg?raw";
 import calendarSvg from "../assets/icons/calendar.svg?raw";
 import chipSvg from "../assets/icons/chip.svg?raw";
-import clockSvg from "../assets/icons/clock.svg?raw";
 import databaseSvg from "../assets/icons/database.svg?raw";
 import gearSvg from "../assets/icons/gear.svg?raw";
+import houseSvg from "../assets/icons/house.svg?raw";
 import manualSvg from "../assets/icons/manual.svg?raw";
 import moonSvg from "../assets/icons/moon.svg?raw";
 import paletteSvg from "../assets/icons/palette.svg?raw";
@@ -24,8 +24,10 @@ import { useNavigate } from "../components/router";
 import { useDirtyGuard } from "../hooks/use-dirty-guard";
 import { usePolling } from "../hooks/use-polling";
 import type { FirmwareVersion, SystemData, UserSettingsData } from "../types";
+import { normalizeError } from "../utils";
 import {
     BRUSH_PRESETS,
+    NAV_MODE_PRESETS,
     SIDE_BRUSH_PRESETS,
     STALL_PRESETS,
     TIMEZONE_PRESETS,
@@ -77,6 +79,10 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
         setTz,
         logLevel,
         setLogLevel,
+        syslogEnabled,
+        setSyslogEnabled,
+        syslogIp,
+        setSyslogIp,
         wifiTxPower,
         setWifiTxPower,
         uartTxPin,
@@ -86,6 +92,8 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
         maxGpioPin,
         hostname,
         setHostname,
+        navMode,
+        setNavMode,
         stallThreshold,
         setStallThreshold,
         brushRpm,
@@ -113,6 +121,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
         isDirty,
         pinError,
         hostnameError,
+        syslogIpError,
         validationError,
         saving,
         showSaveConfirm,
@@ -132,6 +141,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
         ecoMode: "EcoMode",
         intenseClean: "IntenseClean",
         binFullDetect: "BinFullDetect",
+        wallEnable: "WallEnable",
         wifi: "WiFi",
         stealthLed: "StealthLED",
     };
@@ -144,23 +154,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
             const serialValue = value ? "ON" : "OFF";
             api.setUserSetting(robotSettingKeys[field], serialValue)
                 .catch((e: unknown) => {
-                    errorStack.push(e instanceof Error ? e.message : "Failed to update robot settings");
-                    if (userSettingsPoll.data) setRobotSettings(userSettingsPoll.data);
-                })
-                .finally(() => setSavingRobotSettings(false));
-        },
-        [robotSettings, userSettingsPoll.data, errorStack],
-    );
-
-    // --- Wall follower (dedicated endpoint, not SetUserSettings) ---
-    const handleWallFollowerChange = useCallback(
-        (value: boolean) => {
-            if (!robotSettings) return;
-            setRobotSettings({ ...robotSettings, wallEnable: value });
-            setSavingRobotSettings(true);
-            api.setWallFollower(value)
-                .catch((e: unknown) => {
-                    errorStack.push(e instanceof Error ? e.message : "Failed to update wall follower");
+                    errorStack.push(normalizeError(e, "Failed to update robot settings"));
                     if (userSettingsPoll.data) setRobotSettings(userSettingsPoll.data);
                 })
                 .finally(() => setSavingRobotSettings(false));
@@ -182,7 +176,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                 setTimeout(() => setNotifTestResult(null), 2000);
             })
             .catch((e: unknown) => {
-                setNotifTestResult(e instanceof Error ? e.message : "Failed");
+                setNotifTestResult(normalizeError(e, "Failed"));
                 setTimeout(() => setNotifTestResult(null), 3000);
             })
             .finally(() => setTestingNotif(false));
@@ -240,7 +234,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                 if (robotRestartTimeout.current) clearTimeout(robotRestartTimeout.current);
                 robotRestartTimeout.current = null;
                 setRobotRestarting(false);
-                errorStack.push(e instanceof Error ? e.message : "Failed to restart robot");
+                errorStack.push(normalizeError(e, "Failed to restart robot"));
             });
     }, [errorStack]);
 
@@ -261,7 +255,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
         setClearingErrors(true);
         api.clearErrors()
             .catch((e: unknown) => {
-                errorStack.push(e instanceof Error ? e.message : "Failed to clear errors");
+                errorStack.push(normalizeError(e, "Failed to clear errors"));
             })
             .finally(() => setClearingErrors(false));
     }, [errorStack]);
@@ -284,7 +278,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                     setShowRestartConfirm(false);
                     startRebootFlow();
                 } else {
-                    errorStack.push(e instanceof Error ? e.message : "Failed to restart");
+                    errorStack.push(normalizeError(e, "Failed to restart"));
                     setShowRestartConfirm(false);
                 }
             })
@@ -303,7 +297,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                     setShowFormatConfirm(false);
                     startRebootFlow();
                 } else {
-                    errorStack.push(e instanceof Error ? e.message : "Failed to format storage");
+                    errorStack.push(normalizeError(e, "Failed to format storage"));
                     setShowFormatConfirm(false);
                 }
             })
@@ -322,7 +316,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                     setShowResetConfirm(false);
                     startRebootFlow();
                 } else {
-                    errorStack.push(e instanceof Error ? e.message : "Failed to factory reset");
+                    errorStack.push(normalizeError(e, "Failed to factory reset"));
                     setShowResetConfirm(false);
                 }
             })
@@ -449,12 +443,6 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                                 )}
                             </select>
                         </div>
-                        {system?.localTime && (
-                            <div class="settings-robot-time">
-                                <Icon svg={clockSvg} />
-                                Robot time: {system.localTime}
-                            </div>
-                        )}
                     </div>
                     <div class="settings-section">
                         <div class="settings-section-title">UART Pins</div>
@@ -616,6 +604,30 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                                 </div>
                             </>
                         )}
+                    </div>
+                </SettingsCategory>
+
+                <SettingsCategory title="House Cleaning" icon={houseSvg} disabled={firmware?.supported === false}>
+                    <div class="settings-section">
+                        <div class="settings-section-title">Navigation</div>
+                        <div class="settings-tz-select-wrap">
+                            <select
+                                class="settings-tz-select"
+                                value={navMode}
+                                onChange={(e) => setNavMode((e.target as HTMLSelectElement).value)}
+                                disabled={saving}
+                            >
+                                {NAV_MODE_PRESETS.map((p) => (
+                                    <option key={p.value} value={p.value}>
+                                        {p.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div class="settings-robot-time">
+                            How the robot navigates during house cleaning. Extra Care avoids obstacles, Deep cleans
+                            corners thoroughly.
+                        </div>
                     </div>
                 </SettingsCategory>
 
@@ -824,14 +836,45 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                                 disabled={saving}
                             >
                                 <option value={0}>Off (default)</option>
-                                <option value={1}>Info (auto-off after 1 hour)</option>
-                                <option value={2}>Debug (auto-off after 10 min)</option>
+                                <option value={1}>{syslogEnabled ? "Info" : "Info (auto-off after 1 hour)"}</option>
+                                <option value={2}>{syslogEnabled ? "Debug" : "Debug (auto-off after 10 min)"}</option>
                             </select>
                         </div>
                         <div class="settings-robot-time">
-                            Logging writes to flash storage. Higher levels increase wear and can slow serial
-                            communication.
+                            {syslogEnabled
+                                ? "Logs are sent to the remote syslog server over UDP."
+                                : "Logging writes to flash storage. Higher levels increase wear and can slow serial communication."}
                         </div>
+                    </div>
+                    <div class="settings-section">
+                        <div class="settings-toggle-row">
+                            <div class="settings-toggle-label">
+                                <span class="settings-toggle-title">Remote syslog</span>
+                                <span class="settings-toggle-desc">Send logs over UDP instead of writing to flash</span>
+                            </div>
+                            <button
+                                type="button"
+                                class={`settings-toggle${syslogEnabled ? " on" : ""}`}
+                                onClick={() => setSyslogEnabled(!syslogEnabled)}
+                                disabled={saving}
+                                aria-label="Toggle remote syslog"
+                            />
+                        </div>
+                        {syslogEnabled && (
+                            <>
+                                <div class="settings-ntfy-row">
+                                    <input
+                                        type="text"
+                                        class="settings-text-input"
+                                        value={syslogIp}
+                                        onInput={(e) => setSyslogIp((e.target as HTMLInputElement).value)}
+                                        disabled={saving}
+                                        placeholder="e.g. 192.168.1.100"
+                                    />
+                                </div>
+                                {syslogIpError && <div class="settings-field-error">{syslogIpError}</div>}
+                            </>
+                        )}
                     </div>
                     <div class="settings-section">
                         <button type="button" class="settings-nav-row" onClick={() => guardedNavigate("/logs")}>
@@ -956,15 +999,15 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                         </div>
                         <div class="settings-toggle-row">
                             <div class="settings-toggle-label">
-                                <span class="settings-toggle-title">Wall follower</span>
-                                <span class="settings-toggle-desc">Follow walls closely during cleaning</span>
+                                <span class="settings-toggle-title">Wall following</span>
+                                <span class="settings-toggle-desc">Follow walls and edges for thorough cleaning</span>
                             </div>
                             <button
                                 type="button"
                                 class={`settings-toggle${robotSettings?.wallEnable ? " on" : ""}${savingRobotSettings ? " pending" : ""}`}
-                                onClick={() => handleWallFollowerChange(!robotSettings?.wallEnable)}
+                                onClick={() => handleRobotSettingsChange("wallEnable", !robotSettings?.wallEnable)}
                                 disabled={robotSettingsDisabled}
-                                aria-label="Toggle wall follower"
+                                aria-label="Toggle wall following"
                             />
                         </div>
                     </div>

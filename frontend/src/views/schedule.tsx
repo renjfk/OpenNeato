@@ -8,6 +8,7 @@ import { Icon } from "../components/icon";
 import { useDirtyGuard } from "../hooks/use-dirty-guard";
 import { useFetch } from "../hooks/use-fetch";
 import type { SettingsData, SystemData } from "../types";
+import { normalizeError, pad2 } from "../utils";
 import { findCurrentTzAbbrev, findPresetLabel } from "./settings/helpers";
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -65,7 +66,7 @@ function buildSchedulePatch(days: DayState[], server: DayState[]): Partial<Setti
 }
 
 function fmtTime(h: number, m: number): string {
-    return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+    return `${pad2(h)}:${pad2(m)}`;
 }
 
 function parseTime(value: string): { hour: number; minute: number } | null {
@@ -75,18 +76,18 @@ function parseTime(value: string): { hour: number; minute: number } | null {
 }
 
 function tzLabel(tz: string, isDst?: boolean): string {
-    // Show abbreviation with current offset, e.g. "EEST (UTC+3)"
-    if (isDst !== undefined) {
-        const abbrev = findCurrentTzAbbrev(tz, isDst);
-        const preset = findPresetLabel(tz);
-        if (abbrev && preset) {
-            const offset = preset.replace(/^.*\(UTC([^)]+)\/([^)]+)\).*$/, (_m, std, dst) => (isDst ? dst : std));
-            // If regex matched (DST zone), show "EEST (UTC+3)"; otherwise just use the preset label
-            return offset !== preset ? `${abbrev} (UTC${offset})` : preset;
-        }
-        if (abbrev) return abbrev;
-    }
+    const abbrev = isDst !== undefined ? findCurrentTzAbbrev(tz, isDst) : null;
     const preset = findPresetLabel(tz);
+    if (abbrev && preset) {
+        // Extract the active UTC offset from the preset label
+        const dstMatch = preset.match(/\(UTC([^)]+)\/([^)]+)\)/);
+        const offset = dstMatch ? `UTC${isDst ? dstMatch[2] : dstMatch[1]}` : null;
+        if (!offset) {
+            const stdMatch = preset.match(/\(UTC([^)]+)\)/);
+            return stdMatch ? `UTC${stdMatch[1]}` : abbrev;
+        }
+        return `${abbrev}, ${offset}`;
+    }
     if (preset) return preset;
     const match = tz.match(/^([A-Z]{2,5})/);
     return match ? match[1] : tz;
@@ -230,7 +231,7 @@ export function ScheduleView() {
                 setEnabled(res.scheduleEnabled);
             })
             .catch((e: unknown) => {
-                errorStack.push(e instanceof Error ? e.message : "Failed to save schedule");
+                errorStack.push(normalizeError(e, "Failed to save schedule"));
             })
             .finally(() => setSaving(false));
     }, [days, drafts, enabled, errorStack]);
@@ -277,7 +278,11 @@ export function ScheduleView() {
                             />
                         </div>
 
-                        <div class="schedule-tz-hint">Times are in {tzLabel(tz, system?.isDst)}</div>
+                        <div class="schedule-tz-hint">
+                            {system?.localTime
+                                ? `${system.localTime} - ${tzLabel(tz, system.isDst)}`
+                                : `Times are in ${tzLabel(tz)}`}
+                        </div>
 
                         {/* Day rows */}
                         <div class="schedule-days">

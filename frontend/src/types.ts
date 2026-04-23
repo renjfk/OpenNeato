@@ -48,11 +48,14 @@ export interface SystemData {
 export interface SettingsData {
     tz: string;
     logLevel: number; // 0=off, 1=info, 2=debug
+    syslogEnabled: boolean; // When on, logs go to UDP syslog instead of flash
+    syslogIp: string; // IPv4 address of syslog receiver
     wifiTxPower: number; // 0.25 dBm units (e.g. 34 = 8.5 dBm)
     uartTxPin: number;
     uartRxPin: number;
     maxGpioPin: number; // Read-only — max valid GPIO for this chip (21 for C3, 39 for ESP32)
     hostname: string;
+    navMode: string; // Navigation mode for house cleaning: "Normal", "Gentle", "Deep", "Quick"
     stallThreshold: number; // Wheel load % for stall detection (30-80)
     brushRpm: number; // Main brush RPM (500-1600)
     vacuumSpeed: number; // Vacuum speed % (40-100)
@@ -209,13 +212,31 @@ export interface MapBounds {
 export interface MapRechargePoint {
     x: number;
     y: number;
+    // Session-relative timestamp when the robot returned to base to charge,
+    // derived from the last pose snapshot before collection paused.
+    ts: number;
+    // Session-relative timestamp when cleaning resumed after the charge —
+    // taken from the first pose snapshot written once collection restarted.
+    // Falls back to `ts` when the session ended before resuming.
+    endTs: number;
+}
+
+// Coverage cell with the session-relative timestamp (seconds) at which the
+// cell was first stamped. Used by the motion player to reveal coverage
+// progressively during playback.
+export type MapCoverageCell = [cx: number, cy: number, ts: number];
+
+export interface MapTransform {
+    panX: number;
+    panY: number;
+    zoom: number;
 }
 
 export interface MapData {
     session: MapSession | null;
     summary: MapSummary | null;
     path: MapPathPoint[];
-    coverage: [number, number][];
+    coverage: MapCoverageCell[];
     recharges: MapRechargePoint[];
     bounds: MapBounds | null;
     cellSize: number;

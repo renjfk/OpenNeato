@@ -45,8 +45,7 @@
 #define CMD_GET_ROBOT_POS_SMOOTH "GetRobotPos Smooth"
 #define CMD_GET_USER_SETTINGS "GetUserSettings"
 #define CMD_SET_USER_SETTINGS "SetUserSettings"
-#define CMD_SET_WALL_FOLLOWER_ON "SetWallFollower Enable"
-#define CMD_SET_WALL_FOLLOWER_OFF "SetWallFollower Disable"
+#define CMD_SET_NAVIGATION_MODE "SetNavigationMode"
 
 // -- Sound IDs ---------------------------------------------------------------
 
@@ -187,7 +186,7 @@ struct UserSettingsData : public JsonSerializable {
     bool ecoMode = false;
     bool intenseClean = false;
     bool binFullDetect = true;
-    bool wallEnable = true;
+    bool wallEnable = true; // Wall following — robot traces along walls and edges during cleaning
     // Power saving
     bool wifi = true;
     bool stealthLed = false;

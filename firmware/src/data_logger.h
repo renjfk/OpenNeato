@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
 #include <SPIFFS.h>
+#include <WiFiUdp.h>
 #include <functional>
 #include <memory>
 #include <vector>
@@ -104,6 +105,15 @@ public:
     using LogLevelCheck = std::function<int()>;
     void setLogLevelCheck(LogLevelCheck check) { logLevelCheck = check; }
 
+    // Syslog check — returns whether syslog is enabled and the target host.
+    // When enabled, log output goes to UDP instead of flash.
+    struct SyslogConfig {
+        bool enabled = false;
+        String ip;
+    };
+    using SyslogCheck = std::function<SyslogConfig()>;
+    void setSyslogCheck(SyslogCheck check) { syslogCheck = check; }
+
     // -- Log file management (for API) --------------------------------------
 
     std::vector<LogFileInfo> listLogs();
@@ -117,6 +127,11 @@ private:
     NeatoSerial& neato;
     SystemManager& sysMgr;
     LogLevelCheck logLevelCheck;
+    SyslogCheck syslogCheck;
+
+    // UDP syslog sender — fire-and-forget, no ack
+    WiFiUDP syslogUdp;
+    void sendSyslog(const String& line);
 
     void logEvent(const String& type, const std::vector<Field>& fields);
 

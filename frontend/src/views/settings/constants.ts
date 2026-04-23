@@ -3,7 +3,7 @@ import type { SettingsData } from "../../types";
 interface TimezonePreset {
     label: string;
     tz: string;
-    std?: string; // Standard time abbreviation, e.g. "EET"
+    std: string; // Standard time abbreviation, e.g. "EET"
     dst?: string; // DST abbreviation, e.g. "EEST"
 }
 
@@ -15,7 +15,7 @@ interface TxPowerPreset {
 // Common timezone presets — label shown in UI, value is POSIX TZ string
 // Zones with DST show both offsets (standard/summer) to avoid confusion
 export const TIMEZONE_PRESETS: TimezonePreset[] = [
-    { label: "UTC (UTC+0)", tz: "UTC0" },
+    { label: "UTC (UTC+0)", tz: "UTC0", std: "UTC" },
     { label: "US Hawaii (UTC-10)", tz: "HST10", std: "HST" },
     { label: "US Alaska (UTC-9/-8)", tz: "AKST9AKDT,M3.2.0,M11.1.0", std: "AKST", dst: "AKDT" },
     { label: "US Pacific (UTC-8/-7)", tz: "PST8PDT,M3.2.0,M11.1.0", std: "PST", dst: "PDT" },
@@ -41,6 +41,19 @@ export const TX_POWER_PRESETS: TxPowerPreset[] = [
     { label: "15 dBm (recommended)", value: 60 },
     { label: "17 dBm", value: 68 },
     { label: "19.5 dBm (max range)", value: 78 },
+];
+
+// Navigation mode presets — sent to robot before each house clean
+export interface NavModePreset {
+    label: string;
+    value: string;
+}
+
+export const NAV_MODE_PRESETS: NavModePreset[] = [
+    { label: "Normal", value: "Normal" },
+    { label: "Extra Care", value: "Gentle" },
+    { label: "Deep", value: "Deep" },
+    { label: "Quick", value: "Quick" },
 ];
 
 // Stall detection presets — wheel load % threshold
@@ -102,11 +115,14 @@ export const SIDE_BRUSH_PRESETS: SideBrushPreset[] = [
 export const DEFAULT_SERVER = {
     tz: "UTC0",
     logLevel: 0,
+    syslogEnabled: false,
+    syslogIp: "",
     wifiTxPower: 60,
     uartTxPin: 3,
     uartRxPin: 4,
     maxGpioPin: 21,
     hostname: "neato",
+    navMode: "Normal",
     stallThreshold: 60,
     brushRpm: 1200,
     vacuumSpeed: 80,

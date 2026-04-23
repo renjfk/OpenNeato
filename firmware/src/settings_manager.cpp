@@ -58,10 +58,13 @@ void SettingsManager::load() {
     current.wifiTxPower = prefs.getInt(NVS_KEY_WIFI_TX_POWER, WIFI_DEFAULT_TX_POWER);
     current.uartTxPin = prefs.getInt(NVS_KEY_UART_TX_PIN, NEATO_DEFAULT_TX_PIN);
     current.uartRxPin = prefs.getInt(NVS_KEY_UART_RX_PIN, NEATO_DEFAULT_RX_PIN);
+    current.navMode = prefs.getString(NVS_KEY_NAV_MODE, "Normal");
     current.stallThreshold = prefs.getInt(NVS_KEY_MC_STALL_THR, MANUAL_STALL_LOAD_PCT);
     current.brushRpm = prefs.getInt(NVS_KEY_MC_BRUSH_RPM, MANUAL_BRUSH_RPM);
     current.vacuumSpeed = prefs.getInt(NVS_KEY_MC_VACUUM_PCT, MANUAL_VACUUM_SPEED_PCT);
     current.sideBrushPower = prefs.getInt(NVS_KEY_MC_SBRUSH_MW, MANUAL_SIDE_BRUSH_POWER_MW);
+    current.syslogEnabled = prefs.getBool(NVS_KEY_SYSLOG_ENABLED, false);
+    current.syslogIp = prefs.getString(NVS_KEY_SYSLOG_IP, "");
     current.ntfyTopic = prefs.getString(NVS_KEY_NTFY_TOPIC, "");
     current.ntfyServer = prefs.getString(NVS_KEY_NTFY_SERVER, "");
     current.ntfyToken = prefs.getString(NVS_KEY_NTFY_TOKEN, "");
@@ -87,10 +90,13 @@ void SettingsManager::save() {
     prefs.putInt(NVS_KEY_WIFI_TX_POWER, current.wifiTxPower);
     prefs.putInt(NVS_KEY_UART_TX_PIN, current.uartTxPin);
     prefs.putInt(NVS_KEY_UART_RX_PIN, current.uartRxPin);
+    prefs.putString(NVS_KEY_NAV_MODE, current.navMode);
     prefs.putInt(NVS_KEY_MC_STALL_THR, current.stallThreshold);
     prefs.putInt(NVS_KEY_MC_BRUSH_RPM, current.brushRpm);
     prefs.putInt(NVS_KEY_MC_VACUUM_PCT, current.vacuumSpeed);
     prefs.putInt(NVS_KEY_MC_SBRUSH_MW, current.sideBrushPower);
+    prefs.putBool(NVS_KEY_SYSLOG_ENABLED, current.syslogEnabled);
+    prefs.putString(NVS_KEY_SYSLOG_IP, current.syslogIp);
     prefs.putString(NVS_KEY_NTFY_TOPIC, current.ntfyTopic);
     prefs.putString(NVS_KEY_NTFY_SERVER, current.ntfyServer);
     prefs.putString(NVS_KEY_NTFY_TOKEN, current.ntfyToken);
@@ -114,7 +120,9 @@ void SettingsManager::save() {
 const Settings& SettingsManager::get() {
     // Auto-revert log level to off after timeout to prevent forgotten verbose
     // logging that fills flash and degrades serial performance.
-    if (current.logLevel > LOG_LEVEL_OFF && logLevelEnabledAt > 0) {
+    // Skip auto-expire when syslog is enabled — syslog sends over UDP so there
+    // is no flash wear concern, and the whole point is long-running capture.
+    if (current.logLevel > LOG_LEVEL_OFF && logLevelEnabledAt > 0 && !current.syslogEnabled) {
         unsigned long timeout =
                 (current.logLevel >= LOG_LEVEL_DEBUG) ? LOG_LEVEL_AUTO_OFF_DEBUG_MS : LOG_LEVEL_AUTO_OFF_INFO_MS;
         if (millis() - logLevelEnabledAt >= timeout) {
@@ -212,6 +220,18 @@ ApplyResult SettingsManager::apply(const String& json) {
         LOG("SETTINGS", "UART RX pin -> GPIO%d (reboot required)", current.uartRxPin);
     }
 
+    // Cleaning — navigation mode (sent to robot before each house clean)
+    if (incoming.navMode != current.navMode) {
+        // Validate against known modes
+        if (incoming.navMode == "Normal" || incoming.navMode == "Gentle" || incoming.navMode == "Deep" ||
+            incoming.navMode == "Quick") {
+            current.navMode = incoming.navMode;
+            changed = true;
+            LOG("SETTINGS", "Nav mode -> %s", current.navMode.c_str());
+        }
+        // Silently ignore invalid values (keep current)
+    }
+
     // Manual clean motor settings — clamp to safe hardware ranges
     if (incoming.stallThreshold != current.stallThreshold) {
         current.stallThreshold = constrain(incoming.stallThreshold, 30, 80);
@@ -232,6 +252,17 @@ ApplyResult SettingsManager::apply(const String& json) {
         current.sideBrushPower = constrain(incoming.sideBrushPower, 500, 1500);
         changed = true;
         LOG("SETTINGS", "Side brush power -> %d mW", current.sideBrushPower);
+    }
+
+    if (incoming.syslogEnabled != current.syslogEnabled) {
+        current.syslogEnabled = incoming.syslogEnabled;
+        changed = true;
+        LOG("SETTINGS", "Syslog -> %s", current.syslogEnabled ? "on" : "off");
+    }
+    if (incoming.syslogIp != current.syslogIp) {
+        current.syslogIp = incoming.syslogIp;
+        changed = true;
+        LOG("SETTINGS", "Syslog host -> %s", current.syslogIp.isEmpty() ? "(empty)" : current.syslogIp.c_str());
     }
 
     if (incoming.ntfyTopic != current.ntfyTopic) {
@@ -321,10 +352,13 @@ std::vector<Field> Settings::toFields() const {
             {"uartTxPin", String(uartTxPin), FIELD_INT},
             {"uartRxPin", String(uartRxPin), FIELD_INT},
             {"maxGpioPin", String(MAX_GPIO_PIN), FIELD_INT},
+            {"navMode", navMode, FIELD_STRING},
             {"stallThreshold", String(stallThreshold), FIELD_INT},
             {"brushRpm", String(brushRpm), FIELD_INT},
             {"vacuumSpeed", String(vacuumSpeed), FIELD_INT},
             {"sideBrushPower", String(sideBrushPower), FIELD_INT},
+            {"syslogEnabled", syslogEnabled ? "true" : "false", FIELD_BOOL},
+            {"syslogIp", syslogIp, FIELD_STRING},
             {"ntfyTopic", ntfyTopic, FIELD_STRING},
             {"ntfyServer", ntfyServer, FIELD_STRING},
             {"ntfyToken", ntfyToken, FIELD_STRING},
@@ -378,6 +412,10 @@ bool Settings::fromFields(const std::vector<Field>& fields) {
         uartRxPin = f->value.toInt();
         applied = true;
     }
+    if ((f = findField(fields, "navMode")) && f->type == FIELD_STRING) {
+        navMode = f->value;
+        applied = true;
+    }
     if ((f = findField(fields, "stallThreshold")) && f->type == FIELD_INT) {
         stallThreshold = f->value.toInt();
         applied = true;
@@ -392,6 +430,14 @@ bool Settings::fromFields(const std::vector<Field>& fields) {
     }
     if ((f = findField(fields, "sideBrushPower")) && f->type == FIELD_INT) {
         sideBrushPower = f->value.toInt();
+        applied = true;
+    }
+    if ((f = findField(fields, "syslogEnabled")) && f->type == FIELD_BOOL) {
+        syslogEnabled = (f->value == "true");
+        applied = true;
+    }
+    if ((f = findField(fields, "syslogIp")) && f->type == FIELD_STRING) {
+        syslogIp = f->value;
         applied = true;
     }
     if ((f = findField(fields, "ntfyTopic")) && f->type == FIELD_STRING) {

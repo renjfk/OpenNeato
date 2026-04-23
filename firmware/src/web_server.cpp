@@ -104,7 +104,6 @@ void WebServer::registerApiRoutes() {
     registerPostRoute("/api/power", neato, &NeatoSerial::powerControl, {"action"});
     registerPostRoute("/api/lidar/rotate", neato, &NeatoSerial::setLdsRotation, {"enable"});
     registerPostRoute("/api/user-settings", neato, &NeatoSerial::setUserSetting, {"key", "value"});
-    registerPostRoute("/api/wall-follower", neato, &NeatoSerial::setWallFollower, {"enable"});
     registerPostRoute("/api/clear-errors", neato, &NeatoSerial::clearErrors, {});
 
     // Serial endpoint — send arbitrary serial command, returns raw response.

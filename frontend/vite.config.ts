@@ -3,7 +3,7 @@ import { defineConfig } from "vite";
 
 export default defineConfig(({ command }) => {
     const isDev = command === "serve";
-    const serverHost = "localhost";
+    const serverHost = "0.0.0.0";
     const serverPort = 5173;
     return {
         plugins: [preact(), ...(isDev ? [require("./mock/server.js").mockApiPlugin()] : [])],

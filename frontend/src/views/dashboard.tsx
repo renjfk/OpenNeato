@@ -28,6 +28,7 @@ import type { PollResult } from "../hooks/use-polling";
 import { usePolling } from "../hooks/use-polling";
 import type { ChargerData, ErrorData, FirmwareVersion, StateData, SystemData } from "../types";
 import type { UpdateInfo } from "../update";
+import { normalizeError } from "../utils";
 
 // -- Helpers --
 
@@ -82,19 +83,6 @@ function battColor(pct: number): string {
     if (pct <= 25) return "red";
     if (pct <= 50) return "amber";
     return "green";
-}
-
-function formatUptime(ms: number): string {
-    const s = Math.floor(ms / 1000);
-    if (s < 60) return `${s}s`;
-    const m = Math.floor(s / 60);
-    if (m < 60) return `${m}m`;
-    const h = Math.floor(m / 60);
-    const rm = m % 60;
-    if (h < 24) return rm ? `${h}h ${rm}m` : `${h}h`;
-    const d = Math.floor(h / 24);
-    const rh = h % 24;
-    return rh ? `${d}d ${rh}h` : `${d}d`;
 }
 
 function wifiStrength(rssi: number): string {
@@ -171,7 +159,7 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
                     clearTimeout(pendingTimer.current);
                     pendingTimer.current = null;
                 }
-                actionErrorStack.push(e instanceof Error ? e.message : "Action failed");
+                actionErrorStack.push(normalizeError(e, "Action failed"));
             });
         },
         [actionErrorStack],
@@ -240,10 +228,10 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
                         </div>
                     </div>
                     <div class="status-bar-item">
-                        <div class="status-bar-label">Uptime</div>
+                        <div class="status-bar-label">Time</div>
                         <div class="status-bar-value">
                             <Icon svg={clockSvg} />
-                            {formatUptime(system.data.uptime)}
+                            {system.data.localTime}
                         </div>
                     </div>
                     <div class="status-bar-item">

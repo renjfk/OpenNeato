@@ -535,6 +535,14 @@ bool NeatoSerial::clean(const String& action, std::function<void(bool)> callback
         invalidateState();
         if (cleanStartCallback)
             cleanStartCallback();
+        // Send navigation mode first (fire-and-forget); house clean proceeds regardless.
+        if (navModeGetter) {
+            String mode = navModeGetter();
+            if (mode.length() > 0 && mode != "Normal") {
+                String navCmd = String(CMD_SET_NAVIGATION_MODE) + " " + mode;
+                enqueue(navCmd, nullptr, PRIORITY_HIGH);
+            }
+        }
         return enqueue(buildSetEvent(EVT_START_HOUSE), wrapAction(callback), PRIORITY_HIGH);
     }
 
@@ -558,9 +566,18 @@ bool NeatoSerial::clean(const String& action, std::function<void(bool)> callback
         return enqueue(buildSetEvent(EVT_RESUME), wrapAction(callback), PRIORITY_HIGH);
     }
 
+    // New clean from idle — fall through to house clean
     invalidateState();
     if (cleanStartCallback)
         cleanStartCallback();
+    // Send navigation mode first (fire-and-forget); house clean proceeds regardless.
+    if (navModeGetter) {
+        String mode = navModeGetter();
+        if (mode.length() > 0 && mode != "Normal") {
+            String navCmd = String(CMD_SET_NAVIGATION_MODE) + " " + mode;
+            enqueue(navCmd, nullptr, PRIORITY_HIGH);
+        }
+    }
     return enqueue(buildSetEvent(EVT_START_HOUSE), wrapAction(callback), PRIORITY_HIGH);
 }
 
@@ -667,9 +684,8 @@ bool NeatoSerial::setUserSetting(const String& key, const String& value, std::fu
     return enqueue(cmd, wrapAction(callback));
 }
 
-bool NeatoSerial::setWallFollower(bool enable, std::function<void(bool)> callback) {
-    userSettingsCache.invalidate();
-    const char *cmd = enable ? CMD_SET_WALL_FOLLOWER_ON : CMD_SET_WALL_FOLLOWER_OFF;
+bool NeatoSerial::setNavigationMode(const String& mode, std::function<void(bool)> callback) {
+    String cmd = String(CMD_SET_NAVIGATION_MODE) + " " + mode;
     return enqueue(cmd, wrapAction(callback));
 }
 

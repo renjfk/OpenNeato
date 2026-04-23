@@ -240,11 +240,14 @@ const state = {
     lidarSlowRotation: false,
     tz: "UTC0",
     logLevel: 0,
+    syslogEnabled: false,
+    syslogIp: "",
     wifiTxPower: 60, // 15 dBm in 0.25 dBm units
     uartTxPin: 3,
     uartRxPin: 4,
     maxGpioPin: 21,
     hostname: "neato",
+    navMode: "Normal",
     stallThreshold: 60,
     brushRpm: 1200,
     vacuumSpeed: 80,
@@ -264,6 +267,7 @@ const state = {
     ecoMode: false,
     intenseClean: false,
     binFullDetect: true,
+    wallEnable: true,
     wifi: true,
     stealthLed: false,
     filterChange: 2592000,
@@ -735,11 +739,14 @@ const routes = {
         const keys = [
             "tz",
             "logLevel",
+            "syslogEnabled",
+            "syslogIp",
             "wifiTxPower",
             "uartTxPin",
             "uartRxPin",
             "maxGpioPin",
             "hostname",
+            "navMode",
             "stallThreshold",
             "brushRpm",
             "vacuumSpeed",
@@ -783,6 +790,7 @@ const routes = {
             ecoMode: state.ecoMode,
             intenseClean: state.intenseClean,
             binFullDetect: state.binFullDetect,
+            wallEnable: state.wallEnable,
             wifi: state.wifi,
             stealthLed: state.stealthLed,
             filterChange: state.filterChange,
@@ -799,6 +807,7 @@ const routes = {
             EcoMode: "ecoMode",
             IntenseClean: "intenseClean",
             BinFullDetect: "binFullDetect",
+            WallEnable: "wallEnable",
             WiFi: "wifi",
             StealthLED: "stealthLed",
             FilterChange: "filterChange",
@@ -1048,6 +1057,8 @@ const handleRequest = async (req, res) => {
             await new Promise((r) => setTimeout(r, rand(300, 600)));
             if (data.tz !== undefined) state.tz = data.tz;
             if (data.logLevel !== undefined) state.logLevel = data.logLevel;
+            if (data.syslogEnabled !== undefined) state.syslogEnabled = data.syslogEnabled;
+            if (data.syslogIp !== undefined) state.syslogIp = data.syslogIp;
             if (data.wifiTxPower !== undefined) state.wifiTxPower = data.wifiTxPower;
             const pinsChanged =
                 (data.uartTxPin !== undefined && data.uartTxPin !== state.uartTxPin) ||
@@ -1056,6 +1067,7 @@ const handleRequest = async (req, res) => {
             if (data.uartRxPin !== undefined) state.uartRxPin = data.uartRxPin;
             const hostnameChanged = data.hostname !== undefined && data.hostname !== state.hostname;
             if (data.hostname !== undefined) state.hostname = data.hostname;
+            if (data.navMode !== undefined) state.navMode = data.navMode;
             if (data.stallThreshold !== undefined) state.stallThreshold = data.stallThreshold;
             if (data.brushRpm !== undefined) state.brushRpm = data.brushRpm;
             if (data.vacuumSpeed !== undefined) state.vacuumSpeed = data.vacuumSpeed;
@@ -1087,6 +1099,8 @@ const handleRequest = async (req, res) => {
             const keys = [
                 "tz",
                 "logLevel",
+                "syslogEnabled",
+                "syslogIp",
                 "wifiTxPower",
                 "uartTxPin",
                 "uartRxPin",

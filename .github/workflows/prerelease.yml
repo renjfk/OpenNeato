@@ -114,7 +114,9 @@ jobs:
           key: platformio-${{ hashFiles('platformio.ini') }}
 
       - name: Install PlatformIO
-        run: pip install platformio
+        # intelhex is an unlisted runtime dep of the newer tool-esptoolpy
+        # bundled with pioarduino 54.x; esptool imports it at module load.
+        run: pip install platformio intelhex
 
       - name: Build firmware
         env:

@@ -1,5 +1,42 @@
 # Changelog
 
+## 1.5
+
+### Added
+- **Cleaning replay camera** (`camera.openneato_*_motion_map`, translated as
+  "Cleaning replay") — standard HA camera entity serving an animated GIF
+  time-lapse of the most recent completed cleaning session. Plays once,
+  then holds on the fully-drawn map so dashboards settle on a static
+  final image. Works with picture-entity, vacuum-card, and other camera
+  consumers. Regenerated only when a newer completed session lands.
+  Coverage cells are revealed progressively in sync with path drawing.
+
+### Fixed
+- **`/api/history` robustness** — a single heatshrink-corrupted session
+  file no longer breaks the HA coordinator. Previously, merged JSONL
+  lines (a rare decompression artifact) produced invalid JSON in the
+  listing response, causing the entire history fetch to fail and
+  leaving the LIDAR camera blank and `last_clean_*` sensors as
+  "unknown". Firmware now validates session/summary metadata structure
+  before embedding; corrupt metadata is reported as `null`.
+- **"Last clean" sensors** — now pick the most recent session by
+  `summary.time` instead of relying on SPIFFS directory iteration
+  order, which isn't deterministic. Fixes cases where a stale session
+  was shown as the latest.
+
+### Security
+- Session filenames from the ESP32 listing are now validated against
+  `\d+\.jsonl(\.hs)?` before being interpolated into the download URL,
+  and response bodies are capped at 2 MB. Prevents a compromised or
+  misbehaving peer on LAN from redirecting history requests to
+  unrelated endpoints or OOM'ing HA Core with an unbounded stream.
+
+### Previous 1.5-track changes (from 2c0adbc)
+- Navigation mode select (Normal/Gentle/Deep/Quick)
+- Remote syslog switch + syslog server IP text entity
+- Wall follower switch migrated to standard `SetUserSettings WallEnable`
+- Manifest bumped 1.3.1 → 1.5
+
 ## 1.3.1
 
 ### Fixed

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 import aiohttp
@@ -10,9 +11,13 @@ from asyncio import timeout
 
 from homeassistant.exceptions import HomeAssistantError
 
+from .const import MAX_HISTORY_RESPONSE_BYTES, SESSION_NAME_PATTERN
+
 _LOGGER = logging.getLogger(__name__)
 
 TIMEOUT = 30  # seconds — ESP32 can be slow when serial queue is busy
+
+_SESSION_NAME_RE = re.compile(SESSION_NAME_PATTERN)
 
 
 class OpenNeatoConnectionError(HomeAssistantError):
@@ -185,14 +190,33 @@ class OpenNeatoApiClient:
         return await self._get("/api/lidar")
 
     async def get_history_session(self, filename: str) -> str:
-        """Download the raw JSONL data for a specific cleaning session."""
+        """Download the raw JSONL data for a specific cleaning session.
+
+        `filename` originates from the ESP32's /api/history listing and
+        is concatenated into the URL, so we validate it against a strict
+        pattern first — a rogue or MITM'd peer could otherwise redirect
+        the request to an unrelated endpoint. The response is capped to
+        MAX_HISTORY_RESPONSE_BYTES to stop a misbehaving peer from
+        OOM'ing HA Core with an unbounded stream.
+        """
+        if not _SESSION_NAME_RE.match(filename):
+            raise OpenNeatoApiError(
+                f"Invalid session filename: {filename!r}"
+            )
         url = f"{self._base_url}/api/history/{filename}"
         _LOGGER.debug("GET %s", url)
         try:
             async with timeout(TIMEOUT):
                 async with self._session.get(url) as response:
                     response.raise_for_status()
-                    return await response.text()
+                    raw = await response.content.read(MAX_HISTORY_RESPONSE_BYTES + 1)
+                    if len(raw) > MAX_HISTORY_RESPONSE_BYTES:
+                        raise OpenNeatoApiError(
+                            f"Session {filename} exceeds size cap "
+                            f"({MAX_HISTORY_RESPONSE_BYTES} bytes)"
+                        )
+                    encoding = response.get_encoding() or "utf-8"
+                    return raw.decode(encoding, errors="replace")
         except aiohttp.ClientConnectionError as err:
             raise OpenNeatoConnectionError(
                 f"Unable to connect to OpenNeato at {self._host}: {err}"

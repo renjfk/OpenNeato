@@ -24,19 +24,18 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
+from .camera import latest_completed_session
 from .const import DOMAIN
 from .entity import OpenNeatoEntity
 
 
 def _latest_summary(history: Any) -> dict[str, Any] | None:
     """Return the summary dict from the most recent completed session."""
-    if not isinstance(history, list):
+    session = latest_completed_session(history)
+    if not session:
         return None
-    for session in history:
-        summary = session.get("summary")
-        if summary and isinstance(summary, dict):
-            return summary
-    return None
+    summary = session.get("summary")
+    return summary if isinstance(summary, dict) else None
 
 
 @dataclass(frozen=True, kw_only=True)

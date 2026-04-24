@@ -209,8 +209,7 @@ def render_lidar_scan(
     return buf.getvalue()
 
 
-def render_idle_image(image_size: int = LIDAR_IMAGE_SIZE) -> bytes:
-    """Render a placeholder image for when the robot is docked / no data."""
+def _build_idle_image(image_size: int) -> Image.Image:
     img = Image.new("RGB", (image_size, image_size), LIDAR_BG_COLOR)
     draw = ImageDraw.Draw(img)
 
@@ -236,7 +235,18 @@ def render_idle_image(image_size: int = LIDAR_IMAGE_SIZE) -> bytes:
         (cx + 5, cy + 4),
     ]
     draw.polygon(tri, fill=LIDAR_ROBOT_COLOR)
+    return img
 
+
+def render_idle_image(image_size: int = LIDAR_IMAGE_SIZE) -> bytes:
+    """Render a placeholder PNG for when the robot is docked / no data."""
     buf = io.BytesIO()
-    img.save(buf, format="PNG", optimize=True)
+    _build_idle_image(image_size).save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
+
+
+def render_idle_gif(image_size: int = LIDAR_IMAGE_SIZE) -> bytes:
+    """GIF-format variant so motion-map camera's content_type stays consistent."""
+    buf = io.BytesIO()
+    _build_idle_image(image_size).save(buf, format="GIF", optimize=True)
     return buf.getvalue()

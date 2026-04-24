@@ -5,6 +5,46 @@
 #include <SPIFFS.h>
 #include <cmath>
 
+// Heatshrink decompression can drop a byte that merges two JSONL lines into
+// one, so substring matching isn't enough — validate the braces balance and
+// nothing trails the top-level object before embedding into /api/history.
+static bool isValidMetaLine(const String& line, const char* expectedTypePrefix) {
+    if (line.length() < 2 || line[0] != '{' || line[line.length() - 1] != '}')
+        return false;
+    if (line.indexOf(expectedTypePrefix) < 0)
+        return false;
+    int depth = 0;
+    bool inString = false;
+    bool escape = false;
+    for (size_t i = 0; i < line.length(); i++) {
+        char c = line[i];
+        if (escape) {
+            escape = false;
+            continue;
+        }
+        if (inString) {
+            if (c == '\\')
+                escape = true;
+            else if (c == '"')
+                inString = false;
+            continue;
+        }
+        if (c == '"')
+            inString = true;
+        else if (c == '{')
+            depth++;
+        else if (c == '}') {
+            depth--;
+            if (depth < 0)
+                return false;
+            // Reject trailing content after the top-level object closes
+            if (depth == 0 && i != line.length() - 1)
+                return false;
+        }
+    }
+    return depth == 0 && !inString;
+}
+
 CleaningHistory::CleaningHistory(NeatoSerial& neato, DataLogger& logger, SystemManager& sysMgr) :
     LoopTask(HISTORY_INTERVAL_IDLE_MS), neato(neato), dataLogger(logger), systemManager(sysMgr) {
     TaskRegistry::add(this);
@@ -1011,8 +1051,10 @@ std::vector<HistorySessionInfo> CleaningHistory::listSessions() {
             } else {
                 String firstLine, lastLine;
                 readFirstLastLines(fullPath, info.compressed, firstLine, lastLine);
-                info.session = firstLine;
-                if (lastLine.indexOf("\"type\":\"summary\"") >= 0) {
+                if (isValidMetaLine(firstLine, "\"type\":\"session\"")) {
+                    info.session = firstLine;
+                }
+                if (isValidMetaLine(lastLine, "\"type\":\"summary\"")) {
                     info.summary = lastLine;
                 }
                 // Cache for subsequent requests

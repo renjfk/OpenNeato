@@ -28,8 +28,17 @@ from homeassistant.helpers.event import async_track_time_interval
 from .api import OpenNeatoApiClient
 from .const import DOMAIN, HISTORY_IMAGE_SIZE, LIDAR_POLL_INTERVAL
 from .entity import OpenNeatoEntity
-from .history_renderer import parse_session_jsonl, render_history_map
-from .lidar_renderer import ScanAccumulator, render_idle_image, render_lidar_scan
+from .history_renderer import (
+    parse_session_jsonl,
+    render_history_animation,
+    render_history_map,
+)
+from .lidar_renderer import (
+    ScanAccumulator,
+    render_idle_gif,
+    render_idle_image,
+    render_lidar_scan,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,24 +48,63 @@ _CLEANING_SUBSTRINGS = {"CLEANINGRUNNING", "CLEANINGPAUSED", "CLEANINGSUSPENDED"
 _MANUAL_SUBSTRINGS = {"MANUALCLEANING"}
 
 
+def _rank_session_ts(session: dict[str, Any]) -> float:
+    """Shared ranking key: prefer summary.time, fall back to filename epoch.
+
+    Firmware directory iteration order isn't guaranteed, so we can't
+    trust the list order. Summary.time is the clean's end timestamp;
+    filenames are epoch seconds at session start.
+    """
+    summary = session.get("summary")
+    if isinstance(summary, dict):
+        raw = summary.get("time", 0)
+        if isinstance(raw, (int, float)) and raw > 0:
+            return float(raw)
+    name = session.get("name") or ""
+    try:
+        return float(name.split(".", 1)[0])
+    except ValueError:
+        return 0.0
+
+
+def latest_completed_session(history: Any) -> dict[str, Any] | None:
+    """Return the most recent completed (non-recording) session entry."""
+    if not isinstance(history, list):
+        return None
+    best: dict[str, Any] | None = None
+    best_key = -1.0
+    for session in history:
+        if not isinstance(session, dict) or session.get("recording"):
+            continue
+        if not session.get("name"):
+            continue
+        key = _rank_session_ts(session)
+        if key > best_key:
+            best_key = key
+            best = session
+    return best
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the OpenNeato LIDAR map camera from a config entry."""
+    """Set up the OpenNeato map cameras from a config entry."""
     data = hass.data[DOMAIN][entry.entry_id]
+    common = {
+        "coordinator": data["coordinator"],
+        "api": data["api"],
+        "serial": data["serial"],
+        "model": data["model"],
+        "sw_version": data["sw_version"],
+        "fw_version": data["fw_version"],
+        "host": data["host"],
+    }
     async_add_entities(
         [
-            OpenNeatoLidarCamera(
-                coordinator=data["coordinator"],
-                api=data["api"],
-                serial=data["serial"],
-                model=data["model"],
-                sw_version=data["sw_version"],
-                fw_version=data["fw_version"],
-                host=data["host"],
-            )
+            OpenNeatoLidarCamera(**common),
+            OpenNeatoMotionCamera(**common),
         ]
     )
 
@@ -317,22 +365,13 @@ class OpenNeatoLidarCamera(OpenNeatoEntity, Camera):
         if not self.coordinator.data:
             return None
         history = self.coordinator.data.get("history", [])
-        if not isinstance(history, list):
-            return None
-
-        # First pass: look for a recording session if allowed
-        if allow_recording:
+        if allow_recording and isinstance(history, list):
             for session in history:
-                if session.get("recording") and session.get("name"):
+                if (isinstance(session, dict)
+                        and session.get("recording")
+                        and session.get("name")):
                     return session
-
-        # Second pass: find the most recent completed session
-        for session in history:
-            if session.get("recording"):
-                continue
-            if session.get("name"):
-                return session
-        return None
+        return latest_completed_session(history)
 
     async def _async_update_history_map(self, allow_recording: bool = False) -> None:
         """Fetch and render a cleaning session map.
@@ -393,3 +432,141 @@ class OpenNeatoLidarCamera(OpenNeatoEntity, Camera):
         if not self._lidar_polling_active:
             self._map_source = "history"
         self.async_write_ha_state()
+
+
+class OpenNeatoMotionCamera(OpenNeatoEntity, Camera):
+    """Animated replay of the most recent completed cleaning session.
+
+    Serves an animated GIF time-lapse that plays once then holds on the
+    fully-drawn map. Regenerated only when a newer completed session
+    appears; mid-clean the entity keeps serving the previous session's
+    animation. GIF generation runs in the executor, behind a render
+    flag to prevent stampede from coordinator ticks coinciding with
+    camera-image requests.
+    """
+
+    _attr_translation_key = "motion_map"
+    _attr_content_type = "image/gif"
+    # The GIF only changes when a new completed session appears, so tell
+    # HA to re-request the image sparingly (default is 0.5 s = 2 fps of
+    # poll traffic even on a static entity).
+    _attr_frame_interval = 300.0
+
+    def __init__(
+        self,
+        coordinator,
+        api: OpenNeatoApiClient,
+        serial: str,
+        model: str | None = None,
+        sw_version: str | None = None,
+        fw_version: str | None = None,
+        host: str | None = None,
+    ) -> None:
+        OpenNeatoEntity.__init__(
+            self, coordinator, serial,
+            model=model, sw_version=sw_version, fw_version=fw_version, host=host,
+        )
+        Camera.__init__(self)
+        self._api = api
+        self._attr_unique_id = f"{serial}_motion_map"
+
+        self._gif: bytes | None = None
+        self._idle_image: bytes | None = None
+        self._cached_session_name: str | None = None
+        self._rendering = False
+        self._session_mode: str | None = None
+        self._session_duration: int | None = None
+        self._session_area: float | None = None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        attrs: dict[str, Any] = {"map_source": "motion"}
+        if self._cached_session_name:
+            attrs["session_name"] = self._cached_session_name
+        if self._session_mode:
+            attrs["session_mode"] = self._session_mode
+        if self._session_duration is not None:
+            attrs["session_duration"] = self._session_duration
+        if self._session_area is not None:
+            attrs["session_area"] = round(self._session_area, 2)
+        return attrs
+
+    async def async_camera_image(
+        self, width: int | None = None, height: int | None = None
+    ) -> bytes | None:
+        await self._maybe_refresh()
+        if self._gif is not None:
+            return self._gif
+        if self._idle_image is None:
+            self._idle_image = await self.hass.async_add_executor_job(render_idle_gif)
+        return self._idle_image
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        # Warm the cache on startup so the first preview request returns
+        # a rendered GIF instead of the idle placeholder.
+        self.hass.async_create_task(self._maybe_refresh())
+
+    def _latest_completed(self) -> dict[str, Any] | None:
+        if not self.coordinator.data:
+            return None
+        return latest_completed_session(self.coordinator.data.get("history", []))
+
+    async def _maybe_refresh(self) -> None:
+        """Regenerate the GIF if a newer completed session is available.
+
+        Claims the render slot (`_rendering = True`) synchronously
+        before any await so concurrent callers (coordinator update +
+        HA image fetch) can't both enter the fetch-and-render path.
+        """
+        if self._rendering:
+            return
+        session_info = self._latest_completed()
+        if not session_info:
+            return
+        session_name = session_info["name"]
+        if session_name == self._cached_session_name and self._gif is not None:
+            return
+
+        self._rendering = True
+        try:
+            try:
+                raw_jsonl = await self._api.get_history_session(session_name)
+            except Exception:
+                _LOGGER.debug(
+                    "Motion map: failed to fetch session %s",
+                    session_name, exc_info=True,
+                )
+                return
+
+            parsed = await self.hass.async_add_executor_job(parse_session_jsonl, raw_jsonl)
+            if not parsed.get("path"):
+                _LOGGER.info(
+                    "Motion map: session %s has no usable path data", session_name
+                )
+                return
+            gif = await self.hass.async_add_executor_job(
+                render_history_animation, parsed, HISTORY_IMAGE_SIZE
+            )
+            if gif is None:
+                _LOGGER.info(
+                    "Motion map: session %s too short to animate", session_name
+                )
+                return
+            self._gif = gif
+            self._cached_session_name = session_name
+            summary = session_info.get("summary") or parsed.get("summary") or {}
+            session_meta = session_info.get("session") or parsed.get("session") or {}
+            self._session_mode = session_meta.get("mode") or summary.get("mode")
+            self._session_duration = summary.get("duration")
+            self._session_area = summary.get("areaCovered")
+            self.async_write_ha_state()
+        finally:
+            self._rendering = False
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        # Coordinator tick — check for a newer completed session. The
+        # actual render happens in the executor via _maybe_refresh.
+        self.hass.async_create_task(self._maybe_refresh())
+        super()._handle_coordinator_update()

@@ -87,7 +87,8 @@
       "stall_threshold_setting": { "name": "Stall threshold" }
     },
     "camera": {
-      "lidar_map": { "name": "LIDAR map" }
+      "lidar_map": { "name": "LIDAR map" },
+      "motion_map": { "name": "Cleaning replay" }
     },
     "select": {
       "navigation_mode": { "name": "Navigation mode" }

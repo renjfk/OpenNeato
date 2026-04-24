@@ -49,4 +49,32 @@ HISTORY_COVERAGE_COLOR = (52, 199, 89, 38)  # rgba(52, 199, 89, 0.15)
 HISTORY_PATH_COLOR = (249, 235, 178, 153)  # rgba(249, 235, 178, 0.6)
 HISTORY_START_COLOR = (52, 199, 89, 230)  # green
 HISTORY_END_COLOR = (255, 69, 58, 230)  # red
-HISTORY_RECHARGE_COLOR = (255, 204, 0)  # gold bolt
+# Warm orange, deliberately distinct from the gold path color so the
+# bolt icon reads clearly even when a recharge point sits on top of a
+# drawn path segment. Matches vacuum-dashboard conventions for "event".
+HISTORY_RECHARGE_COLOR = (255, 160, 51)
+
+# ── Animated motion-replay camera ──────────────────────────────────
+# The animation compresses a full session into a short loop regardless
+# of the real cleaning duration. Plays once (loop=1) then holds on the
+# fully-drawn map so the dashboard settles on a static final image
+# rather than spinning forever.
+MOTION_FRAMES = 30
+MOTION_TOTAL_MS = 7000
+MOTION_TAIL_FRAMES = 10  # ~1/3 of the loop holds the final map
+# Render-time cap on the path/coverage fed into the GIF encoder — long
+# sessions (40+ min, 2000+ poses) would otherwise spend seconds in the
+# executor and produce megabyte-scale GIFs. Subsampling preserves the
+# first/last pose so start and end markers still sit on real data.
+MOTION_MAX_PATH_POINTS = 500
+
+# ── API hardening ───────────────────────────────────────────────────
+# Session name flows from the ESP32's /api/history response into the
+# next URL path segment, so validate it before concatenation to stop
+# a rogue/compromised robot (or LAN MITM over plain HTTP) from
+# redirecting requests to other endpoints.
+SESSION_NAME_PATTERN = r"^\d+\.jsonl(\.hs)?$"
+# Upper bound on /api/history/<name> responses. Real sessions on the
+# 1MB SPIFFS history budget cap below this; a larger payload implies a
+# misbehaving peer and we refuse to load it into HA Core.
+MAX_HISTORY_RESPONSE_BYTES = 2 * 1024 * 1024

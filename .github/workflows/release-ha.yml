@@ -1,0 +1,98 @@
+name: Release (HA integration only)
+
+# Lightweight release path for HACS-only changes (no firmware/frontend/flash
+# build). HACS bundles custom_components/openneato/ directly from the tagged
+# ref, so a tag + a GitHub release with notes is all that's needed — no
+# artifacts, no GoReleaser, no PlatformIO. Runs in seconds instead of minutes.
+#
+# Use the full "Build and Release" workflow when firmware or flash-tool
+# changes need to ship.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag (e.g. v0.12 or ha-1.7)'
+        required: true
+        type: string
+      release_notes:
+        description: 'Release notes (markdown)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        type: boolean
+        default: false
+      draft:
+        description: 'Create as draft release'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Tag + GitHub release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate HA-only change
+        run: |
+          # Find the most recent ancestor tag matching v* and diff the tree
+          # against it — fail loudly if anything outside custom_components/
+          # moved, so nobody accidentally ships firmware changes without the
+          # firmware build.
+          LAST_TAG=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
+          if [ -z "$LAST_TAG" ]; then
+            echo "No prior v* tag found; skipping scope check."
+            exit 0
+          fi
+          CHANGED=$(git diff --name-only "$LAST_TAG"..HEAD | grep -v '^custom_components/' || true)
+          if [ -n "$CHANGED" ]; then
+            echo "::error::Files outside custom_components/ have changed since $LAST_TAG:"
+            echo "$CHANGED"
+            echo "Use the full 'Build and Release' workflow instead."
+            exit 1
+          fi
+          echo "Scope OK — only custom_components/ changed since $LAST_TAG."
+
+      - name: Create and push release tag
+        run: |
+          RELEASE_TAG="${{ github.event.inputs.release_tag }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git rev-parse "$RELEASE_TAG" >/dev/null 2>&1; then
+            git tag -a "$RELEASE_TAG" -m "Release $RELEASE_TAG"
+            git push origin "$RELEASE_TAG"
+          else
+            echo "Tag $RELEASE_TAG already exists"
+          fi
+
+      - name: Write release notes
+        run: |
+          cat << 'EOF' > /tmp/release_notes.md
+          ${{ github.event.inputs.release_notes }}
+          EOF
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          FLAGS=""
+          if [ "${{ github.event.inputs.draft }}" = "true" ]; then
+            FLAGS="$FLAGS --draft"
+          fi
+          if [ "${{ github.event.inputs.prerelease }}" = "true" ]; then
+            FLAGS="$FLAGS --prerelease"
+          fi
+          gh release create "${{ github.event.inputs.release_tag }}" \
+            --title "${{ github.event.inputs.release_tag }}" \
+            --notes-file /tmp/release_notes.md \
+            $FLAGS

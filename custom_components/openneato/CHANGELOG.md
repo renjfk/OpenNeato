@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.8
+
+### Fixed
+- **Blank camera diagnostics** — `LIDAR map` and `Cleaning replay` could
+  stay on the idle polar-grid placeholder even when a valid session
+  existed, because a Pillow/parser exception inside the executor would
+  bubble up through `async_create_task` and only surface as an
+  unhandled-task warning — easy to miss without DEBUG filtering on. The
+  parse and render steps are now wrapped in `try/except` and log the
+  traceback at `WARNING` so the failure is visible in the default log.
+  Fetch-failure logs also moved from DEBUG to WARNING.
+
 ## 1.7
 
 ### Fixed

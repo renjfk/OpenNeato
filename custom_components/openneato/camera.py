@@ -415,21 +415,32 @@ class OpenNeatoLidarCamera(OpenNeatoEntity, Camera):
         try:
             raw_jsonl = await self._api.get_history_session(session_name)
         except Exception:
-            _LOGGER.debug(
-                "Failed to fetch history session %s", session_name, exc_info=True
+            _LOGGER.warning(
+                "LIDAR map: failed to fetch session %s", session_name, exc_info=True
             )
             return
 
-        # Parse and render in the executor
-        parsed = await self.hass.async_add_executor_job(parse_session_jsonl, raw_jsonl)
+        try:
+            parsed = await self.hass.async_add_executor_job(parse_session_jsonl, raw_jsonl)
+        except Exception:
+            _LOGGER.warning(
+                "LIDAR map: failed to parse session %s", session_name, exc_info=True
+            )
+            return
 
         if not parsed.get("path"):
             _LOGGER.debug("Session %s has no path data", session_name)
             return
 
-        self._history_image = await self.hass.async_add_executor_job(
-            render_history_map, parsed, HISTORY_IMAGE_SIZE, recording
-        )
+        try:
+            self._history_image = await self.hass.async_add_executor_job(
+                render_history_map, parsed, HISTORY_IMAGE_SIZE, recording
+            )
+        except Exception:
+            _LOGGER.warning(
+                "LIDAR map: failed to render session %s", session_name, exc_info=True
+            )
+            return
 
         # Cache session identity and extract metadata
         self._history_session_name = session_name
@@ -544,21 +555,35 @@ class OpenNeatoMotionCamera(OpenNeatoEntity, Camera):
             try:
                 raw_jsonl = await self._api.get_history_session(session_name)
             except Exception:
-                _LOGGER.debug(
+                _LOGGER.warning(
                     "Motion map: failed to fetch session %s",
                     session_name, exc_info=True,
                 )
                 return
 
-            parsed = await self.hass.async_add_executor_job(parse_session_jsonl, raw_jsonl)
+            try:
+                parsed = await self.hass.async_add_executor_job(parse_session_jsonl, raw_jsonl)
+            except Exception:
+                _LOGGER.warning(
+                    "Motion map: failed to parse session %s",
+                    session_name, exc_info=True,
+                )
+                return
             if not parsed.get("path"):
                 _LOGGER.info(
                     "Motion map: session %s has no usable path data", session_name
                 )
                 return
-            gif = await self.hass.async_add_executor_job(
-                render_history_animation, parsed, HISTORY_IMAGE_SIZE
-            )
+            try:
+                gif = await self.hass.async_add_executor_job(
+                    render_history_animation, parsed, HISTORY_IMAGE_SIZE
+                )
+            except Exception:
+                _LOGGER.warning(
+                    "Motion map: failed to render session %s",
+                    session_name, exc_info=True,
+                )
+                return
             if gif is None:
                 _LOGGER.info(
                     "Motion map: session %s too short to animate", session_name

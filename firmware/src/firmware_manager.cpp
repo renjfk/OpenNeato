@@ -4,23 +4,47 @@
 
 FirmwareManager::FirmwareManager(DataLogger& logger) : LoopTask(250), dataLogger(logger) {}
 
-// ESP32 image extended header byte 12 contains the chip ID.
-// The esp_chip_info model enum uses the same values (CHIP_ESP32=1, CHIP_ESP32S2=2,
-// CHIP_ESP32C3=5, CHIP_ESP32S3=9, etc.), so we compare directly.
+// ESP32 image extended header byte 12 contains the chip ID (ESP_CHIP_ID_*),
+// which is a different enum from esp_chip_info_t::model (esp_chip_model_t).
+// They happen to match for C3 (5) and S3 (9), but not for the original ESP32
+// (header=0, model=1) or H2. Translate explicitly before comparing.
 bool FirmwareManager::validateChip(uint8_t *data, size_t len) {
     if (len < 16) {
         return true; // Not enough data yet, defer validation
     }
-    esp_chip_info_t info;
-    esp_chip_info(&info);
+    struct ChipMap {
+        uint8_t headerId; // ESP_CHIP_ID_* from image header byte 12
+        uint8_t model; // esp_chip_model_t value
+    };
+    static const ChipMap kChipMap[] = {
+            {0x00, CHIP_ESP32},
+            {0x02, CHIP_ESP32S2},
+            {0x05, CHIP_ESP32C3},
+            {0x09, CHIP_ESP32S3},
+    };
     auto binChipId = static_cast<uint8_t>(data[12]);
-    auto expected = static_cast<uint8_t>(info.model);
-    if (binChipId != expected) {
-        updateError = "Firmware chip mismatch: file targets a different ESP32 variant";
-        LOG("FW", "Chip mismatch: binary has chip ID %u, expected %u", binChipId, expected);
+    const ChipMap *match = nullptr;
+    for (const auto& entry: kChipMap) {
+        if (entry.headerId == binChipId) {
+            match = &entry;
+            break;
+        }
+    }
+    if (!match) {
+        updateError = "Firmware chip mismatch: unknown chip ID in image";
+        LOG("FW", "Unknown binary chip ID: 0x%02X", binChipId);
         return false;
     }
-    LOG("FW", "Chip ID validated: %u", binChipId);
+    esp_chip_info_t info;
+    esp_chip_info(&info);
+    auto expected = static_cast<uint8_t>(info.model);
+    if (match->model != expected) {
+        updateError = "Firmware chip mismatch: file targets a different ESP32 variant";
+        LOG("FW", "Chip mismatch: binary chip ID 0x%02X (model %u), expected model %u", binChipId, match->model,
+            expected);
+        return false;
+    }
+    LOG("FW", "Chip ID validated: 0x%02X (model %u)", binChipId, match->model);
     return true;
 }
 

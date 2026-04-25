@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import boltSvg from "../../assets/icons/bolt.svg?raw";
+import rotateLeftSvg from "../../assets/icons/rotate-left.svg?raw";
+import rotateRightSvg from "../../assets/icons/rotate-right.svg?raw";
 import { Icon } from "../../components/icon";
 import { useMapGestures } from "../../hooks/use-map-gestures";
 import type { HistoryFileInfo, MapData } from "../../types";
@@ -14,9 +16,25 @@ interface HistoryItemViewProps {
     recording: boolean;
 }
 
+// Persisted map rotation, in degrees. Always normalized to one of 0/90/180/270.
+function loadRotation(): number {
+    const raw = Number(localStorage.getItem("mapRotation"));
+    if (!Number.isFinite(raw)) return 0;
+    return (((Math.round(raw / 90) * 90) % 360) + 360) % 360;
+}
+
 export function HistoryItemView({ file, map, mapEmpty, recording }: HistoryItemViewProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const transform = useMapGestures(canvasRef);
+    const [rotation, setRotation] = useState<number>(loadRotation);
+    const transform = useMapGestures(canvasRef, rotation);
+
+    useEffect(() => {
+        localStorage.setItem("mapRotation", String(rotation));
+    }, [rotation]);
+
+    const rotateBy = useCallback((delta: number) => {
+        setRotation((r) => (((r + delta) % 360) + 360) % 360);
+    }, []);
 
     // Expose the live canvas element so MotionPlayer can drive the renderer
     // without duplicating gesture handling or the ref plumbing.
@@ -63,7 +81,7 @@ export function HistoryItemView({ file, map, mapEmpty, recording }: HistoryItemV
         if (!map || map.path.length === 0) return;
         const wave = waveRef.current;
         if (!wave) return;
-        wave.startReveal(map, transform);
+        wave.startReveal(map, transform, rotation);
         revealStartedRef.current = true;
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [map]);
@@ -82,20 +100,20 @@ export function HistoryItemView({ file, map, mapEmpty, recording }: HistoryItemV
         if (showPlayer) return;
         if (revealing) return;
         if (map && canvasRef.current) {
-            renderMap(canvasRef.current, map, recording, transform);
+            renderMap(canvasRef.current, map, recording, transform, undefined, rotation);
         }
-    }, [map, recording, transform, showPlayer, revealing]);
+    }, [map, recording, transform, showPlayer, revealing, rotation]);
 
     useEffect(() => {
         if (showPlayer) return;
         if (revealing) return;
         if (!map) return;
         const handleResize = () => {
-            if (map && canvasRef.current) renderMap(canvasRef.current, map, recording, transform);
+            if (map && canvasRef.current) renderMap(canvasRef.current, map, recording, transform, undefined, rotation);
         };
         window.addEventListener("resize", handleResize);
         return () => window.removeEventListener("resize", handleResize);
-    }, [map, recording, transform, showPlayer, revealing]);
+    }, [map, recording, transform, showPlayer, revealing, rotation]);
 
     // Prefer list metadata summary (available immediately), fall back to
     // the summary parsed from the full JSONL data (available after fetch)
@@ -141,13 +159,39 @@ export function HistoryItemView({ file, map, mapEmpty, recording }: HistoryItemV
             <div class="history-canvas-wrap">
                 {mapEmpty && <div class="history-empty">Not enough data to display map</div>}
                 <canvas ref={canvasRef} class="history-canvas" style={mapEmpty ? { display: "none" } : undefined} />
+                {map && !mapEmpty && (
+                    <>
+                        <button
+                            type="button"
+                            class="history-rotate-btn left"
+                            onClick={() => rotateBy(-90)}
+                            aria-label="Rotate map counter-clockwise"
+                        >
+                            <Icon svg={rotateLeftSvg} />
+                        </button>
+                        <button
+                            type="button"
+                            class="history-rotate-btn right"
+                            onClick={() => rotateBy(90)}
+                            aria-label="Rotate map clockwise"
+                        >
+                            <Icon svg={rotateRightSvg} />
+                        </button>
+                    </>
+                )}
             </div>
 
             {/* Motion player mounts immediately when data arrives so its
                 controls render right away. Its canvas effects are
                 suspended via `canvasSuspended` until the wave resolves. */}
             {showPlayer && map && (
-                <MotionPlayer canvas={canvasEl} map={map} transform={transform} canvasSuspended={revealing} />
+                <MotionPlayer
+                    canvas={canvasEl}
+                    map={map}
+                    transform={transform}
+                    rotation={rotation}
+                    canvasSuspended={revealing}
+                />
             )}
 
             {/* Legend */}

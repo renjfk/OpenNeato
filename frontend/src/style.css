@@ -2245,11 +2245,67 @@ body {
 }
 
 .history-canvas-wrap {
+    position: relative;
     border: 1px solid var(--border);
     border-radius: 12px;
     overflow: hidden;
     background: var(--surface);
     touch-action: manipulation;
+}
+
+.history-rotate-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0, 0, 0, 0.45);
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0.55;
+    transition:
+        opacity 0.15s,
+        transform 0.1s;
+    -webkit-tap-highlight-color: transparent;
+    z-index: 1;
+}
+
+.history-rotate-btn.left {
+    left: 8px;
+}
+
+.history-rotate-btn.right {
+    right: 8px;
+}
+
+.history-rotate-btn svg {
+    width: 26px;
+    height: 26px;
+}
+
+.history-rotate-btn:hover,
+.history-rotate-btn:focus-visible {
+    opacity: 1;
+    color: var(--text);
+}
+
+.history-rotate-btn:active {
+    transform: translateY(-50%) scale(0.9);
+}
+
+.light .history-rotate-btn {
+    background: rgba(255, 255, 255, 0.7);
+}
+
+@media (prefers-color-scheme: light) {
+    .system-theme .history-rotate-btn {
+        background: rgba(255, 255, 255, 0.7);
+    }
 }
 
 .history-canvas {

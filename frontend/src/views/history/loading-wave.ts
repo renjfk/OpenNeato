@@ -133,6 +133,7 @@ export class Wave {
     private canvas: HTMLCanvasElement;
     private map: MapData | null = null;
     private transform: MapTransform | null = null;
+    private rotation = 0;
     private carrier: Pulse | null = null;
     private pulses: Pulse[] = [];
     private nextSpawnAt = 0;
@@ -163,10 +164,11 @@ export class Wave {
     // and re-anchors any in-flight loading pulses onto the carrier's
     // velocity so they expand at the same rate and expire together
     // instead of trailing as ghosts on their own slower cadence.
-    startReveal(map: MapData, transform: MapTransform): void {
+    startReveal(map: MapData, transform: MapTransform, rotation: number = 0): void {
         if (this.carrier !== null || this.finished) return;
         this.map = map;
         this.transform = transform;
+        this.rotation = rotation;
 
         const W = this.canvas.clientWidth;
         const H = this.canvas.clientHeight;
@@ -263,7 +265,7 @@ export class Wave {
             const front = pulseFront(this.carrier, t);
             const ringW = pulseRingW(this.carrier, t);
             if (front - ringW >= this.carrier.maxR) {
-                renderMap(this.canvas, this.map, false, this.transform);
+                renderMap(this.canvas, this.map, false, this.transform, undefined, this.rotation);
                 this.finish();
                 return;
             }
@@ -311,16 +313,35 @@ export class Wave {
 
         if (proj) {
             const tf = this.transform ?? { panX: 0, panY: 0, zoom: 1 };
+            ctx.save();
+            if (this.rotation) {
+                ctx.translate(displayW / 2, displayH / 2);
+                ctx.rotate((this.rotation * Math.PI) / 180);
+                ctx.translate(-displayW / 2, -displayH / 2);
+            }
             ctx.translate(tf.panX, tf.panY);
             ctx.scale(tf.zoom, tf.zoom);
             drawMapGrid(ctx, proj, isDark);
             this.drawRevealCoverage(ctx, t, proj, isDark);
             this.drawRevealPath(ctx, t, proj, isDark);
+            ctx.restore();
         }
 
         this.drawWaveCells(ctx, t, displayW, displayH, isDark);
 
-        if (proj) this.drawRevealMarkers(ctx, t, proj);
+        if (proj) {
+            ctx.save();
+            if (this.rotation) {
+                ctx.translate(displayW / 2, displayH / 2);
+                ctx.rotate((this.rotation * Math.PI) / 180);
+                ctx.translate(-displayW / 2, -displayH / 2);
+            }
+            const tf = this.transform ?? { panX: 0, panY: 0, zoom: 1 };
+            ctx.translate(tf.panX, tf.panY);
+            ctx.scale(tf.zoom, tf.zoom);
+            this.drawRevealMarkers(ctx, t, proj);
+            ctx.restore();
+        }
     }
 
     // Paint real coverage cells at native 5cm resolution behind the

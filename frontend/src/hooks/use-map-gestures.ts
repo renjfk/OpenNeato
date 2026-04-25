@@ -10,8 +10,13 @@ const DOUBLE_TAP_ZOOM = 2.5;
 
 // Manages pan, zoom, and reset gestures for a canvas element.
 // Returns the current transform and a reset function.
-export function useMapGestures(canvasRef: { current: HTMLCanvasElement | null }): MapTransform {
+// `rotation` (degrees, 0/90/180/270) keeps gesture math aligned with the
+// rotated drawing transform applied in renderMap so dragging right always
+// pans the visible content right regardless of orientation.
+export function useMapGestures(canvasRef: { current: HTMLCanvasElement | null }, rotation = 0): MapTransform {
     const [transform, setTransform] = useState<MapTransform>(DEFAULT_TRANSFORM);
+    const rotationRef = useRef(rotation);
+    rotationRef.current = rotation;
 
     // Mutable refs for gesture state to avoid re-attaching listeners
     const tRef = useRef<MapTransform>(DEFAULT_TRANSFORM);
@@ -67,16 +72,35 @@ export function useMapGestures(canvasRef: { current: HTMLCanvasElement | null })
         [clampPan, commit],
     );
 
-    // Convert client coordinates to canvas-local coordinates
+    // Convert client coordinates to canvas-local coordinates, in the
+    // map's pre-rotation space. Pan/zoom transforms are applied after the
+    // rotation in renderMap, so gestures must operate in that same space.
     const toLocal = useCallback(
         (clientX: number, clientY: number): { x: number; y: number } => {
             const canvas = canvasRef.current;
             if (!canvas) return { x: clientX, y: clientY };
             const rect = canvas.getBoundingClientRect();
-            return { x: clientX - rect.left, y: clientY - rect.top };
+            const sx = clientX - rect.left;
+            const sy = clientY - rect.top;
+            const theta = (-rotationRef.current * Math.PI) / 180;
+            const cos = Math.cos(theta);
+            const sin = Math.sin(theta);
+            const w = canvas.clientWidth;
+            const h = canvas.clientHeight;
+            const dx = sx - w / 2;
+            const dy = sy - h / 2;
+            return { x: w / 2 + cos * dx - sin * dy, y: h / 2 + sin * dx + cos * dy };
         },
         [canvasRef],
     );
+
+    // Rotate a screen-space delta into the map's pre-rotation space.
+    const rotateDelta = useCallback((dx: number, dy: number): { dx: number; dy: number } => {
+        const theta = (-rotationRef.current * Math.PI) / 180;
+        const cos = Math.cos(theta);
+        const sin = Math.sin(theta);
+        return { dx: cos * dx - sin * dy, dy: sin * dx + cos * dy };
+    }, []);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -102,9 +126,8 @@ export function useMapGestures(canvasRef: { current: HTMLCanvasElement | null })
 
         const onPointerMove = (e: PointerEvent) => {
             if (!dragging.current) return;
-            const dx = e.clientX - dragStart.current.x;
-            const dy = e.clientY - dragStart.current.y;
-            const pan = clampPan(panStart.current.x + dx, panStart.current.y + dy, tRef.current.zoom);
+            const d = rotateDelta(e.clientX - dragStart.current.x, e.clientY - dragStart.current.y);
+            const pan = clampPan(panStart.current.x + d.dx, panStart.current.y + d.dy, tRef.current.zoom);
             commit({ ...tRef.current, panX: pan.panX, panY: pan.panY });
         };
 
@@ -191,9 +214,11 @@ export function useMapGestures(canvasRef: { current: HTMLCanvasElement | null })
                 const pan = clampPan(nextPanX + panDx, nextPanY + panDy, newZoom);
                 commit({ panX: pan.panX, panY: pan.panY, zoom: newZoom });
             } else if (e.touches.length === 1 && dragging.current) {
-                const dx = e.touches[0].clientX - dragStart.current.x;
-                const dy = e.touches[0].clientY - dragStart.current.y;
-                const pan = clampPan(panStart.current.x + dx, panStart.current.y + dy, tRef.current.zoom);
+                const d = rotateDelta(
+                    e.touches[0].clientX - dragStart.current.x,
+                    e.touches[0].clientY - dragStart.current.y,
+                );
+                const pan = clampPan(panStart.current.x + d.dx, panStart.current.y + d.dy, tRef.current.zoom);
                 commit({ ...tRef.current, panX: pan.panX, panY: pan.panY });
             }
         };
@@ -236,7 +261,7 @@ export function useMapGestures(canvasRef: { current: HTMLCanvasElement | null })
             canvas.removeEventListener("touchmove", onTouchMove);
             canvas.removeEventListener("touchend", onTouchEnd);
         };
-    }, [canvasRef, clampPan, commit, reset, toLocal, zoomAt]);
+    }, [canvasRef, clampPan, commit, reset, toLocal, zoomAt, rotateDelta]);
 
     // Reset transform when canvas ref changes (new map loaded)
     useEffect(() => {

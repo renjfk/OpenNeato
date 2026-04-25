@@ -15,6 +15,7 @@ interface MotionPlayerProps {
     canvas: HTMLCanvasElement | null;
     map: MapData;
     transform: MapTransform;
+    rotation: number;
     // Seconds of session time played per real second. 1x replays in real time,
     // higher values speed the playback up proportionally.
     speed?: number;
@@ -24,7 +25,7 @@ interface MotionPlayerProps {
     canvasSuspended?: boolean;
 }
 
-export function MotionPlayer({ canvas, map, transform, speed = 8, canvasSuspended }: MotionPlayerProps) {
+export function MotionPlayer({ canvas, map, transform, rotation, speed = 8, canvasSuspended }: MotionPlayerProps) {
     const duration = sessionDuration(map);
     const [playing, setPlaying] = useState(false);
     // Start at the end of the timeline so a freshly opened session shows the
@@ -50,19 +51,19 @@ export function MotionPlayer({ canvas, map, transform, speed = 8, canvasSuspende
     useEffect(() => {
         if (canvasSuspended) return;
         if (!canvas || !map) return;
-        renderMap(canvas, map, false, transform, currentTime);
-    }, [canvas, map, transform, currentTime, canvasSuspended]);
+        renderMap(canvas, map, false, transform, currentTime, rotation);
+    }, [canvas, map, transform, currentTime, rotation, canvasSuspended]);
 
     // Re-render on resize — canvas backing store gets invalidated.
     useEffect(() => {
         if (canvasSuspended) return;
         if (!canvas) return;
         const onResize = () => {
-            renderMap(canvas, map, false, transform, timeRef.current);
+            renderMap(canvas, map, false, transform, timeRef.current, rotation);
         };
         window.addEventListener("resize", onResize);
         return () => window.removeEventListener("resize", onResize);
-    }, [canvas, map, transform, canvasSuspended]);
+    }, [canvas, map, transform, rotation, canvasSuspended]);
 
     // Reset to the completed map whenever the session switches. The scrubber
     // anchors at `duration` so the user sees the full session at rest.

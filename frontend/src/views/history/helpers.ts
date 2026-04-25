@@ -145,12 +145,14 @@ export function interpolatePose(
 // renderer draws only the portion of the session up to that timestamp and
 // shows the interpolated robot pose as a directional sprite — used by the
 // motion player. Without `currentTime` the full static map is drawn.
+// `rotation` rotates the map content around the canvas center (degrees, 0/90/180/270).
 export function renderMap(
     canvas: HTMLCanvasElement,
     map: MapData,
     recording = false,
     tf?: MapTransform,
     currentTime?: number,
+    rotation = 0,
 ) {
     const ctx = canvas.getContext("2d");
     if (!ctx || !map.bounds) return;
@@ -166,6 +168,20 @@ export function renderMap(
     canvas.height = displayH * dpr;
     ctx.scale(dpr, dpr);
 
+    // Fill the unrotated background first so rotation doesn't expose the
+    // underlying transparent canvas at the corners.
+    ctx.fillStyle = getComputedStyle(canvas).getPropertyValue("--surface").trim() || "#1a1a1c";
+    ctx.fillRect(0, 0, displayW, displayH);
+
+    // Rotate the map content around the canvas center. Pan/zoom are applied
+    // in the rotated coordinate space so gestures stay aligned with the
+    // visible orientation (handled in useMapGestures).
+    if (rotation) {
+        ctx.translate(displayW / 2, displayH / 2);
+        ctx.rotate((rotation * Math.PI) / 180);
+        ctx.translate(-displayW / 2, -displayH / 2);
+    }
+
     // Apply zoom + pan: zoom from top-left origin, panX/panY computed by
     // useMapGestures already account for the cursor-relative zoom anchor.
     ctx.translate(panX, panY);
@@ -174,10 +190,6 @@ export function renderMap(
     const proj = computeMapProjection(displayW, displayH, map.bounds);
     const { scale, toX, toY } = proj;
     const isDark = isDarkSurface(canvas);
-
-    // Background
-    ctx.fillStyle = getComputedStyle(canvas).getPropertyValue("--surface").trim() || "#1a1a1c";
-    ctx.fillRect(0, 0, displayW, displayH);
 
     // Grid lines - draw first so coverage/path render on top
     drawMapGrid(ctx, proj, isDark);

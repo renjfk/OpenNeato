@@ -101,6 +101,7 @@ const _randf = (min, max, decimals = 2) => parseFloat((Math.random() * (max - mi
 //   fpe  — Polling fault: GET /api/error
 //   fp   — All polling faults (state + charger + error)
 //   fhc  — History corruption (inject corrupted pose lines in session data)
+//   fhl  — History list corruption (malformed JSON in /api/history response, triggers recovery panel)
 //   fal  — All faults combined
 const SCENARIO = "ok";
 
@@ -161,6 +162,7 @@ const SCENARIOS = {
     fpe: { faults: { pollError: true } },
     fp: { faults: { pollState: true, pollCharger: true, pollError: true } },
     fhc: { faults: { historyCorrupt: true } },
+    fhl: { faults: { historyListCorrupt: true } },
     fal: {
         faults: {
             actions: true,
@@ -171,6 +173,7 @@ const SCENARIOS = {
             pollCharger: true,
             pollError: true,
             historyCorrupt: true,
+            historyListCorrupt: true,
         },
     },
 };
@@ -898,6 +901,22 @@ const handleRequest = async (req, res) => {
                 summary,
             };
         });
+        // Mimic the firmware bug from issue #90: one session's summary field
+        // contains a truncated pose snapshot concatenated with the real
+        // summary, which makes the entire response unparseable. Triggers the
+        // recovery panel in the frontend.
+        if (faults.historyListCorrupt && list.length > 0) {
+            const target = list[Math.min(1, list.length - 1)];
+            const summaryJson = target.summary ? JSON.stringify(target.summary) : '{"type":"summary"}';
+            const corruptedSummary = `{"x":-0.218,"y":0.007,"t":35${summaryJson.slice(1)}`;
+            const body = JSON.stringify(list).replace(JSON.stringify(target.summary ?? null), corruptedSummary);
+            res.writeHead(200, {
+                "Content-Type": "application/json",
+                "Content-Length": Buffer.byteLength(body),
+            });
+            res.end(body);
+            return;
+        }
         return jsonResponse(res, list);
     }
 

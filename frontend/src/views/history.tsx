@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "preact/hooks";
-import { api } from "../api";
+import { api, ResponseParseError } from "../api";
 import backSvg from "../assets/icons/back.svg?raw";
+import { ConfirmDialog } from "../components/confirm-dialog";
 import { ErrorBannerStack, useErrorStack } from "../components/error-banner";
 import { Icon } from "../components/icon";
 import { useNavigate, usePath } from "../components/router";
@@ -8,6 +9,9 @@ import type { HistoryFileInfo, MapData } from "../types";
 import { normalizeError } from "../utils";
 import { HistoryItemView } from "./history/item";
 import { HistoryListView } from "./history/list";
+
+const RECOVERY_GUIDE_URL =
+    "https://github.com/renjfk/OpenNeato/blob/main/docs/user-guide.md#recovering-corrupted-cleaning-history";
 
 export function HistoryView() {
     const navigate = useNavigate();
@@ -18,6 +22,11 @@ export function HistoryView() {
     const [selectedMap, setSelectedMap] = useState<MapData | null>(null);
     const [mapEmpty, setMapEmpty] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    // Set when the list response is unparseable (e.g. one session's metadata
+    // contains malformed JSON that breaks the surrounding response). Triggers
+    // the recovery panel instead of the normal list view.
+    const [listCorrupted, setListCorrupted] = useState(false);
+    const [confirmReset, setConfirmReset] = useState(false);
 
     // Derive selected filename from URL: /history = list, /history/<name> = detail
     const selectedName = path.startsWith("/history/") ? decodeURIComponent(path.slice(9)) : null;
@@ -35,10 +44,15 @@ export function HistoryView() {
     // Load file list only (no full session data)
     useEffect(() => {
         setLoading(true);
+        setListCorrupted(false);
         api.getHistoryList()
             .then((fileList) => setFiles(sortByDateDesc(fileList)))
             .catch((e: unknown) => {
-                errorStack.push(normalizeError(e, "Failed to load map data"));
+                if (e instanceof ResponseParseError) {
+                    setListCorrupted(true);
+                } else {
+                    errorStack.push(normalizeError(e, "Failed to load map data"));
+                }
             })
             .finally(() => setLoading(false));
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -131,6 +145,7 @@ export function HistoryView() {
         api.deleteAllHistory()
             .then(() => {
                 setFiles([]);
+                setListCorrupted(false);
                 if (selectedName) navigate("/history");
             })
             .catch((e: unknown) => {
@@ -164,7 +179,36 @@ export function HistoryView() {
             <div class="history-page">
                 {loading && <div class="history-empty">Loading...</div>}
 
-                {!loading && files.length === 0 && !showDetail && (
+                {!loading && listCorrupted && !showDetail && (
+                    <div class="history-recovery">
+                        <h2 class="history-recovery-title">Cleaning history is corrupted</h2>
+                        <p class="history-recovery-msg">
+                            One of the stored sessions contains malformed data and is preventing the list from loading.
+                            The recovery guide explains how to identify and remove the bad session(s) without losing the
+                            rest. If you'd rather not investigate, you can wipe everything in one go.
+                        </p>
+                        <div class="history-recovery-actions">
+                            <a
+                                class="history-recovery-link"
+                                href={RECOVERY_GUIDE_URL}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                Open recovery guide
+                            </a>
+                            <button
+                                type="button"
+                                class={`history-delete-all-btn${deleting ? " pending" : ""}`}
+                                onClick={() => setConfirmReset(true)}
+                                disabled={deleting}
+                            >
+                                Delete all history
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {!loading && !listCorrupted && files.length === 0 && !showDetail && (
                     <HistoryListView
                         files={files}
                         hasRecording={false}
@@ -177,7 +221,7 @@ export function HistoryView() {
                     />
                 )}
 
-                {!loading && files.length > 0 && !showDetail && (
+                {!loading && !listCorrupted && files.length > 0 && !showDetail && (
                     <HistoryListView
                         files={files}
                         hasRecording={hasRecording}
@@ -196,6 +240,19 @@ export function HistoryView() {
                         map={selectedMap}
                         mapEmpty={mapEmpty}
                         recording={selectedRecording}
+                    />
+                )}
+
+                {confirmReset && (
+                    <ConfirmDialog
+                        message="Delete all map data?"
+                        confirmLabel="Delete"
+                        disabled={deleting}
+                        onConfirm={() => {
+                            setConfirmReset(false);
+                            handleDeleteAll();
+                        }}
+                        onCancel={() => setConfirmReset(false)}
                     />
                 )}
             </div>

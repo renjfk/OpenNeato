@@ -1883,6 +1883,51 @@ body {
     padding: 48px 0;
 }
 
+.history-recovery {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    padding: 20px;
+    margin-top: 12px;
+}
+
+.history-recovery-title {
+    margin: 0 0 8px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--red);
+}
+
+.history-recovery-msg {
+    margin: 0 0 16px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--text-muted);
+}
+
+.history-recovery-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.history-recovery-link {
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-raised);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.history-recovery-link:active {
+    opacity: 0.7;
+}
+
 .history-session-row {
     display: flex;
     align-items: center;

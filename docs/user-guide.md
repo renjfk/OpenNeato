@@ -6,7 +6,6 @@ Everything you need to set up, configure, and troubleshoot OpenNeato.
 
 - [Hardware Setup](#hardware-setup)
     - [What You Need](#what-you-need)
-    - [Opening the Robot](#opening-the-robot)
     - [Debug Port Pinout](#debug-port-pinout)
     - [Wiring](#wiring)
 - [Flashing Firmware](#flashing-firmware)
@@ -24,6 +23,7 @@ Everything you need to set up, configure, and troubleshoot OpenNeato.
     - [Enabling Logging](#enabling-logging)
     - [Collecting Logs](#collecting-logs)
     - [Downloading Cleaning Maps](#downloading-cleaning-maps)
+    - [Recovering Corrupted Cleaning History](#recovering-corrupted-cleaning-history)
     - [Factory Reset](#factory-reset)
     - [Reporting an Issue](#reporting-an-issue)
 - [Multiple Robots](#multiple-robots)
@@ -37,12 +37,10 @@ Everything you need to set up, configure, and troubleshoot OpenNeato.
 ## Hardware Setup
 
 > [!NOTE]
-> Hardware assembly is not the primary focus of this project. There are already comprehensive
-> teardown and wiring guides available — in particular
-> [Philip2809/neato-brainslug](https://github.com/Philip2809/neato-brainslug) which covers
-> the D3-D7 debug port in detail. This section shares my personal experience with minimal
-> photos and a bill of materials. If there's community interest I'll expand it further —
-> I'll be opening my own Neato D7 soon to replace the LIDAR O-ring.
+> Hardware assembly is not the primary focus of this project. For a comprehensive teardown
+> guide covering how to open the robot and reach the debug port, see
+> [Philip2809/neato-brainslug](https://github.com/Philip2809/neato-brainslug). This section
+> covers the parts list, debug port pinout, and wiring.
 
 ### What You Need
 
@@ -74,11 +72,6 @@ solder the JST connector wires directly to the board pads for the cleanest resul
 
 The ESP32 is powered directly from the robot's 3.3V debug port — no separate USB power
 supply needed during normal operation.
-
-### Opening the Robot
-
-<!-- TODO: brief description of my experience, photos of the bottom screws and top shell removal -->
-<!-- Reference: https://github.com/Philip2809/neato-brainslug for a comprehensive teardown guide -->
 
 ### Debug Port Pinout
 
@@ -362,7 +355,36 @@ termination), download the cleaning history session from **History**. Each sessi
 the robot's recorded path rendered as a coverage map, along with stats like duration, distance,
 area covered, and battery usage.
 
-<!-- TODO: describe how to download/share the session data file for issue reports -->
+### Recovering Corrupted Cleaning History
+
+If the History page shows a "Cleaning history is corrupted" message, one of the stored sessions
+has malformed data and is preventing the list from loading. This can happen if a cleaning was
+interrupted by a power loss or unexpected reset. The following steps let you find and remove
+the bad session(s) without losing the rest. Replace `YOUR_ROBOT` with your bridge's hostname
+or IP address.
+
+1. **Fetch the session list** and inspect it visually:
+
+    ```sh
+    curl "http://YOUR_ROBOT/api/history"
+    ```
+
+   Paste the response into a JSON validator (for example
+   [jsonlint.com](https://jsonlint.com) or [jsonformatter.org](https://jsonformatter.org)).
+   The validator will flag the position of the malformed entry. Note the `name` field of the
+   bad session (e.g. `1776667071.jsonl.hs`).
+
+2. **Delete the bad session**:
+
+    ```sh
+    curl -X DELETE "http://YOUR_ROBOT/api/history/<filename>"
+    ```
+
+3. **Reload the History page**. If multiple sessions are corrupted, repeat steps 1-2 until the
+   list loads.
+
+If you'd rather not investigate, the History page also offers a **Delete all history** button
+that wipes every session in one go and restores the list view.
 
 ### Factory Reset
 

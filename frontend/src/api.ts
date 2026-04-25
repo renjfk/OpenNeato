@@ -24,10 +24,24 @@ async function parseError(res: Response): Promise<string> {
     return `${res.status} ${res.statusText}`;
 }
 
+// Thrown when an OK response body cannot be parsed as JSON. Distinct from
+// network/HTTP errors so callers can render a recovery flow instead of a
+// generic error banner.
+export class ResponseParseError extends Error {
+    constructor(public url: string) {
+        super(`Failed to parse response from ${url}`);
+        this.name = "ResponseParseError";
+    }
+}
+
 async function get<T>(url: string): Promise<T> {
     const res = await fetch(url);
     if (!res.ok) throw new Error(await parseError(res));
-    return res.json();
+    try {
+        return (await res.json()) as T;
+    } catch {
+        throw new ResponseParseError(url);
+    }
 }
 
 async function post(url: string): Promise<void> {

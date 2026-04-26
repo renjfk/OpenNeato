@@ -122,7 +122,7 @@ export function HistoryItemView({ file, map, mapEmpty, recording }: HistoryItemV
                     <div class="history-stat">
                         <span class="history-stat-label">Battery</span>
                         <span class="history-stat-value">
-                            {session?.battery ?? "?"}% &rarr; {summary.batteryEnd ?? summary.battery ?? "?"}%
+                            {session?.battery ?? "?"}% &rarr; {summary.batteryEnd ?? "?"}%
                         </span>
                     </div>
                     {summary.recharges > 0 && (

@@ -98,7 +98,9 @@ jobs:
         run: npm ci
         working-directory: frontend
 
-      - name: Build frontend (lint + typecheck + vite + embed)
+      - name: Build frontend (lint + typecheck + vite + embed + api docs)
+        env:
+          OPENNEATO_VERSION: ${{ needs.prepare.outputs.version }}
         run: npm run build
         working-directory: frontend
 

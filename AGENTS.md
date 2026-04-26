@@ -25,7 +25,8 @@ Three top-level components: `firmware/` (ESP32 C/C++), `frontend/` (Preact SPA),
 - Flash tool: Go CLI, cross-compiled via GoReleaser, uses esptool subprocess
 - Mock server: `frontend/mock/server.js` Vite plugin, `SCENARIO` constant for state switching. Reset to `"ok"` before
   committing.
-- Build pipeline: `npm run build` -> lint -> tsc -> vite -> `embed_frontend.js` generates `web_assets.h`
+- Build pipeline: `npm run build` -> lint -> tsc -> vite -> `embed_frontend.js` generates `web_assets.h` ->
+  `gen_api_docs.js` generates `frontend/dist-docs/{openapi.json, api-reference.md}` (shipped as release assets)
 
 ### Data Logging
 
@@ -42,6 +43,13 @@ All significant events must be logged via `DataLogger` (injected by reference).
 needs logging, add a new typed helper following the existing pattern. Log both
 success and failure outcomes. At info level, only failures and state transitions
 are logged; at debug level, all serial commands including raw responses are included.
+
+### API Documentation
+
+When adding/changing an HTTP route, annotate it with `// @doc` directives in
+`web_server.cpp` and keep TSDoc (`/** ... */`) on every field of the matching
+response/body interface in `frontend/src/types.ts`. The generator (`npm run build`)
+fails on drift between firmware JSON keys and TS interfaces.
 
 ### Filesystem and Flash Wear
 

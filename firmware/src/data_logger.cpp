@@ -452,18 +452,15 @@ void DataLogger::logEvent(const String& type, const std::vector<Field>& fields) 
 }
 
 static const char *httpMethodStr(WebRequestMethodComposite method) {
-    switch (method) {
-        case HTTP_GET:
-            return "GET";
-        case HTTP_POST:
-            return "POST";
-        case HTTP_DELETE:
-            return "DELETE";
-        case HTTP_PUT:
-            return "PUT";
-        default:
-            return "UNKNOWN";
-    }
+    if (method == HTTP_GET)
+        return "GET";
+    if (method == HTTP_POST)
+        return "POST";
+    if (method == HTTP_DELETE)
+        return "DELETE";
+    if (method == HTTP_PUT)
+        return "PUT";
+    return "UNKNOWN";
 }
 
 void DataLogger::logRequest(WebRequestMethodComposite method, const String& path, int status, unsigned long ms) {

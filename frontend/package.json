@@ -2,6 +2,7 @@
     "name": "neato-web",
     "private": true,
     "version": "0.0.1",
+    "type": "module",
     "scripts": {
         "dev": "vite",
         "build": "biome check && tsc --noEmit && vite build && node scripts/embed_frontend.js",
@@ -11,12 +12,12 @@
         "fix:unsafe": "biome check --write --unsafe"
     },
     "dependencies": {
-        "preact": "10.29.0"
+        "preact": "10.29.1"
     },
     "devDependencies": {
-        "@biomejs/biome": "2.4.7",
-        "@preact/preset-vite": "2.10.3",
-        "typescript": "5.9.3",
-        "vite": "7.3.1"
+        "@biomejs/biome": "2.4.13",
+        "@preact/preset-vite": "2.10.5",
+        "typescript": "6.0.3",
+        "vite": "8.0.10"
     }
 }

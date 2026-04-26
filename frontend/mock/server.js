@@ -3,10 +3,13 @@
 // Runs as a Vite plugin — hooks into Vite's dev server middleware
 // To test different scenarios, edit the `state` object directly and reload
 
-const { createHash } = require("node:crypto");
-const { execSync } = require("node:child_process");
-const { readFileSync, readdirSync } = require("node:fs");
-const { join } = require("node:path");
+import { execSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // --- Helpers ---
 
@@ -936,7 +939,7 @@ const handleRequest = async (req, res) => {
         const bodyStr = body.toString("binary");
         // Extract filename from Content-Disposition header in multipart body
         const nameMatch = bodyStr.match(/filename="([^"]+)"/);
-        if (!nameMatch || !nameMatch[1].endsWith(".jsonl")) {
+        if (!nameMatch?.[1].endsWith(".jsonl")) {
             return sendError(res, "Invalid file: expected a .jsonl session file", 400);
         }
         const filename = nameMatch[1];
@@ -1201,4 +1204,4 @@ function mockApiPlugin() {
     };
 }
 
-module.exports = { mockApiPlugin };
+export { mockApiPlugin };

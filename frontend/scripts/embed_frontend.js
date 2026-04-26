@@ -6,10 +6,12 @@
 //
 // Usage: node frontend/scripts/embed_frontend.js
 
-const fs = require("node:fs");
-const path = require("node:path");
-const zlib = require("node:zlib");
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import zlib from "node:zlib";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.join(__dirname, "..", "dist");
 const outHeader = path.join(__dirname, "..", "..", "firmware", "src", "web_assets.h");
 

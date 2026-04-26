@@ -3,3 +3,6 @@ declare module "*.svg?raw" {
     const content: string;
     export default content;
 }
+
+// Type declaration for side-effect CSS imports
+declare module "*.css";

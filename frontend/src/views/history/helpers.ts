@@ -4,10 +4,67 @@ import clockSvg from "../../assets/icons/clock.svg?raw";
 import houseSvg from "../../assets/icons/house.svg?raw";
 import manualSvg from "../../assets/icons/manual.svg?raw";
 import spotSvg from "../../assets/icons/spot.svg?raw";
-import type { MapData, MapPathPoint, MapTransform } from "../../types";
+import type { MapBounds, MapData, MapPathPoint, MapTransform } from "../../types";
 import { pad2 } from "../../utils";
 
 const DEFAULT_TRANSFORM: MapTransform = { panX: 0, panY: 0, zoom: 1 };
+const MAP_PAD = 20;
+const GRID_STEP = 0.5;
+
+export interface MapProjection {
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
+    scale: number;
+    toX: (wx: number) => number;
+    toY: (wy: number) => number;
+}
+
+// World-to-canvas projection used by the static renderer and the loading wave.
+// `pad` is in display pixels; the world is centered within the available area.
+export function computeMapProjection(displayW: number, displayH: number, bounds: MapBounds): MapProjection {
+    const { minX, maxX, minY, maxY } = bounds;
+    const worldW = maxX - minX;
+    const worldH = maxY - minY;
+    const availW = displayW - MAP_PAD * 2;
+    const availH = displayH - MAP_PAD * 2;
+    const scale = Math.min(availW / worldW, availH / worldH);
+    const offX = MAP_PAD + (availW - worldW * scale) / 2;
+    const offY = MAP_PAD + (availH - worldH * scale) / 2;
+    return {
+        minX,
+        maxX,
+        minY,
+        maxY,
+        scale,
+        toX: (wx) => offX + (wx - minX) * scale,
+        toY: (wy) => offY + (maxY - wy) * scale,
+    };
+}
+
+// 0.5m background grid. Same look in both the static map and the wave reveal.
+export function drawMapGrid(ctx: CanvasRenderingContext2D, proj: MapProjection, isDark: boolean): void {
+    ctx.strokeStyle = isDark ? "rgba(255, 255, 255, 0.04)" : "rgba(0, 0, 0, 0.06)";
+    ctx.lineWidth = 1;
+    const { minX, maxX, minY, maxY, toX, toY } = proj;
+    for (let gx = Math.floor(minX / GRID_STEP) * GRID_STEP; gx <= maxX; gx += GRID_STEP) {
+        ctx.beginPath();
+        ctx.moveTo(toX(gx), toY(minY));
+        ctx.lineTo(toX(gx), toY(maxY));
+        ctx.stroke();
+    }
+    for (let gy = Math.floor(minY / GRID_STEP) * GRID_STEP; gy <= maxY; gy += GRID_STEP) {
+        ctx.beginPath();
+        ctx.moveTo(toX(minX), toY(gy));
+        ctx.lineTo(toX(maxX), toY(gy));
+        ctx.stroke();
+    }
+}
+
+export function isDarkSurface(canvas: HTMLCanvasElement): boolean {
+    return getComputedStyle(canvas).getPropertyValue("--surface").trim().startsWith("#1");
+}
 
 export function formatDuration(secs: number): string {
     if (secs < 60) return `${secs}s`;
@@ -114,48 +171,16 @@ export function renderMap(
     ctx.translate(panX, panY);
     ctx.scale(zoom, zoom);
 
-    const { minX, maxX, minY, maxY } = map.bounds;
-    const worldW = maxX - minX;
-    const worldH = maxY - minY;
-
-    const pad = 20;
-    const availW = displayW - pad * 2;
-    const availH = displayH - pad * 2;
-    const scale = Math.min(availW / worldW, availH / worldH);
-
-    // Center the map within the canvas
-    const renderedW = worldW * scale;
-    const renderedH = worldH * scale;
-    const offX = pad + (availW - renderedW) / 2;
-    const offY = pad + (availH - renderedH) / 2;
-
-    const toX = (x: number) => offX + (x - minX) * scale;
-    const toY = (y: number) => offY + (maxY - y) * scale;
-
-    const isDark = getComputedStyle(canvas).getPropertyValue("--surface").trim().startsWith("#1");
+    const proj = computeMapProjection(displayW, displayH, map.bounds);
+    const { scale, toX, toY } = proj;
+    const isDark = isDarkSurface(canvas);
 
     // Background
     ctx.fillStyle = getComputedStyle(canvas).getPropertyValue("--surface").trim() || "#1a1a1c";
     ctx.fillRect(0, 0, displayW, displayH);
 
     // Grid lines - draw first so coverage/path render on top
-    ctx.strokeStyle = isDark ? "rgba(255, 255, 255, 0.04)" : "rgba(0, 0, 0, 0.06)";
-    ctx.lineWidth = 1;
-    const gridStep = 0.5;
-    const gridMinX = Math.floor(minX / gridStep) * gridStep;
-    const gridMinY = Math.floor(minY / gridStep) * gridStep;
-    for (let gx = gridMinX; gx <= maxX; gx += gridStep) {
-        ctx.beginPath();
-        ctx.moveTo(toX(gx), toY(minY));
-        ctx.lineTo(toX(gx), toY(maxY));
-        ctx.stroke();
-    }
-    for (let gy = gridMinY; gy <= maxY; gy += gridStep) {
-        ctx.beginPath();
-        ctx.moveTo(toX(minX), toY(gy));
-        ctx.lineTo(toX(maxX), toY(gy));
-        ctx.stroke();
-    }
+    drawMapGrid(ctx, proj, isDark);
 
     // Coverage cells — filtered by timestamp during playback
     const cellPx = map.cellSize * scale;

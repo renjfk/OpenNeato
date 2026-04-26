@@ -18,9 +18,13 @@ interface MotionPlayerProps {
     // Seconds of session time played per real second. 1x replays in real time,
     // higher values speed the playback up proportionally.
     speed?: number;
+    // When true, the player's controls render as normal but it does NOT
+    // touch the canvas. Used by the host UI to keep play/restart/scrubber
+    // visible while the loading wave still owns the canvas drawing surface.
+    canvasSuspended?: boolean;
 }
 
-export function MotionPlayer({ canvas, map, transform, speed = 8 }: MotionPlayerProps) {
+export function MotionPlayer({ canvas, map, transform, speed = 8, canvasSuspended }: MotionPlayerProps) {
     const duration = sessionDuration(map);
     const [playing, setPlaying] = useState(false);
     // Start at the end of the timeline so a freshly opened session shows the
@@ -40,20 +44,25 @@ export function MotionPlayer({ canvas, map, transform, speed = 8 }: MotionPlayer
 
     // Re-render canvas whenever the time, transform, or map changes. This
     // runs on every animation frame tick via the setCurrentTime update.
+    // While `canvasSuspended` is true the wave owns the canvas, so we
+    // skip painting; once the host clears the suspension this effect
+    // re-runs and lays down the current playhead state.
     useEffect(() => {
+        if (canvasSuspended) return;
         if (!canvas || !map) return;
         renderMap(canvas, map, false, transform, currentTime);
-    }, [canvas, map, transform, currentTime]);
+    }, [canvas, map, transform, currentTime, canvasSuspended]);
 
     // Re-render on resize — canvas backing store gets invalidated.
     useEffect(() => {
+        if (canvasSuspended) return;
         if (!canvas) return;
         const onResize = () => {
             renderMap(canvas, map, false, transform, timeRef.current);
         };
         window.addEventListener("resize", onResize);
         return () => window.removeEventListener("resize", onResize);
-    }, [canvas, map, transform]);
+    }, [canvas, map, transform, canvasSuspended]);
 
     // Reset to the completed map whenever the session switches. The scrubber
     // anchors at `duration` so the user sees the full session at rest.

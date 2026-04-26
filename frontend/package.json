@@ -5,7 +5,7 @@
     "type": "module",
     "scripts": {
         "dev": "vite",
-        "build": "biome check && tsc --noEmit && vite build && node scripts/embed_frontend.js",
+        "build": "biome check && tsc --noEmit && vite build && node scripts/embed_frontend.js && node scripts/gen_api_docs.js",
         "preview": "vite preview",
         "check": "biome check",
         "fix": "biome check --write",

@@ -77,32 +77,78 @@ void WebServer::begin() {
 
 void WebServer::registerApiRoutes() {
     // -- Sensor query endpoints ----------------------------------------------
+    // @tag Sensors: Read-only telemetry from the robot
 
+    // @doc summary: Get robot identity (model, serial, firmware versions)
+    // @doc response: VersionData
     registerGetRoute("/api/version", neato, &NeatoSerial::getVersion, {});
+    // @doc summary: Get battery and charger status
+    // @doc response: ChargerData
     registerGetRoute("/api/charger", neato, &NeatoSerial::getCharger, {});
+    // @doc summary: Get motor telemetry (brush, vacuum, wheels, side brush, laser)
+    // @doc response: MotorData
     registerGetRoute(
             "/api/motors", neato,
             static_cast<void (NeatoSerial::*)(std::function<void(bool, const MotorData&)>)>(&NeatoSerial::getMotors),
             {});
+    // @doc summary: Get current UI and robot state machine values
+    // @doc response: StateData
     registerGetRoute("/api/state", neato, &NeatoSerial::getState, {});
+    // @doc summary: Get current error or warning state
+    // @doc response: ErrorData
     registerGetRoute("/api/error", neato, &NeatoSerial::getErr, {});
+    // @doc summary: Get latest 360-point LIDAR scan
+    // @doc response: LidarScan
     registerGetRoute("/api/lidar", neato, &NeatoSerial::getLdsScan, {});
+    // @doc summary: Get robot on-board user settings (sounds, eco, wall follow, maintenance)
+    // @doc response: UserSettingsData
     registerGetRoute("/api/user-settings", neato, &NeatoSerial::getUserSettings, {});
 
     // -- Action endpoints ----------------------------------------------------
     // All parameterized actions use query strings: resource URL identifies the
     // command, query params carry arguments (mirrors Neato serial protocol).
+    // @tag Actions: Control commands sent to the robot
 
+    // @doc summary: Start, pause, resume, stop, or dock cleaning
+    // @doc query: action enum=house,spot,pause,stop,dock required
+    // @doc response: Ok
+    // @doc errors: 503=robot busy, 504=robot timeout
     registerPostRoute("/api/clean", neato, &NeatoSerial::clean, {"action"});
+    // @doc summary: Play a robot sound effect
+    // @doc query: id integer 0..20 required
+    // @doc response: Ok
+    // @doc errors: 503=robot busy, 504=robot timeout
     registerPostRoute("/api/sound", neato, &NeatoSerial::playSound, {"id"});
+    // @doc summary: Enter or exit test mode (required for manual control)
+    // @doc query: enable boolean 0..1 required
+    // @doc response: Ok
+    // @doc errors: 503=robot busy, 504=robot timeout
     registerPostRoute("/api/testmode", neato, &NeatoSerial::testMode, {"enable"});
+    // @doc summary: Restart or shutdown the robot
+    // @doc query: action enum=restart,shutdown required
+    // @doc response: Ok
+    // @doc errors: 503=robot busy, 504=robot timeout
     registerPostRoute("/api/power", neato, &NeatoSerial::powerControl, {"action"});
+    // @doc summary: Start or stop LIDAR turret rotation
+    // @doc query: enable boolean 0..1 required
+    // @doc response: Ok
+    // @doc errors: 503=robot busy, 504=robot timeout
     registerPostRoute("/api/lidar/rotate", neato, &NeatoSerial::setLdsRotation, {"enable"});
+    // @doc summary: Set a single robot on-board user setting
+    // @doc query: key string required
+    // @doc query: value string required
+    // @doc response: Ok
+    // @doc errors: 503=robot busy, 504=robot timeout
     registerPostRoute("/api/user-settings", neato, &NeatoSerial::setUserSetting, {"key", "value"});
+    // @doc summary: Clear all UI errors and warnings on the robot
+    // @doc response: Ok
+    // @doc errors: 503=robot busy, 504=robot timeout
     registerPostRoute("/api/clear-errors", neato, &NeatoSerial::clearErrors, {});
 
     // Serial endpoint — send arbitrary serial command, returns raw response.
     // Always available (no debug gate — useful for diagnostics without enabling verbose logging).
+    // Excluded from public API docs (diagnostics-only passthrough).
+    // @doc skip
     server.on("/api/serial", HTTP_POST, [this](AsyncWebServerRequest *request) {
         lastApiActivity = millis();
         unsigned long startMs = lastApiActivity;
@@ -141,13 +187,35 @@ void WebServer::registerApiRoutes() {
 void WebServer::registerManualRoutes() {
     // Register longer paths first — ESPAsyncWebServer matches routes by prefix,
     // so /api/manual would swallow /api/manual/move and /api/manual/motors.
+    // @tag Manual: Manual cleaning mode (joystick, motors)
+
+    // @doc path: /api/manual/status
+    // @doc method: GET
+    // @doc summary: Get manual mode state (active flag, motors, bumpers, stalls)
+    // @doc response: ManualStatus
     loggedRoute("/api/manual/status", HTTP_GET, [this](AsyncWebServerRequest *request) {
         request->send(200, "application/json", manualMgr.getStatusJson());
         return 200;
     });
+    // @doc summary: Drive the wheels for a specific distance at a given speed
+    // @doc query: left integer required (mm, negative=backward)
+    // @doc query: right integer required (mm, negative=backward)
+    // @doc query: speed integer required (mm/s)
+    // @doc response: Ok
+    // @doc errors: 503=manual mode inactive or unsafe state, 504=robot timeout
     registerPostRoute("/api/manual/move", manualMgr, &ManualCleanManager::move, {"left", "right", "speed"});
+    // @doc summary: Toggle main brush, vacuum, and side brush motors
+    // @doc query: brush boolean 0..1 required
+    // @doc query: vacuum boolean 0..1 required
+    // @doc query: sideBrush boolean 0..1 required
+    // @doc response: Ok
+    // @doc errors: 503=manual mode inactive, 504=robot timeout
     registerPostRoute("/api/manual/motors", manualMgr, &ManualCleanManager::setMotors,
                       {"brush", "vacuum", "sideBrush"});
+    // @doc summary: Enable or disable manual mode (also enters TestMode and starts LIDAR)
+    // @doc query: enable boolean 0..1 required
+    // @doc response: Ok
+    // @doc errors: 503=cannot enter manual mode, 504=robot timeout
     registerPostRoute("/api/manual", manualMgr, &ManualCleanManager::enable, {"enable"});
 
     LOG("WEB", "Manual clean routes registered");
@@ -174,11 +242,23 @@ static String logListJson(const std::vector<LogFileInfo>& files) {
 }
 
 void WebServer::registerLogRoutes() {
+    // @tag Logs: Diagnostic log files stored in flash
+
     // GET /api/logs[/filename] — list logs or download a specific file
     // A single BackwardCompatible handler matches both "/api/logs" and "/api/logs/..."
     // This route uses server.on() directly instead of loggedRoute() because
     // compressed log downloads use chunked streaming (beginChunkedResponse) which
     // must not block — loggedRoute's sync wrapper would block until completion.
+    // @doc path: /api/logs
+    // @doc method: GET
+    // @doc summary: List all log files
+    // @doc response: array of LogFileInfo
+    // @doc path: /api/logs/{filename}
+    // @doc method: GET
+    // @doc summary: Download a single log file (transparently decompressed)
+    // @doc param: filename string required
+    // @doc response: application/x-ndjson
+    // @doc errors: 404=log not found
     server.on("/api/logs", HTTP_GET, [this](AsyncWebServerRequest *request) {
         unsigned long startMs = millis();
         String filename = request->url().substring(String("/api/logs/").length());
@@ -211,6 +291,16 @@ void WebServer::registerLogRoutes() {
     });
 
     // DELETE /api/logs[/filename] — delete all logs or a specific file
+    // @doc path: /api/logs
+    // @doc method: DELETE
+    // @doc summary: Delete all log files
+    // @doc response: Ok
+    // @doc path: /api/logs/{filename}
+    // @doc method: DELETE
+    // @doc summary: Delete a single log file
+    // @doc param: filename string required
+    // @doc response: Ok
+    // @doc errors: 404=log not found
     loggedRoute("/api/logs", HTTP_DELETE, [this](AsyncWebServerRequest *request) -> int {
         String filename = request->url().substring(String("/api/logs/").length());
 
@@ -235,13 +325,23 @@ void WebServer::registerLogRoutes() {
 // -- System health endpoint ---------------------------------------------------
 
 void WebServer::registerSystemRoutes() {
+    // @tag System: ESP32 system health and lifecycle
+
     // GET /api/system — live system health (heap, uptime, RSSI, storage, NTP)
+    // @doc path: /api/system
+    // @doc method: GET
+    // @doc summary: Get live system metrics (heap, uptime, WiFi RSSI, storage, NTP, time)
+    // @doc response: SystemData
     loggedRoute("/api/system", HTTP_GET, [this](AsyncWebServerRequest *request) -> int {
         request->send(200, "application/json", sysMgr.getSystemHealth(settingsMgr.get().tz).toJson());
         return 200;
     });
 
     // POST /api/system/restart — deferred restart
+    // @doc path: /api/system/restart
+    // @doc method: POST
+    // @doc summary: Restart the ESP32 (deferred 500ms to flush HTTP response)
+    // @doc response: Ok
     loggedRoute("/api/system/restart", HTTP_POST, [this](AsyncWebServerRequest *request) -> int {
         sendOk(request);
         sysMgr.restart();
@@ -249,6 +349,10 @@ void WebServer::registerSystemRoutes() {
     });
 
     // POST /api/system/reset — factory reset (clears NVS + WiFi, then restarts)
+    // @doc path: /api/system/reset
+    // @doc method: POST
+    // @doc summary: Factory reset (clear NVS and WiFi credentials, then restart)
+    // @doc response: Ok
     loggedRoute("/api/system/reset", HTTP_POST, [this](AsyncWebServerRequest *request) -> int {
         sendOk(request);
         sysMgr.factoryReset();
@@ -256,6 +360,10 @@ void WebServer::registerSystemRoutes() {
     });
 
     // POST /api/system/format-fs — format filesystem (erases logs + map data, then restarts)
+    // @doc path: /api/system/format-fs
+    // @doc method: POST
+    // @doc summary: Format the SPIFFS filesystem (erases logs and history, then restart)
+    // @doc response: Ok
     loggedRoute("/api/system/format-fs", HTTP_POST, [this](AsyncWebServerRequest *request) -> int {
         sendOk(request);
         sysMgr.formatFs();
@@ -268,13 +376,25 @@ void WebServer::registerSystemRoutes() {
 // -- Settings endpoint -------------------------------------------------------
 
 void WebServer::registerSettingsRoutes() {
+    // @tag Settings: User-configurable bridge settings
+
     // GET /api/settings — all user-configurable settings
+    // @doc path: /api/settings
+    // @doc method: GET
+    // @doc summary: Get all bridge settings (timezone, logging, WiFi, navigation, schedule, notifications)
+    // @doc response: SettingsData
     loggedRoute("/api/settings", HTTP_GET, [this](AsyncWebServerRequest *request) -> int {
         request->send(200, "application/json", settingsMgr.get().toJson());
         return 200;
     });
 
     // PUT /api/settings — partial update (only fields present are written)
+    // @doc path: /api/settings
+    // @doc method: PUT
+    // @doc summary: Partial settings update (only fields present in body are written)
+    // @doc body: SettingsData (partial)
+    // @doc response: SettingsData
+    // @doc errors: 400=invalid settings
     loggedBodyRoute("/api/settings", HTTP_PUT,
                     [this](AsyncWebServerRequest *request, uint8_t *data, size_t len) -> int {
                         String body = String(reinterpret_cast<const char *>(data), len);
@@ -296,6 +416,12 @@ void WebServer::registerSettingsRoutes() {
                     });
 
     // POST /api/notifications/test?topic=<topic> — send a test notification
+    // @doc path: /api/notifications/test
+    // @doc method: POST
+    // @doc summary: Send a test push notification to the given ntfy.sh topic
+    // @doc query: topic string required
+    // @doc response: Ok
+    // @doc errors: 400=missing or empty topic
     loggedRoute("/api/notifications/test", HTTP_POST, [this](AsyncWebServerRequest *request) -> int {
         if (!request->hasParam("topic")) {
             sendError(request, 400, "missing topic");
@@ -317,7 +443,13 @@ void WebServer::registerSettingsRoutes() {
 // -- Firmware endpoints -------------------------------------------------------
 
 void WebServer::registerFirmwareRoutes() {
+    // @tag Firmware: ESP32 firmware version and OTA update
+
     // GET /api/firmware/version — current ESP32 firmware version + chip model + robot support status
+    // @doc path: /api/firmware/version
+    // @doc method: GET
+    // @doc summary: Get current ESP32 firmware version, chip model, robot model, and support status
+    // @doc response: FirmwareVersion
     loggedRoute("/api/firmware/version", HTTP_GET, [this](AsyncWebServerRequest *request) -> int {
         std::vector<Field> fields = {
                 {"version", fwMgr.getFirmwareVersion(), FIELD_STRING},
@@ -332,6 +464,13 @@ void WebServer::registerFirmwareRoutes() {
     });
 
     // POST /api/firmware/update?hash=<md5> — single-request firmware upload
+    // @doc path: /api/firmware/update
+    // @doc method: POST
+    // @doc summary: Upload a new firmware image and verify against the supplied MD5
+    // @doc query: hash string required (MD5 of firmware binary)
+    // @doc body: multipart/form-data file=<firmware.bin>
+    // @doc response: text/plain "OK"
+    // @doc errors: 400=update failed (bad hash, write error, or MD5 mismatch)
     server.on(
             "/api/firmware/update", HTTP_POST,
             // Response handler (called after upload completes)
@@ -388,7 +527,19 @@ void WebServer::registerFirmwareRoutes() {
 // -- Map data endpoints -------------------------------------------------------
 
 void WebServer::registerMapRoutes() {
+    // @tag History: Cleaning session history and map data
+
     // GET /api/history[/filename] — list sessions, collection status, or download a specific file
+    // @doc path: /api/history
+    // @doc method: GET
+    // @doc summary: List all cleaning session files with embedded session and summary metadata
+    // @doc response: array of HistoryFileInfo
+    // @doc path: /api/history/{filename}
+    // @doc method: GET
+    // @doc summary: Download a single session file (transparently decompressed)
+    // @doc param: filename string required
+    // @doc response: application/x-ndjson
+    // @doc errors: 404=session not found
     server.on("/api/history", HTTP_GET, [this](AsyncWebServerRequest *request) {
         lastApiActivity = millis();
         unsigned long startMs = lastApiActivity;
@@ -443,6 +594,16 @@ void WebServer::registerMapRoutes() {
     });
 
     // DELETE /api/history[/filename] — delete one or all sessions
+    // @doc path: /api/history
+    // @doc method: DELETE
+    // @doc summary: Delete all cleaning session files
+    // @doc response: Ok
+    // @doc path: /api/history/{filename}
+    // @doc method: DELETE
+    // @doc summary: Delete a single cleaning session file
+    // @doc param: filename string required
+    // @doc response: Ok
+    // @doc errors: 404=session not found
     loggedRoute("/api/history", HTTP_DELETE, [this](AsyncWebServerRequest *request) -> int {
         String filename = request->url().substring(String("/api/history/").length());
 
@@ -462,6 +623,12 @@ void WebServer::registerMapRoutes() {
     });
 
     // POST /api/history/import — upload a .jsonl session file, compress and store
+    // @doc path: /api/history/import
+    // @doc method: POST
+    // @doc summary: Upload a JSONL session file (compressed and stored on flash)
+    // @doc body: multipart/form-data file=<session.jsonl>
+    // @doc response: Ok
+    // @doc errors: 400=import failed (invalid file or write error)
     server.on(
             "/api/history/import", HTTP_POST,
             // Response handler (called after upload completes)

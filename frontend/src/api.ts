@@ -12,6 +12,8 @@ import type {
     StateData,
     SystemData,
     UserSettingsData,
+    WiFiScanResult,
+    WiFiStatus,
 } from "./types";
 
 async function parseError(res: Response): Promise<string> {
@@ -184,4 +186,10 @@ export const api = {
     setUserSetting: (key: string, value: string) =>
         post(`/api/user-settings?key=${encodeURIComponent(key)}&value=${encodeURIComponent(value)}`),
     sendSerial: (cmd: string) => sendSerial(cmd),
+
+    getWifiStatus: () => get<WiFiStatus>("/api/wifi/status"),
+    scanWifi: () => get<WiFiScanResult>("/api/wifi/scan"),
+    connectWifi: (ssid: string, password: string) =>
+        post(`/api/wifi/connect?ssid=${encodeURIComponent(ssid)}&password=${encodeURIComponent(password)}`),
+    disconnectWifi: () => post("/api/wifi/disconnect"),
 };

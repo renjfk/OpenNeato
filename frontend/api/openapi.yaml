@@ -18,6 +18,8 @@ tags:
     description: Manual cleaning mode (joystick, motors)
   - name: Logs
     description: Diagnostic log files stored in flash
+  - name: WiFi
+    description: WiFi station status and provisioning over the fallback AP
   - name: System
     description: ESP32 system health and lifecycle
   - name: Settings
@@ -533,6 +535,70 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /api/wifi/status:
+    get:
+      tags:
+        - WiFi
+      summary: Get current WiFi STA + fallback AP status snapshot
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WiFiStatus"
+  /api/wifi/scan:
+    get:
+      tags:
+        - WiFi
+      summary: Scan for nearby WiFi networks (synchronous, capped at 30 entries)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WiFiScanResult"
+        "500":
+          description: scan failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/wifi/connect:
+    post:
+      tags:
+        - WiFi
+      summary: Save credentials and connect to a WiFi network (reboots on success)
+      parameters:
+        - name: ssid
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: password
+          in: query
+          required: true
+          description: Empty string for open networks
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "400":
+          description: missing ssid or connection failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/wifi/disconnect:
+    post:
+      tags:
+        - WiFi
+      summary: Clear saved credentials and drop the STA connection
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
   /api/system:
     get:
       tags:
@@ -1177,6 +1243,9 @@ components:
         logLevel:
           type: number
           description: 0=off, 1=info, 2=debug
+        apFallbackOnDisconnect:
+          type: boolean
+          description: Bring up the fallback AP automatically when STA drops
         syslogEnabled:
           type: boolean
           description: When on, logs go to UDP syslog instead of flash
@@ -1321,6 +1390,7 @@ components:
       required:
         - tz
         - logLevel
+        - apFallbackOnDisconnect
         - syslogEnabled
         - syslogIp
         - wifiTxPower
@@ -1520,6 +1590,74 @@ components:
         - totalRotation
         - areaCovered
         - errorsDuringClean
+    WiFiStatus:
+      type: object
+      properties:
+        staConnected:
+          type: boolean
+          description: Station mode connected to an upstream AP
+        ssid:
+          type: string
+          description: Connected SSID, or last saved SSID when disconnected
+        ip:
+          type: string
+          description: STA IPv4 address (empty when disconnected)
+        rssi:
+          type: integer
+          description: STA signal strength in dBm (0 when disconnected)
+        apActive:
+          type: boolean
+          description: Fallback AP currently broadcasting
+        apSsid:
+          type: string
+          description: Fallback AP SSID (empty when AP is down)
+        apIp:
+          type: string
+          description: Fallback AP IPv4 address (empty when AP is down)
+        apClients:
+          type: integer
+          description: Number of clients connected to the fallback AP
+        apFallbackOnDisconnect:
+          type: boolean
+          description: Whether the AP is brought up automatically when STA drops
+        lastError:
+          type: string
+          description: Human-readable description of the most recent STA failure
+      required:
+        - staConnected
+        - ssid
+        - ip
+        - rssi
+        - apActive
+        - apSsid
+        - apIp
+        - apClients
+        - apFallbackOnDisconnect
+        - lastError
+    WiFiNetwork:
+      type: object
+      properties:
+        ssid:
+          type: string
+        rssi:
+          type: integer
+          description: Signal strength in dBm
+        open:
+          type: boolean
+          description: True for open networks (no encryption)
+      required:
+        - ssid
+        - rssi
+        - open
+    WiFiScanResult:
+      type: object
+      properties:
+        networks:
+          type: array
+          items:
+            $ref: "#/components/schemas/WiFiNetwork"
+      required:
+        - networks
   responses:
     Ok:
       description: Success acknowledgement

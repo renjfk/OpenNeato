@@ -15,10 +15,12 @@ Everything you need to set up, configure, and troubleshoot OpenNeato.
     - [Command Reference](#command-reference)
     - [Troubleshooting Flash Issues](#troubleshooting-flash-issues)
 - [First-Time WiFi Setup](#first-time-wifi-setup)
-    - [Serial Monitor](#serial-monitor)
+    - [Option A: Fallback Access Point (no serial cable)](#option-a-fallback-access-point-no-serial-cable)
+    - [Option B: Serial Monitor](#option-b-serial-monitor)
     - [WiFi Configuration Menu](#wifi-configuration-menu)
     - [Verifying the Connection](#verifying-the-connection)
     - [Quick Commands](#quick-commands)
+    - [Reconfiguring WiFi Later](#reconfiguring-wifi-later)
 - [Troubleshooting](#troubleshooting)
     - [Enabling Logging](#enabling-logging)
     - [Collecting Logs](#collecting-logs)
@@ -232,23 +234,48 @@ Windows, close any other serial monitor that might have the port open.
 
 ## First-Time WiFi Setup
 
-After flashing, the tool opens a serial monitor where you'll configure WiFi.
+After flashing, the device has no saved WiFi credentials and won't be on your network yet.
+You have two ways to provision it: a browser via the fallback access point (no serial cable
+needed), or the serial menu that the flash tool opens for you.
 
-### Serial Monitor
+### Option A: Fallback Access Point (no serial cable)
+
+When the device has no saved credentials, it broadcasts an open WiFi network so you can
+configure it from any phone or laptop browser. This works even after you've unplugged the
+USB cable and tucked the ESP32 inside the robot.
+
+1. From your phone or laptop, connect to the WiFi network named **`neato-ap`** (or
+   `<hostname>-ap` if you've changed the hostname). It's an open network , no password.
+2. Open a browser and go to `http://192.168.4.1`. You'll land on the OpenNeato dashboard.
+3. Open **Settings -> WiFi**, tap **Scan**, pick your home network from the dropdown, and
+   enter the password.
+4. After confirming, the device joins your home network and reboots. The `neato-ap` network
+   disappears at that point , reconnect your phone/laptop to your home WiFi to keep using
+   the web UI at `http://neato.local` (or the IP shown on the dashboard).
+
+> [!NOTE]
+> The fallback AP is unencrypted because there's no way to display a password to a user
+> who hasn't set one up yet. It only runs while the device has no saved credentials or
+> cannot reach your home network. Once connected, it shuts down automatically.
+
+### Option B: Serial Monitor
 
 The serial monitor connects at 115,200 baud and shows the ESP32's boot output. You'll see
-the boot banner:
+the boot banner. With no credentials saved, the fallback AP comes up automatically and the
+banner reflects that:
 
 ```
 ========================================
   OpenNeato v0.1
 ========================================
-  WiFi: not configured
+  WiFi: AP mode, connect to neato-ap and open http://192.168.4.1
   Press 'm' for menu, 's' for status
 ========================================
 ```
 
-If WiFi is not configured, the configuration menu appears automatically.
+You can finish provisioning either by joining `neato-ap` from a browser (Option A above) or
+by pressing `m` to open the WiFi configuration menu over serial , both end up in the same
+place.
 
 ### WiFi Configuration Menu
 
@@ -308,6 +335,21 @@ Once connected, you can type single-key commands in the serial monitor at any ti
 |-----|-----------------------------------------|
 | `m` | Open WiFi configuration menu            |
 | `s` | Print WiFi status (SSID, IP, MAC, RSSI) |
+
+### Reconfiguring WiFi Later
+
+Once the device is on your home network you can change networks from the web UI directly:
+**Settings -> WiFi -> Scan**, pick a new network, enter the password.
+
+If your home network goes down or you've moved house, the bridge falls back to the
+`<hostname>-ap` access point automatically so you can re-provision it from a browser without
+opening up the robot. This behavior is controlled by the **Fallback AP on disconnect** toggle
+in the WiFi section , it's on by default. If you turn it off, recovery from a broken WiFi
+config requires the serial menu.
+
+To wipe credentials entirely and force the device back into first-time setup mode (always-on
+AP, no auto-reconnect), use **Settings -> WiFi -> Forget current network**. The device will
+broadcast `<hostname>-ap` until you provision a new network.
 
 ---
 

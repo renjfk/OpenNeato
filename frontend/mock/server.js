@@ -105,6 +105,15 @@ const _randf = (min, max, decimals = 2) => parseFloat((Math.random() * (max - mi
 //   fp   — All polling faults (state + charger + error)
 //   fhc  — History corruption (inject corrupted pose lines in session data)
 //   fhl  — History list corruption (malformed JSON in /api/history response, triggers recovery panel)
+//
+// WiFi:
+//   wap  , Fallback AP active (STA disconnected, fallback enabled)
+//   wnc  , No saved credentials (first boot, AP always on)
+//   wfo  , Fallback AP setting off (combine with wap to test off + disconnected)
+//   fws  , Scan fault: /api/wifi/scan returns 500
+//   fwn  , Empty scan: /api/wifi/scan returns no networks
+//   fwc  , Connect fault: /api/wifi/connect rejects with auth error
+//
 //   fal  — All faults combined
 const SCENARIO = "ok";
 
@@ -166,6 +175,12 @@ const SCENARIOS = {
     fp: { faults: { pollState: true, pollCharger: true, pollError: true } },
     fhc: { faults: { historyCorrupt: true } },
     fhl: { faults: { historyListCorrupt: true } },
+    wap: { wifiDisconnected: true },
+    wnc: { wifiDisconnected: true, wifiNoCredentials: true },
+    wfo: { apFallbackOnDisconnect: false },
+    fws: { faults: { wifiScan: true } },
+    fwn: { faults: { wifiScanEmpty: true } },
+    fwc: { faults: { wifiConnect: true } },
     fal: {
         faults: {
             actions: true,
@@ -177,6 +192,8 @@ const SCENARIOS = {
             pollError: true,
             historyCorrupt: true,
             historyListCorrupt: true,
+            wifiScan: true,
+            wifiConnect: true,
         },
     },
 };
@@ -202,6 +219,9 @@ const faults = {
     pollCharger: false,
     pollError: false,
     historyCorrupt: false,
+    wifiScan: false,
+    wifiScanEmpty: false,
+    wifiConnect: false,
     ...(merged.faults || {}),
 };
 
@@ -246,6 +266,12 @@ const state = {
     lidarSlowRotation: false,
     tz: "UTC0",
     logLevel: 0,
+    apFallbackOnDisconnect: true,
+    // WiFi mock state , `wifiDisconnected` flips STA to disconnected and
+    // brings up the fallback AP; `wifiNoCredentials` clears saved SSID so
+    // the UI shows the "first boot" path (no current network, no forget).
+    wifiDisconnected: false,
+    wifiNoCredentials: false,
     syslogEnabled: false,
     syslogIp: "",
     wifiTxPower: 60, // 15 dBm in 0.25 dBm units
@@ -743,6 +769,7 @@ const routes = {
         const keys = [
             "tz",
             "logLevel",
+            "apFallbackOnDisconnect",
             "syslogEnabled",
             "syslogIp",
             "wifiTxPower",
@@ -773,6 +800,59 @@ const routes = {
             s[`sched${d}Slot1On`] = state[`sched${d}Slot1On`];
         }
         jsonResponse(res, s);
+    },
+
+    "GET /api/wifi/status": (_req, res) => {
+        // No saved credentials: STA never reports a "last SSID" and the
+        // fallback AP is always up regardless of the toggle.
+        const hasCreds = !state.wifiNoCredentials;
+        const apOn = !!state.wifiDisconnected || !hasCreds;
+        jsonResponse(res, {
+            staConnected: !state.wifiDisconnected && hasCreds,
+            ssid: hasCreds ? "HomeWiFi" : "",
+            ip: state.wifiDisconnected || !hasCreds ? "" : "192.168.1.42",
+            rssi: state.wifiDisconnected || !hasCreds ? 0 : -52,
+            apActive: apOn,
+            apSsid: apOn ? `${state.hostname}-ap` : "",
+            apIp: apOn ? "192.168.4.1" : "",
+            apClients: apOn ? (hasCreds ? 1 : 0) : 0,
+            apFallbackOnDisconnect: state.apFallbackOnDisconnect,
+            lastError: state.wifiDisconnected && hasCreds ? "wrong password or authentication rejected" : "",
+        });
+    },
+
+    "GET /api/wifi/scan": async (_req, res) => {
+        // Simulate scan latency
+        await new Promise((r) => setTimeout(r, rand(800, 1500)));
+        if (faults.wifiScan) return sendError(res, "WiFi scan failed: radio busy", 500);
+        if (faults.wifiScanEmpty) return jsonResponse(res, { networks: [] });
+        jsonResponse(res, {
+            networks: [
+                { ssid: "HomeWiFi", rssi: -52, open: false },
+                { ssid: "Neighbour-5G", rssi: -68, open: false },
+                { ssid: "GuestNet", rssi: -71, open: true },
+                { ssid: "FritzBox-2", rssi: -78, open: false },
+                { ssid: "TP-Link-Guest", rssi: -82, open: true },
+            ],
+        });
+    },
+
+    "POST /api/wifi/connect": async (_req, res, query) => {
+        if (!query.ssid) return sendError(res, "missing ssid", 400);
+        await new Promise((r) => setTimeout(r, rand(500, 1500)));
+        if (faults.wifiConnect) {
+            return sendError(res, "wrong password or authentication rejected", 500);
+        }
+        // Simulate reboot path on success , caller will see the AP go away
+        state.wifiDisconnected = false;
+        state.wifiNoCredentials = false;
+        sendOk(res);
+    },
+
+    "POST /api/wifi/disconnect": (_req, res) => {
+        state.wifiDisconnected = true;
+        state.wifiNoCredentials = true;
+        sendOk(res);
     },
 
     "POST /api/notifications/test": (_req, res, query) => {
@@ -1075,6 +1155,7 @@ const handleRequest = async (req, res) => {
             await new Promise((r) => setTimeout(r, rand(300, 600)));
             if (data.tz !== undefined) state.tz = data.tz;
             if (data.logLevel !== undefined) state.logLevel = data.logLevel;
+            if (data.apFallbackOnDisconnect !== undefined) state.apFallbackOnDisconnect = data.apFallbackOnDisconnect;
             if (data.syslogEnabled !== undefined) state.syslogEnabled = data.syslogEnabled;
             if (data.syslogIp !== undefined) state.syslogIp = data.syslogIp;
             if (data.wifiTxPower !== undefined) state.wifiTxPower = data.wifiTxPower;
@@ -1115,6 +1196,7 @@ const handleRequest = async (req, res) => {
             const keys = [
                 "tz",
                 "logLevel",
+                "apFallbackOnDisconnect",
                 "syslogEnabled",
                 "syslogIp",
                 "wifiTxPower",

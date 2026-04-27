@@ -118,6 +118,9 @@ CSS frameworks, routing, or HTTP wrapper libraries.
 
 - 4-space indent, double quotes, semicolons, 120-col (Biome)
 - Named `interface`/`type` only, never inline object type literals
+- Reuse existing CSS utilities and component classes before adding new ones.
+  When two rules share a body, consolidate via a shared selector list, a
+  shared class, or a CSS custom property.
 
 ## Hardware
 

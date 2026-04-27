@@ -30,7 +30,7 @@ ManualCleanManager manualClean(neatoSerial);
 NotificationManager notifMgr(neatoSerial, settingsManager, dataLogger);
 CleaningHistory cleaningHistory(neatoSerial, dataLogger, systemManager);
 WebServer webServer(server, neatoSerial, dataLogger, systemManager, firmwareManager, settingsManager, manualClean,
-                    notifMgr, cleaningHistory);
+                    notifMgr, cleaningHistory, wifiManager);
 
 // Tracks whether web server has been started (may be deferred if WiFi was slow at boot)
 bool webServerStarted = false;
@@ -54,7 +54,11 @@ void setup() {
     settingsManager.onTzChange([&](const String& tz) { systemManager.applyTimezone(tz); });
     settingsManager.onTxPowerChange([&](int quarterDbm) { wifiManager.setTxPower(quarterDbm); });
     settingsManager.onRebootRequired([&] { systemManager.restart(); });
+    settingsManager.onApFallbackChange([&](bool enabled) { wifiManager.setApFallbackOnDisconnect(enabled); });
     settingsManager.begin();
+
+    // Push initial AP fallback policy into WiFiManager before begin()
+    wifiManager.setApFallbackOnDisconnect(settingsManager.get().apFallbackOnDisconnect);
 
     // Apply manual clean settings from NVS (stall threshold, motor speeds)
     const auto& s = settingsManager.get();
@@ -115,19 +119,24 @@ void setup() {
         dataLogger.logNtp("sync_ok", {{"epoch", String(static_cast<long>(t)), FIELD_INT}});
     });
 
-    // Initialize web server and OTA if WiFi is already connected.
-    // If WiFi is slow (e.g. DHCP timeout after OTA), the web server will be
-    // started later in loop() once WiFi comes up — see deferred start below.
-    if (wifiManager.isConnected()) {
+    // Initialize web server and OTA if any network interface is up , STA
+    // (normal operation) or fallback AP (provisioning). Without either, the
+    // server has no socket to bind to. The deferred path in loop() picks up
+    // any late-arriving STA association.
+    if (wifiManager.isConnected() || wifiManager.isApActive()) {
         LOG("BOOT", "Initializing web server...");
         webServer.begin();
         LOG("BOOT", "Starting HTTP server...");
         server.begin();
         webServerStarted = true;
 
-        // Mark firmware as valid — cancels auto-rollback on next reboot
-        esp_ota_mark_app_valid_cancel_rollback();
-        LOG("BOOT", "Firmware marked valid");
+        // Mark firmware as valid , cancels auto-rollback on next reboot.
+        // Only cancel rollback once we have STA connectivity, otherwise an OTA
+        // image that broke STA but kept AP working would still be marked valid.
+        if (wifiManager.isConnected()) {
+            esp_ota_mark_app_valid_cancel_rollback();
+            LOG("BOOT", "Firmware marked valid");
+        }
     } else {
         LOG("BOOT", "WiFi not ready — web server will start when connected");
     }
@@ -161,14 +170,21 @@ void setup() {
 
     LOG("BOOT", "System initialization complete");
 
-    // User-facing boot banner (visible in serial monitor / flash tool)
-    if (wifiManager.isConnected()) {
-        SerialMenu::printBanner("OpenNeato", FIRMWARE_VERSION,
-                                "WiFi: " + WiFi.SSID() + " (" + WiFi.localIP().toString() + ")",
-                                "Press 'm' for menu, 's' for status");
-    } else {
-        SerialMenu::printBanner("OpenNeato", FIRMWARE_VERSION, "WiFi: not configured");
-    }
+    // User-facing boot banner (visible in serial monitor / flash tool).
+    // Build the status line from the current WiFi state, then call
+    // printBanner once (a single call avoids bugprone-branch-clone warnings
+    // from clang-tidy for chained conditionals that all end the same way).
+    auto bannerStatus = [&]() -> String {
+        if (wifiManager.isConnected())
+            return "WiFi: " + WiFi.SSID() + " (" + WiFi.localIP().toString() + ")";
+        if (wifiManager.isApActive())
+            return "WiFi: AP mode, connect to " + (settingsManager.get().hostname + String(AP_SSID_SUFFIX)) +
+                   " and open http://" + WiFi.softAPIP().toString();
+        return "WiFi: not configured";
+    }();
+    String bannerHint =
+            (wifiManager.isConnected() || wifiManager.isApActive()) ? "Press 'm' for menu, 's' for status" : "";
+    SerialMenu::printBanner("OpenNeato", FIRMWARE_VERSION, bannerStatus, bannerHint);
 
     // Show WiFi config menu if needed
     if (!wifiManager.isConnected()) {
@@ -189,17 +205,20 @@ void loop() {
     // WiFi auto-reconnect with exponential backoff
     wifiManager.loop();
 
-    // Deferred web server start — if WiFi was slow at boot (e.g. DHCP timeout
-    // after OTA), start the web server once WiFi eventually connects.
-    if (!webServerStarted && wifiManager.isConnected()) {
-        LOG("MAIN", "WiFi connected late — starting web server now");
+    // Deferred web server start , if WiFi was slow at boot (e.g. DHCP timeout
+    // after OTA), start the web server once WiFi eventually connects, or once
+    // the fallback AP comes up so the user can reconfigure WiFi from a browser.
+    if (!webServerStarted && (wifiManager.isConnected() || wifiManager.isApActive())) {
+        LOG("MAIN", "WiFi available late , starting web server now");
         dataLogger.logWifi("deferred_start");
         webServer.begin();
         server.begin();
         webServerStarted = true;
 
-        esp_ota_mark_app_valid_cancel_rollback();
-        LOG("MAIN", "Firmware marked valid (deferred)");
+        if (wifiManager.isConnected()) {
+            esp_ota_mark_app_valid_cancel_rollback();
+            LOG("MAIN", "Firmware marked valid (deferred)");
+        }
     }
 
     // Check for button press (runtime reset)
@@ -227,8 +246,10 @@ void loop() {
         }
     }
 
-    // Firmware update handling (only if connected)
-    if (wifiManager.isConnected()) {
+    // Firmware update handling , runs while either STA or fallback AP is up so
+    // the user can recover from a broken STA config by uploading firmware over
+    // the AP.
+    if (wifiManager.isConnected() || wifiManager.isApActive()) {
         firmwareManager.loop();
 
         // Skip other operations during firmware update

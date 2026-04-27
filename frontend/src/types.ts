@@ -18,6 +18,9 @@ export type {
     SystemData,
     UserSettingsData,
     VersionData,
+    WiFiNetwork,
+    WiFiScanResult,
+    WiFiStatus,
 } from "./types.generated";
 
 // -- Frontend-only types (not part of the HTTP API) --------------------------
@@ -44,7 +47,7 @@ export interface MapRechargePoint {
     // Session-relative timestamp when the robot returned to base to charge,
     // derived from the last pose snapshot before collection paused.
     ts: number;
-    // Session-relative timestamp when cleaning resumed after the charge —
+    // Session-relative timestamp when cleaning resumed after the charge -
     // taken from the first pose snapshot written once collection restarted.
     // Falls back to `ts` when the session ended before resuming.
     endTs: number;

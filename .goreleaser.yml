@@ -5,6 +5,13 @@ project_name: openneato
 env:
   - ESPTOOL_VERSION=v5.2.0
 
+before:
+  # Stamp the release version into the OpenAPI spec shipped as a release
+  # artifact. The in-repo file carries "0.0.0-dev" as a placeholder.
+  hooks:
+    - "sed -i.bak 's/^  version:.*/  version: {{ .Version }}/' frontend/api/openapi.yaml"
+    - "rm -f frontend/api/openapi.yaml.bak"
+
 builds:
   - id: openneato-flash
     dir: flash
@@ -53,16 +60,14 @@ release:
   extra_files:
     - glob: .pio/build/*-release/*-firmware.bin
     - glob: .pio/build/*-release/*-full.tar.gz
-    - glob: frontend/dist-docs/openapi.json
-    - glob: frontend/dist-docs/api-reference.md
+    - glob: frontend/api/openapi.yaml
 
 checksum:
   name_template: checksums.txt
   extra_files:
     - glob: .pio/build/*-release/*-firmware.bin
     - glob: .pio/build/*-release/*-full.tar.gz
-    - glob: frontend/dist-docs/openapi.json
-    - glob: frontend/dist-docs/api-reference.md
+    - glob: frontend/api/openapi.yaml
 
 changelog:
   sort: asc

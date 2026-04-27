@@ -4,6 +4,7 @@
     "files": {
         "includes": [
             "src/**",
+            "!src/types.generated.ts",
             "mock/*.js",
             "scripts/**",
             "vite.config.ts",

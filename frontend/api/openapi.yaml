@@ -1,0 +1,1529 @@
+openapi: 3.0.3
+info:
+  title: OpenNeato API
+  version: 0.0.0-dev
+  description: HTTP API exposed by the OpenNeato firmware. All endpoints are served on the local network only (no authentication, no TLS). The diagnostic `/api/serial` passthrough is documented separately in the [user guide](https://github.com/renjfk/OpenNeato/blob/main/docs/user-guide.md#serial-api).
+servers:
+  - url: http://{host}
+    description: OpenNeato bridge on local network
+    variables:
+      host:
+        default: neato.local
+tags:
+  - name: Sensors
+    description: Read-only telemetry from the robot
+  - name: Actions
+    description: Control commands sent to the robot
+  - name: Manual
+    description: Manual cleaning mode (joystick, motors)
+  - name: Logs
+    description: Diagnostic log files stored in flash
+  - name: System
+    description: ESP32 system health and lifecycle
+  - name: Settings
+    description: User-configurable bridge settings
+  - name: Firmware
+    description: ESP32 firmware version and OTA update
+  - name: History
+    description: Cleaning session history and map data
+paths:
+  /api/version:
+    get:
+      tags:
+        - Sensors
+      summary: Get robot identity (model, serial, firmware versions)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionData"
+        "504":
+          description: robot timeout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/charger:
+    get:
+      tags:
+        - Sensors
+      summary: Get battery and charger status
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChargerData"
+        "504":
+          description: robot timeout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/motors:
+    get:
+      tags:
+        - Sensors
+      summary: Get motor telemetry (brush, vacuum, wheels, side brush, laser)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MotorData"
+        "504":
+          description: robot timeout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/state:
+    get:
+      tags:
+        - Sensors
+      summary: Get current UI and robot state machine values
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StateData"
+        "504":
+          description: robot timeout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/error:
+    get:
+      tags:
+        - Sensors
+      summary: Get current error or warning state
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorData"
+        "504":
+          description: robot timeout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/lidar:
+    get:
+      tags:
+        - Sensors
+      summary: Get latest 360-point LIDAR scan
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LidarScan"
+        "504":
+          description: robot timeout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/user-settings:
+    get:
+      tags:
+        - Sensors
+      summary: Get robot on-board user settings (sounds, eco, wall follow, maintenance)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSettingsData"
+        "504":
+          description: robot timeout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      tags:
+        - Actions
+      summary: Set a single robot on-board user setting
+      parameters:
+        - name: key
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: value
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "503":
+          description: robot busy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "504":
+          description: robot timeout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/clean:
+    post:
+      tags:
+        - Actions
+      summary: Start, pause, resume, stop, or dock cleaning
+      parameters:
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - house
+              - spot
+              - pause
+              - stop
+              - dock
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "503":
+          description: robot busy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "504":
+          description: robot timeout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/sound:
+    post:
+      tags:
+        - Actions
+      summary: Play a robot sound effect
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 20
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "503":
+          description: robot busy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "504":
+          description: robot timeout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/testmode:
+    post:
+      tags:
+        - Actions
+      summary: Enter or exit test mode (required for manual control)
+      parameters:
+        - name: enable
+          in: query
+          required: true
+          schema:
+            type: boolean
+            minimum: 0
+            maximum: 1
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "503":
+          description: robot busy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "504":
+          description: robot timeout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/power:
+    post:
+      tags:
+        - Actions
+      summary: Restart or shutdown the robot
+      parameters:
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - restart
+              - shutdown
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "503":
+          description: robot busy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "504":
+          description: robot timeout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/lidar/rotate:
+    post:
+      tags:
+        - Actions
+      summary: Start or stop LIDAR turret rotation
+      parameters:
+        - name: enable
+          in: query
+          required: true
+          schema:
+            type: boolean
+            minimum: 0
+            maximum: 1
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "503":
+          description: robot busy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "504":
+          description: robot timeout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/clear-errors:
+    post:
+      tags:
+        - Actions
+      summary: Clear all UI errors and warnings on the robot
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "503":
+          description: robot busy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "504":
+          description: robot timeout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/manual/status:
+    get:
+      tags:
+        - Manual
+      summary: Get manual mode state (active flag, motors, bumpers, stalls)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManualStatus"
+  /api/manual/move:
+    post:
+      tags:
+        - Manual
+      summary: Drive the wheels for a specific distance at a given speed
+      parameters:
+        - name: left
+          in: query
+          required: true
+          description: mm, negative=backward
+          schema:
+            type: integer
+        - name: right
+          in: query
+          required: true
+          description: mm, negative=backward
+          schema:
+            type: integer
+        - name: speed
+          in: query
+          required: true
+          description: mm/s
+          schema:
+            type: integer
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "503":
+          description: manual mode inactive or unsafe state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "504":
+          description: robot timeout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/manual/motors:
+    post:
+      tags:
+        - Manual
+      summary: Toggle main brush, vacuum, and side brush motors
+      parameters:
+        - name: brush
+          in: query
+          required: true
+          schema:
+            type: boolean
+            minimum: 0
+            maximum: 1
+        - name: vacuum
+          in: query
+          required: true
+          schema:
+            type: boolean
+            minimum: 0
+            maximum: 1
+        - name: sideBrush
+          in: query
+          required: true
+          schema:
+            type: boolean
+            minimum: 0
+            maximum: 1
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "503":
+          description: manual mode inactive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "504":
+          description: robot timeout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/manual:
+    post:
+      tags:
+        - Manual
+      summary: Enable or disable manual mode (also enters TestMode and starts LIDAR)
+      parameters:
+        - name: enable
+          in: query
+          required: true
+          schema:
+            type: boolean
+            minimum: 0
+            maximum: 1
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "503":
+          description: cannot enter manual mode
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "504":
+          description: robot timeout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/logs:
+    get:
+      tags:
+        - Logs
+      summary: List all log files
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LogFileInfo"
+    delete:
+      tags:
+        - Logs
+      summary: Delete all log files
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+  /api/logs/{filename}:
+    get:
+      tags:
+        - Logs
+      summary: Download a single log file (transparently decompressed)
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: application/x-ndjson
+          content:
+            application/x-ndjson:
+              schema:
+                type: string
+        "404":
+          description: log not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      tags:
+        - Logs
+      summary: Delete a single log file
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "404":
+          description: log not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/system:
+    get:
+      tags:
+        - System
+      summary: Get live system metrics (heap, uptime, WiFi RSSI, storage, NTP, time)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemData"
+  /api/system/restart:
+    post:
+      tags:
+        - System
+      summary: Restart the ESP32 (deferred 500ms to flush HTTP response)
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+  /api/system/reset:
+    post:
+      tags:
+        - System
+      summary: Factory reset (clear NVS and WiFi credentials, then restart)
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+  /api/system/format-fs:
+    post:
+      tags:
+        - System
+      summary: Format the SPIFFS filesystem (erases logs and history, then restart)
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+  /api/settings:
+    get:
+      tags:
+        - Settings
+      summary: Get all bridge settings (timezone, logging, WiFi, navigation, schedule, notifications)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingsData"
+    put:
+      tags:
+        - Settings
+      summary: Partial settings update (only fields present in body are written)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingsData"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingsData"
+        "400":
+          description: invalid settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/notifications/test:
+    post:
+      tags:
+        - Settings
+      summary: Send a test push notification to the given ntfy.sh topic
+      parameters:
+        - name: topic
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "400":
+          description: missing or empty topic
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/firmware/version:
+    get:
+      tags:
+        - Firmware
+      summary: Get current ESP32 firmware version, chip model, robot model, and support status
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FirmwareVersion"
+  /api/firmware/update:
+    post:
+      tags:
+        - Firmware
+      summary: Upload a new firmware image and verify against the supplied MD5
+      parameters:
+        - name: hash
+          in: query
+          required: true
+          description: MD5 of firmware binary
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required:
+                - file
+      responses:
+        "200":
+          description: text/plain "OK"
+          content:
+            text/plain:
+              schema:
+                type: string
+        "400":
+          description: update failed (bad hash, write error, or MD5 mismatch)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/history:
+    get:
+      tags:
+        - History
+      summary: List all cleaning session files with embedded session and summary metadata
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HistoryFileInfo"
+    delete:
+      tags:
+        - History
+      summary: Delete all cleaning session files
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+  /api/history/{filename}:
+    get:
+      tags:
+        - History
+      summary: Download a single session file (transparently decompressed)
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: application/x-ndjson
+          content:
+            application/x-ndjson:
+              schema:
+                type: string
+        "404":
+          description: session not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      tags:
+        - History
+      summary: Delete a single cleaning session file
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "404":
+          description: session not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/history/import:
+    post:
+      tags:
+        - History
+      summary: Upload a JSONL session file (compressed and stored on flash)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required:
+                - file
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "400":
+          description: import failed (invalid file or write error)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  schemas:
+    Ok:
+      type: object
+      properties:
+        ok:
+          type: boolean
+      required:
+        - ok
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+    VersionData:
+      type: object
+      properties:
+        modelName:
+          type: string
+          description: Robot model name (e.g. "Botvac D7")
+        serialNumber:
+          type: string
+          description: Robot serial number
+        softwareVersion:
+          type: string
+          description: Robot firmware version, format "Major.Minor.Build"
+        ldsVersion:
+          type: string
+          description: LIDAR firmware version
+        ldsSerial:
+          type: string
+          description: LIDAR serial number
+        mainBoardVersion:
+          type: string
+          description: Main board hardware version
+      required:
+        - modelName
+        - serialNumber
+        - softwareVersion
+        - ldsVersion
+        - ldsSerial
+        - mainBoardVersion
+    ChargerData:
+      type: object
+      properties:
+        fuelPercent:
+          type: number
+          description: Battery charge percentage (0-100, -1 = unknown)
+        batteryOverTemp:
+          type: boolean
+          description: Battery temperature exceeds safe limits
+        chargingActive:
+          type: boolean
+          description: Charger currently delivering current
+        chargingEnabled:
+          type: boolean
+          description: Charging circuit enabled (independent of active flow)
+        confidOnFuel:
+          type: boolean
+          description: Fuel gauge reading is trusted
+        onReservedFuel:
+          type: boolean
+          description: Battery has dropped into reserve range
+        emptyFuel:
+          type: boolean
+          description: Battery considered empty (robot will not start)
+        batteryFailure:
+          type: boolean
+          description: Battery hardware fault detected
+        extPwrPresent:
+          type: boolean
+          description: External power supply (dock or barrel jack) connected
+        vBattV:
+          type: number
+          description: Battery voltage in volts
+        vExtV:
+          type: number
+          description: External supply voltage in volts
+        chargerMAH:
+          type: number
+          description: Cumulative mAh delivered into the battery
+        dischargeMAH:
+          type: number
+          description: Cumulative mAh discharged from the battery
+      required:
+        - fuelPercent
+        - batteryOverTemp
+        - chargingActive
+        - chargingEnabled
+        - confidOnFuel
+        - onReservedFuel
+        - emptyFuel
+        - batteryFailure
+        - extPwrPresent
+        - vBattV
+        - vExtV
+        - chargerMAH
+        - dischargeMAH
+    MotorData:
+      type: object
+      properties:
+        brushRPM:
+          type: number
+          description: Main brush rotation speed in RPM
+        brushMA:
+          type: number
+          description: Main brush current draw in mA
+        vacuumRPM:
+          type: number
+          description: Vacuum motor speed in RPM
+        vacuumMA:
+          type: number
+          description: Vacuum motor current draw in mA
+        leftWheelRPM:
+          type: number
+          description: Left wheel rotation speed in RPM
+        leftWheelLoad:
+          type: number
+          description: Left wheel load percentage
+        leftWheelPositionMM:
+          type: number
+          description: Left wheel position in millimeters since boot
+        leftWheelSpeed:
+          type: number
+          description: Left wheel speed in mm/s
+        rightWheelRPM:
+          type: number
+          description: Right wheel rotation speed in RPM
+        rightWheelLoad:
+          type: number
+          description: Right wheel load percentage
+        rightWheelPositionMM:
+          type: number
+          description: Right wheel position in millimeters since boot
+        rightWheelSpeed:
+          type: number
+          description: Right wheel speed in mm/s
+        sideBrushMA:
+          type: number
+          description: Side brush current draw in mA
+        laserRPM:
+          type: number
+          description: Laser turret rotation speed in RPM
+      required:
+        - brushRPM
+        - brushMA
+        - vacuumRPM
+        - vacuumMA
+        - leftWheelRPM
+        - leftWheelLoad
+        - leftWheelPositionMM
+        - leftWheelSpeed
+        - rightWheelRPM
+        - rightWheelLoad
+        - rightWheelPositionMM
+        - rightWheelSpeed
+        - sideBrushMA
+        - laserRPM
+    StateData:
+      type: object
+      properties:
+        uiState:
+          type: string
+          description: UI state machine value, e.g. "UIMGR_STATE_STANDBY"
+        robotState:
+          type: string
+          description: Robot state machine value, e.g. "ST_C_Standby"
+      required:
+        - uiState
+        - robotState
+    ErrorData:
+      type: object
+      properties:
+        hasError:
+          type: boolean
+          description: True if the robot is currently reporting an error or warning
+        kind:
+          type: string
+          enum:
+            - error
+            - warning
+          description: '"error" for codes 243+, "warning" for codes 201-242'
+        errorCode:
+          type: number
+          description: Numeric error/warning code (200 = no error)
+        errorMessage:
+          type: string
+          description: Full raw response from the robot (for diagnostics)
+        displayMessage:
+          type: string
+          description: Human-readable message suitable for UI and notifications
+      required:
+        - hasError
+        - kind
+        - errorCode
+        - errorMessage
+        - displayMessage
+    LidarScan:
+      type: object
+      properties:
+        rotationSpeed:
+          type: number
+          description: LIDAR turret rotation speed in Hz
+        validPoints:
+          type: number
+          description: Count of points with error == 0
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/LidarPoint"
+          description: Always 360 entries indexed by angle
+      required:
+        - rotationSpeed
+        - validPoints
+        - points
+    LidarPoint:
+      type: object
+      properties:
+        angle:
+          type: number
+          description: Bearing in degrees (0-359, 0 = robot front)
+        dist:
+          type: number
+          description: Distance to target in millimeters (0 if invalid)
+        intensity:
+          type: number
+          description: Return signal strength (0-255)
+        error:
+          type: number
+          description: Per-point error code (0 = valid)
+      required:
+        - angle
+        - dist
+        - intensity
+        - error
+    UserSettingsData:
+      type: object
+      properties:
+        buttonClick:
+          type: boolean
+          description: Play a click sound on button presses
+        melodies:
+          type: boolean
+          description: Play melodies (start, finish, etc.)
+        warnings:
+          type: boolean
+          description: Play warning chimes
+        ecoMode:
+          type: boolean
+          description: Reduced power cleaning (longer runtime, lower suction)
+        intenseClean:
+          type: boolean
+          description: Maximum power cleaning
+        binFullDetect:
+          type: boolean
+          description: Stop and warn when dirt bin is full
+        wallEnable:
+          type: boolean
+          description: Enable wall following along walls and edges
+        wifi:
+          type: boolean
+          description: Robot WiFi radio enabled (separate from bridge WiFi)
+        stealthLed:
+          type: boolean
+          description: Dim status LEDs at night
+        filterChange:
+          type: number
+          description: Filter change reminder interval in seconds
+        brushChange:
+          type: number
+          description: Brush change reminder interval in seconds
+        dirtBin:
+          type: number
+          description: Dirt bin reminder interval in minutes
+      required:
+        - buttonClick
+        - melodies
+        - warnings
+        - ecoMode
+        - intenseClean
+        - binFullDetect
+        - wallEnable
+        - wifi
+        - stealthLed
+        - filterChange
+        - brushChange
+        - dirtBin
+    ManualStatus:
+      type: object
+      properties:
+        active:
+          type: boolean
+          description: Manual mode currently engaged
+        brush:
+          type: boolean
+          description: Main brush motor enabled
+        vacuum:
+          type: boolean
+          description: Vacuum motor enabled
+        sideBrush:
+          type: boolean
+          description: Side brush motor enabled
+        lifted:
+          type: boolean
+          description: Robot wheel-drop sensor reports the robot is off the ground
+        bumperFrontLeft:
+          type: boolean
+          description: Front-left bumper contacted
+        bumperFrontRight:
+          type: boolean
+          description: Front-right bumper contacted
+        bumperSideLeft:
+          type: boolean
+          description: Left side bumper contacted
+        bumperSideRight:
+          type: boolean
+          description: Right side bumper contacted
+        stallFront:
+          type: boolean
+          description: Front wheel stall detected
+        stallRear:
+          type: boolean
+          description: Rear wheel stall detected
+      required:
+        - active
+        - brush
+        - vacuum
+        - sideBrush
+        - lifted
+        - bumperFrontLeft
+        - bumperFrontRight
+        - bumperSideLeft
+        - bumperSideRight
+        - stallFront
+        - stallRear
+    LogFileInfo:
+      type: object
+      properties:
+        name:
+          type: string
+          description: File name as stored on flash (may include .hs compression suffix)
+        size:
+          type: number
+          description: File size in bytes
+        compressed:
+          type: boolean
+          description: True if stored with heatshrink compression
+      required:
+        - name
+        - size
+        - compressed
+    SystemData:
+      type: object
+      properties:
+        heap:
+          type: number
+          description: Free heap memory in bytes
+        heapTotal:
+          type: number
+          description: Total heap memory in bytes
+        uptime:
+          type: number
+          description: Milliseconds since boot
+        rssi:
+          type: number
+          description: WiFi signal strength in dBm (negative, closer to 0 = stronger)
+        fsUsed:
+          type: number
+          description: SPIFFS bytes used
+        fsTotal:
+          type: number
+          description: SPIFFS total capacity in bytes
+        ntpSynced:
+          type: boolean
+          description: NTP has successfully synced at least once
+        time:
+          type: number
+          description: Current Unix epoch time in seconds (UTC)
+        timeSource:
+          type: string
+          description: 'Time source: "ntp", "robot", or "boot"'
+        tz:
+          type: string
+          description: Configured IANA timezone (e.g. "America/New_York")
+        localTime:
+          type: string
+          description: DST-aware local time, e.g. "Sat 17:45:01"
+        isDst:
+          type: boolean
+          description: True when daylight saving time is active
+      required:
+        - heap
+        - heapTotal
+        - uptime
+        - rssi
+        - fsUsed
+        - fsTotal
+        - ntpSynced
+        - time
+        - timeSource
+        - tz
+        - localTime
+        - isDst
+    SettingsData:
+      type: object
+      properties:
+        tz:
+          type: string
+          description: IANA timezone identifier (e.g. "America/New_York")
+        logLevel:
+          type: number
+          description: 0=off, 1=info, 2=debug
+        syslogEnabled:
+          type: boolean
+          description: When on, logs go to UDP syslog instead of flash
+        syslogIp:
+          type: string
+          description: IPv4 address of syslog receiver
+        wifiTxPower:
+          type: number
+          description: WiFi TX power in 0.25 dBm units (e.g. 34 = 8.5 dBm)
+        uartTxPin:
+          type: number
+          description: GPIO pin used for UART TX to the robot
+        uartRxPin:
+          type: number
+          description: GPIO pin used for UART RX from the robot
+        maxGpioPin:
+          type: number
+          description: Read-only - max valid GPIO for this chip (21 for C3, 39 for ESP32)
+        hostname:
+          type: string
+          description: mDNS hostname (e.g. "openneato")
+        navMode:
+          type: string
+          description: 'Navigation mode for house cleaning: "Normal", "Gentle", "Deep", "Quick"'
+        stallThreshold:
+          type: number
+          description: Wheel load % for stall detection (30-80)
+        brushRpm:
+          type: number
+          description: Main brush RPM (500-1600)
+        vacuumSpeed:
+          type: number
+          description: Vacuum speed % (40-100)
+        sideBrushPower:
+          type: number
+          description: Side brush power in mW (500-1500)
+        ntfyTopic:
+          type: string
+          description: ntfy.sh topic for push notifications (empty = disabled)
+        ntfyEnabled:
+          type: boolean
+          description: Global switch - must be on for any notification to fire
+        ntfyOnDone:
+          type: boolean
+          description: Notify when cleaning completes
+        ntfyOnError:
+          type: boolean
+          description: Notify on robot error (UI_ERROR_*, code 243+)
+        ntfyOnAlert:
+          type: boolean
+          description: Notify on robot alert (UI_ALERT_*, code 201-242)
+        ntfyOnDocking:
+          type: boolean
+          description: Notify when robot returns to base
+        scheduleEnabled:
+          type: boolean
+          description: Master switch for the weekly cleaning schedule
+        sched0Hour:
+          type: number
+        sched0Min:
+          type: number
+        sched0On:
+          type: boolean
+        sched1Hour:
+          type: number
+        sched1Min:
+          type: number
+        sched1On:
+          type: boolean
+        sched2Hour:
+          type: number
+        sched2Min:
+          type: number
+        sched2On:
+          type: boolean
+        sched3Hour:
+          type: number
+        sched3Min:
+          type: number
+        sched3On:
+          type: boolean
+        sched4Hour:
+          type: number
+        sched4Min:
+          type: number
+        sched4On:
+          type: boolean
+        sched5Hour:
+          type: number
+        sched5Min:
+          type: number
+        sched5On:
+          type: boolean
+        sched6Hour:
+          type: number
+        sched6Min:
+          type: number
+        sched6On:
+          type: boolean
+        sched0Slot1Hour:
+          type: number
+        sched0Slot1Min:
+          type: number
+        sched0Slot1On:
+          type: boolean
+        sched1Slot1Hour:
+          type: number
+        sched1Slot1Min:
+          type: number
+        sched1Slot1On:
+          type: boolean
+        sched2Slot1Hour:
+          type: number
+        sched2Slot1Min:
+          type: number
+        sched2Slot1On:
+          type: boolean
+        sched3Slot1Hour:
+          type: number
+        sched3Slot1Min:
+          type: number
+        sched3Slot1On:
+          type: boolean
+        sched4Slot1Hour:
+          type: number
+        sched4Slot1Min:
+          type: number
+        sched4Slot1On:
+          type: boolean
+        sched5Slot1Hour:
+          type: number
+        sched5Slot1Min:
+          type: number
+        sched5Slot1On:
+          type: boolean
+        sched6Slot1Hour:
+          type: number
+        sched6Slot1Min:
+          type: number
+        sched6Slot1On:
+          type: boolean
+      required:
+        - tz
+        - logLevel
+        - syslogEnabled
+        - syslogIp
+        - wifiTxPower
+        - uartTxPin
+        - uartRxPin
+        - maxGpioPin
+        - hostname
+        - navMode
+        - stallThreshold
+        - brushRpm
+        - vacuumSpeed
+        - sideBrushPower
+        - ntfyTopic
+        - ntfyEnabled
+        - ntfyOnDone
+        - ntfyOnError
+        - ntfyOnAlert
+        - ntfyOnDocking
+        - scheduleEnabled
+        - sched0Hour
+        - sched0Min
+        - sched0On
+        - sched1Hour
+        - sched1Min
+        - sched1On
+        - sched2Hour
+        - sched2Min
+        - sched2On
+        - sched3Hour
+        - sched3Min
+        - sched3On
+        - sched4Hour
+        - sched4Min
+        - sched4On
+        - sched5Hour
+        - sched5Min
+        - sched5On
+        - sched6Hour
+        - sched6Min
+        - sched6On
+        - sched0Slot1Hour
+        - sched0Slot1Min
+        - sched0Slot1On
+        - sched1Slot1Hour
+        - sched1Slot1Min
+        - sched1Slot1On
+        - sched2Slot1Hour
+        - sched2Slot1Min
+        - sched2Slot1On
+        - sched3Slot1Hour
+        - sched3Slot1Min
+        - sched3Slot1On
+        - sched4Slot1Hour
+        - sched4Slot1Min
+        - sched4Slot1On
+        - sched5Slot1Hour
+        - sched5Slot1Min
+        - sched5Slot1On
+        - sched6Slot1Hour
+        - sched6Slot1Min
+        - sched6Slot1On
+    FirmwareVersion:
+      type: object
+      properties:
+        version:
+          type: string
+          description: Bridge firmware semantic version
+        chip:
+          type: string
+          description: ESP32 chip model (e.g. "ESP32-C3")
+        model:
+          type: string
+          description: Robot model name (e.g. "Botvac D7", empty until identified)
+        hostname:
+          type: string
+          description: mDNS hostname (e.g. "openneato")
+        supported:
+          type: boolean
+          description: True if the connected robot model is officially supported
+        identifying:
+          type: boolean
+          description: True while the bridge is still probing the robot model
+      required:
+        - version
+        - chip
+        - model
+        - hostname
+        - supported
+        - identifying
+    HistoryFileInfo:
+      type: object
+      properties:
+        name:
+          type: string
+          description: File name as stored on flash (may include .hs compression suffix)
+        size:
+          type: number
+          description: File size in bytes
+        compressed:
+          type: boolean
+          description: True if stored with heatshrink compression
+        recording:
+          type: boolean
+          description: True if this session is currently being recorded
+        session:
+          description: Session metadata, or null if not yet written
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/MapSession"
+        summary:
+          description: Session summary, or null if cleaning has not finished
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/MapSummary"
+      required:
+        - name
+        - size
+        - compressed
+        - recording
+        - session
+        - summary
+    MapSession:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+            - session
+          description: Always "session" - identifies the record type
+        mode:
+          type: string
+          description: 'Cleaning mode: "House", "Spot", or "Manual"'
+        time:
+          type: number
+          description: Unix epoch seconds when the session started
+        battery:
+          type: number
+          description: Battery percentage at session start
+      required:
+        - type
+        - mode
+        - time
+        - battery
+    MapSummary:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+            - summary
+          description: Always "summary" - identifies the record type
+        time:
+          type: number
+          description: Unix epoch seconds when the session ended
+        duration:
+          type: number
+          description: Session duration in seconds
+        mode:
+          type: string
+          description: 'Cleaning mode: "House", "Spot", or "Manual"'
+        recharges:
+          type: number
+          description: Number of times the robot returned to base to recharge
+        snapshots:
+          type: number
+          description: Number of pose snapshots captured
+        distanceTraveled:
+          type: number
+          description: Total distance traveled in meters
+        maxDistFromOrigin:
+          type: number
+          description: Maximum distance from origin in meters
+        totalRotation:
+          type: number
+          description: Total rotation in degrees
+        areaCovered:
+          type: number
+          description: Estimated area covered in square meters
+        errorsDuringClean:
+          type: number
+          description: Number of errors encountered during cleaning
+        batteryStart:
+          type: number
+          description: Battery percentage at session start
+        batteryEnd:
+          type: number
+          description: Battery percentage at session end
+      required:
+        - type
+        - time
+        - duration
+        - mode
+        - recharges
+        - snapshots
+        - distanceTraveled
+        - maxDistFromOrigin
+        - totalRotation
+        - areaCovered
+        - errorsDuringClean
+  responses:
+    Ok:
+      description: Success acknowledgement
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Ok"

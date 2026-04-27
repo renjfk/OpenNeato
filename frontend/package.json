@@ -4,8 +4,9 @@
     "version": "0.0.1",
     "type": "module",
     "scripts": {
-        "dev": "vite",
-        "build": "biome check && tsc --noEmit && vite build && node scripts/embed_frontend.js && node scripts/gen_api_docs.js",
+        "dev": "npm run gen:types && vite",
+        "gen:types": "openapi-typescript --root-types --root-types-no-schema-prefix --output src/types.generated.ts api/openapi.yaml",
+        "build": "biome check && npm run gen:types && node scripts/check_api_paths.js && tsc --noEmit && vite build && node scripts/embed_frontend.js",
         "preview": "vite preview",
         "check": "biome check",
         "fix": "biome check --write",
@@ -17,7 +18,9 @@
     "devDependencies": {
         "@biomejs/biome": "2.4.13",
         "@preact/preset-vite": "2.10.5",
+        "openapi-typescript": "^7.13.0",
         "typescript": "6.0.3",
-        "vite": "8.0.10"
+        "vite": "8.0.10",
+        "yaml": "^2.8.3"
     }
 }

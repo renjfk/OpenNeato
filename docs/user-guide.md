@@ -148,6 +148,11 @@ These are standalone binaries — no extraction needed. On macOS/Linux you may n
 > xattr -d com.apple.quarantine ~/Downloads/openneato-flash_Darwin_arm64
 > ```
 
+> [!IMPORTANT]
+> macOS 11 (Big Sur) is the minimum supported version. This is the floor for the Go toolchain
+> the binary is built with — older macOS versions (Catalina, Mojave, and earlier) will fail to
+> load the binary or crash on first network request.
+
 > [!WARNING]
 > The flash tool has been primarily tested on macOS. Linux and Windows builds are provided but
 > not battle-tested — if you run into issues on those platforms, please

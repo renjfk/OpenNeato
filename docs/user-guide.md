@@ -13,6 +13,7 @@ Everything you need to set up, configure, and troubleshoot OpenNeato.
     - [Basic Usage](#basic-usage)
     - [What Happens Under the Hood](#what-happens-under-the-hood)
     - [Command Reference](#command-reference)
+    - [Manual Flashing with esptool](#manual-flashing-with-esptool)
     - [Troubleshooting Flash Issues](#troubleshooting-flash-issues)
 - [First-Time WiFi Setup](#first-time-wifi-setup)
     - [Option A: Fallback Access Point (no serial cable)](#option-a-fallback-access-point-no-serial-cable)
@@ -214,6 +215,108 @@ tool refuses to flash.
 > When using `-firmware` with a local firmware pack, place `checksums.txt` in the same
 > directory as the `.tar.gz` file. The tool verifies SHA-256 before extracting and will
 > refuse to flash if the checksums file is missing or the hash doesn't match.
+
+### Manual Flashing with esptool
+
+If `openneato-flash` does not run on your system, you can flash the same firmware pack manually
+with Espressif's prebuilt `esptool` binary. This path does not require Python and uses the same
+files, offsets, baud rate, compression, and reset behavior as `openneato-flash`.
+
+1. Download the matching prebuilt `esptool` binary for your platform from
+   [Espressif's esptool releases](https://github.com/espressif/esptool/releases), then extract
+   it. To use the same version as `openneato-flash`, check `ESPTOOL_VERSION` in
+   [`.goreleaser.yml`](../.goreleaser.yml).
+
+2. Plug in the ESP32. If only one ESP device is connected, you can let `esptool` find the serial
+   port automatically by omitting `-p`.
+
+   If you have multiple serial devices connected, pass the port explicitly with `-p`. Common port
+   names are `/dev/cu.usbmodem*` on macOS, `/dev/ttyUSB*` or `/dev/ttyACM*` on Linux, and `COM3`
+   or similar on Windows.
+
+3. Detect the chip name:
+
+   ```bash
+   ./esptool chip-id
+   ```
+
+   Look for a line like `Detecting chip type... ESP32-C3`, then use the lowercase chip name in
+   the firmware filename: `esp32-c3`, `esp32-s3`, or `esp32`.
+
+4. Download the full firmware pack and `checksums.txt` from the
+   [OpenNeato Releases](https://github.com/renjfk/OpenNeato/releases) page.
+
+   For example, for an ESP32-C3 on the latest release:
+
+   ```bash
+   curl -LO https://github.com/renjfk/OpenNeato/releases/latest/download/openneato-esp32-c3-full.tar.gz
+   curl -LO https://github.com/renjfk/OpenNeato/releases/latest/download/checksums.txt
+   ```
+
+5. Verify the firmware pack checksum before extracting it.
+
+   macOS:
+
+   ```bash
+   shasum -a 256 -c checksums.txt --ignore-missing
+   ```
+
+   Linux:
+
+   ```bash
+   sha256sum -c checksums.txt --ignore-missing
+   ```
+
+   Windows PowerShell:
+
+   ```powershell
+   Select-String "openneato-esp32-c3-full.tar.gz" checksums.txt
+   Get-FileHash .\openneato-esp32-c3-full.tar.gz -Algorithm SHA256
+   ```
+
+   The hash printed by PowerShell must match the hash from `checksums.txt`.
+
+6. Extract the firmware pack and open `offsets.json`.
+
+   macOS/Linux:
+
+   ```bash
+   tar -xzf openneato-esp32-c3-full.tar.gz
+   ```
+
+   Windows PowerShell:
+
+   ```powershell
+   tar -xzf .\openneato-esp32-c3-full.tar.gz
+   ```
+
+7. Flash all images using the offsets from `offsets.json`.
+
+   macOS/Linux:
+
+   ```bash
+   ./esptool -b 921600 --before default-reset --after hard-reset write-flash -z \
+     BOOTLOADER_OFFSET bootloader.bin \
+     PARTITIONS_OFFSET partitions.bin \
+     OTADATA_OFFSET boot_app0.bin \
+     APP_OFFSET firmware.bin
+   ```
+
+   Windows PowerShell:
+
+   ```powershell
+   .\esptool.exe -b 921600 --before default-reset --after hard-reset write-flash -z `
+     BOOTLOADER_OFFSET .\bootloader.bin `
+     PARTITIONS_OFFSET .\partitions.bin `
+     OTADATA_OFFSET .\boot_app0.bin `
+     APP_OFFSET .\firmware.bin
+   ```
+
+   Replace the `*_OFFSET` placeholders with the values from `offsets.json`, and replace the
+   firmware pack name to match your chip. If auto-detection picks the wrong serial device or you
+   have multiple ESP devices connected, add `-p <port>` before `-b 921600`. Do not hard-code the
+   flash offsets from another source; `offsets.json` is generated with the release and is the
+   source of truth for the manual command.
 
 ### Troubleshooting Flash Issues
 

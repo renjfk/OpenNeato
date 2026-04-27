@@ -110,6 +110,18 @@ enum CommandStatus {
 // NVS keys — WiFi
 #define NVS_KEY_WIFI_SSID "wifi_ssid"
 #define NVS_KEY_WIFI_PASS "wifi_pass"
+#define NVS_KEY_AP_FALLBACK "ap_fallback"
+
+// Fallback Access Point (provisioning AP)
+// SSID is derived from hostname: "<hostname>-ap". Network is open (no password).
+// AP is automatic: always on when no STA credentials saved; on/off based on
+// apFallbackOnDisconnect setting when STA connection drops.
+#define AP_SSID_SUFFIX "-ap"
+#define AP_DEFAULT_IP IPAddress(192, 168, 4, 1)
+#define AP_GATEWAY IPAddress(192, 168, 4, 1)
+#define AP_SUBNET IPAddress(255, 255, 255, 0)
+#define AP_CHANNEL 1
+#define AP_MAX_CONNECTIONS 4
 
 // NVS keys — Time/NTP
 #define NVS_KEY_TIMEZONE "tz"

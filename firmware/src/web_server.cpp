@@ -8,15 +8,16 @@
 #include "manual_clean_manager.h"
 #include "notification_manager.h"
 #include "cleaning_history.h"
+#include "wifi_manager.h"
 #include <SPIFFS.h>
 
 unsigned long WebServer::lastApiActivity = 0;
 
 WebServer::WebServer(AsyncWebServer& server, NeatoSerial& neato, DataLogger& logger, SystemManager& sys,
                      FirmwareManager& fw, SettingsManager& settings, ManualCleanManager& manual,
-                     NotificationManager& notif, CleaningHistory& history) :
+                     NotificationManager& notif, CleaningHistory& history, WiFiManager& wifi) :
     server(server), neato(neato), logger(logger), sysMgr(sys), fwMgr(fw), settingsMgr(settings), manualMgr(manual),
-    notifMgr(notif), historyMgr(history) {}
+    notifMgr(notif), historyMgr(history), wifiMgr(wifi) {}
 
 void WebServer::loggedRoute(const char *path, WebRequestMethodComposite httpMethod, SyncHandler handler) {
     server.on(path, httpMethod, [this, handler](AsyncWebServerRequest *request) {
@@ -71,6 +72,7 @@ void WebServer::begin() {
     registerSettingsRoutes();
     registerFirmwareRoutes();
     registerMapRoutes();
+    registerWiFiRoutes();
 
     LOG("WEB", "Frontend and API routes registered");
 }
@@ -504,4 +506,24 @@ void WebServer::registerMapRoutes() {
             });
 
     LOG("WEB", "History routes registered");
+}
+
+// -- WiFi management endpoints -----------------------------------------------
+
+void WebServer::registerWiFiRoutes() {
+    // GET /api/wifi/status , STA + fallback AP snapshot
+    registerGetRoute("/api/wifi/status", wifiMgr, &WiFiManager::getStatus, {});
+
+    // GET /api/wifi/scan , list nearby networks
+    registerGetRoute("/api/wifi/scan", wifiMgr, &WiFiManager::scanNetworks, {});
+
+    // POST /api/wifi/connect?ssid=&password= , save credentials and connect.
+    // On success the device reboots into normal STA mode; on failure the
+    // fallback AP stays up so the user can retry.
+    registerPostRoute("/api/wifi/connect", wifiMgr, &WiFiManager::connect, {"ssid", "password"});
+
+    // POST /api/wifi/disconnect , clear credentials and drop the connection
+    registerPostRoute("/api/wifi/disconnect", wifiMgr, &WiFiManager::disconnect, {});
+
+    LOG("WEB", "WiFi routes registered");
 }

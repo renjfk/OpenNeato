@@ -35,6 +35,11 @@ struct Settings : public JsonSerializable {
     int vacuumSpeed = MANUAL_VACUUM_SPEED_PCT; // Vacuum speed % (40-100)
     int sideBrushPower = MANUAL_SIDE_BRUSH_POWER_MW; // Side brush power in mW (500-1500)
 
+    // Fallback Access Point , when STA connection is lost, expose an AP for
+    // browser-based reconfiguration. Always on when no STA credentials are
+    // saved; controlled by this flag once credentials exist.
+    bool apFallbackOnDisconnect = true;
+
     // Remote syslog (UDP) — when enabled, logs go to network instead of flash
     bool syslogEnabled = false;
     String syslogIp; // IPv4 address of syslog receiver
@@ -81,12 +86,18 @@ public:
     using RebootCallback = std::function<void()>;
     void onRebootRequired(RebootCallback cb) { rebootCb = cb; }
 
+    // Callback fired when AP fallback policy changes (so WiFiManager can
+    // re-evaluate whether the AP should be active right now).
+    using ApFallbackChangeCallback = std::function<void(bool enabled)>;
+    void onApFallbackChange(ApFallbackChangeCallback cb) { apFallbackChangeCb = cb; }
+
 private:
     Preferences& prefs;
     Settings current;
     TzChangeCallback tzChangeCb;
     TxPowerChangeCallback txPowerChangeCb;
     RebootCallback rebootCb;
+    ApFallbackChangeCallback apFallbackChangeCb;
     unsigned long logLevelEnabledAt = 0; // millis() when log level was changed from off (0 = off/never)
 
     void load();

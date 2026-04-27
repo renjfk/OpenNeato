@@ -39,6 +39,7 @@ import { SettingsCategory } from "./settings/settings-category";
 import { useFirmwareUpload } from "./settings/use-firmware-upload";
 import { useReboot } from "./settings/use-reboot";
 import { useSettingsForm } from "./settings/use-settings-form";
+import { WiFiSection } from "./settings/wifi-section";
 
 type Theme = "system" | "dark" | "light";
 
@@ -85,6 +86,8 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
         setSyslogIp,
         wifiTxPower,
         setWifiTxPower,
+        apFallbackOnDisconnect,
+        setApFallbackOnDisconnect,
         uartTxPin,
         setUartTxPin,
         uartRxPin,
@@ -491,6 +494,15 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                             </div>
                         </button>
                     </div>
+                </SettingsCategory>
+
+                <SettingsCategory title="WiFi" icon={wifiSvg} lazy>
+                    <WiFiSection
+                        apFallbackOnDisconnect={apFallbackOnDisconnect}
+                        onApFallbackChange={setApFallbackOnDisconnect}
+                        saving={saving}
+                        errorStack={errorStack}
+                    />
                 </SettingsCategory>
 
                 <SettingsCategory title="Notifications" icon={bellSvg}>
@@ -1158,11 +1170,11 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
             )}
 
             {(rebooting || robotRestarting) && (
-                <div class="reboot-overlay">
-                    <div class="reboot-dialog">
-                        <div class="reboot-spinner" />
-                        <div class="reboot-text">{robotRestarting ? "Restarting robot..." : "Rebooting..."}</div>
-                        <div class="reboot-subtext">
+                <div class="loading-overlay">
+                    <div class="loading-dialog">
+                        <div class="loading-spinner" />
+                        <div class="loading-text">{robotRestarting ? "Restarting robot..." : "Rebooting..."}</div>
+                        <div class="loading-subtext">
                             {robotRestarting
                                 ? "Waiting for robot to come back online"
                                 : "Waiting for device to come back online"}

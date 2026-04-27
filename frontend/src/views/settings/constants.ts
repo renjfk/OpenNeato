@@ -115,6 +115,7 @@ export const SIDE_BRUSH_PRESETS: SideBrushPreset[] = [
 export const DEFAULT_SERVER = {
     tz: "UTC0",
     logLevel: 0,
+    apFallbackOnDisconnect: true,
     syslogEnabled: false,
     syslogIp: "",
     wifiTxPower: 60,

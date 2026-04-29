@@ -98,7 +98,7 @@ These are the **robot's** RX/TX labels, so you cross-connect to the ESP32:
 
 The default TX/RX GPIOs depend on the chip (ESP32-C3: GPIO 3/4, ESP32-S3: GPIO 17/18,
 original ESP32: GPIO 17/16) but are fully configurable from the web UI in
-**Settings -> Robot -> UART Pins** — so wire whichever GPIOs are convenient and update the
+**Settings -> Device -> UART Pins** — so wire whichever GPIOs are convenient and update the
 setting to match.
 
 ### Wiring

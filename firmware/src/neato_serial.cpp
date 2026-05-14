@@ -18,6 +18,12 @@ NeatoSerial::NeatoSerial() :
     chargerCache(
             CACHE_TTL_CHARGER, [this](AsyncCache<ChargerData>::Callback cb) { fetchCharger(cb); },
             CACHE_HIT(CMD_GET_CHARGER)),
+    analogCache(
+            CACHE_TTL_SENSORS, [this](AsyncCache<BatteryAnalogData>::Callback cb) { fetchBatteryAnalog(cb); },
+            CACHE_HIT(CMD_GET_ANALOG_SENSORS)),
+    warrantyCache(
+            CACHE_TTL_VERSION, [this](AsyncCache<BatteryWarrantyData>::Callback cb) { fetchBatteryWarranty(cb); },
+            CACHE_HIT(CMD_GET_WARRANTY)),
     digitalCache(
             CACHE_TTL_SENSORS, [this](AsyncCache<DigitalSensorData>::Callback cb) { fetchDigitalSensors(cb); },
             CACHE_HIT(CMD_GET_DIGITAL_SENSORS)),
@@ -291,6 +297,14 @@ void NeatoSerial::getCharger(std::function<void(bool, const ChargerData&)> callb
     chargerCache.get(callback);
 }
 
+void NeatoSerial::getBatteryAnalog(std::function<void(bool, const BatteryAnalogData&)> callback) {
+    analogCache.get(callback);
+}
+
+void NeatoSerial::getBatteryWarranty(std::function<void(bool, const BatteryWarrantyData&)> callback) {
+    warrantyCache.get(callback);
+}
+
 void NeatoSerial::getUserSettings(std::function<void(bool, const UserSettingsData&)> callback) {
     userSettingsCache.get(callback);
 }
@@ -378,6 +392,26 @@ void NeatoSerial::fetchCharger(std::function<void(bool, const ChargerData&)> cal
         ChargerData data;
         if (ok)
             ok = parseChargerData(raw, data);
+        if (callback)
+            callback(ok, data);
+    });
+}
+
+void NeatoSerial::fetchBatteryAnalog(std::function<void(bool, const BatteryAnalogData&)> callback) {
+    enqueue(CMD_GET_ANALOG_SENSORS, [callback](bool ok, const String& raw) {
+        BatteryAnalogData data;
+        if (ok)
+            ok = parseBatteryAnalogData(raw, data);
+        if (callback)
+            callback(ok, data);
+    });
+}
+
+void NeatoSerial::fetchBatteryWarranty(std::function<void(bool, const BatteryWarrantyData&)> callback) {
+    enqueue(CMD_GET_WARRANTY, [callback](bool ok, const String& raw) {
+        BatteryWarrantyData data;
+        if (ok)
+            ok = parseBatteryWarrantyData(raw, data);
         if (callback)
             callback(ok, data);
     });
@@ -480,6 +514,8 @@ void NeatoSerial::invalidateState() {
 void NeatoSerial::invalidateAll() {
     versionCache.invalidate();
     chargerCache.invalidate();
+    analogCache.invalidate();
+    warrantyCache.invalidate();
     digitalCache.invalidate();
     motorCache.invalidate();
     stateCache.invalidate();
@@ -694,6 +730,31 @@ bool NeatoSerial::powerControl(const String& action, std::function<void(bool)> c
 bool NeatoSerial::clearErrors(std::function<void(bool)> callback) {
     invalidateState();
     return enqueue(CMD_SET_UI_ERROR_CLEAR_ALL, wrapAction(callback));
+}
+
+bool NeatoSerial::newBattery(std::function<void(bool)> callback) {
+    invalidateState();
+    return testMode(true, [this, callback](bool ok) {
+        if (!ok) {
+            if (callback)
+                callback(false);
+            return;
+        }
+
+        enqueue(
+                CMD_NEW_BATTERY,
+                [this, callback](bool okCmd, const String&) {
+                    if (!okCmd) {
+                        // Best-effort return robot to normal mode even if NewBattery failed
+                        testMode(false, nullptr);
+                        if (callback)
+                            callback(false);
+                        return;
+                    }
+                    testMode(false, callback);
+                },
+                PRIORITY_HIGH);
+    });
 }
 
 bool NeatoSerial::sendRaw(const String& cmd, std::function<void(bool, const String&)> callback) {

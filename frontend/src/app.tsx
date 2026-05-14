@@ -4,6 +4,7 @@ import { Route, Router } from "./components/router";
 import { usePolling } from "./hooks/use-polling";
 import type { FirmwareVersion, ManualStatus, StateData } from "./types";
 import { checkForUpdate, getAvailableUpdate, type UpdateInfo } from "./update";
+import { BatteryView } from "./views/battery";
 import { DashboardView } from "./views/dashboard";
 import { HistoryView } from "./views/history";
 import { LogsView } from "./views/logs";
@@ -171,6 +172,9 @@ export function App() {
             )}
             <Route path="/schedule">
                 <ScheduleView />
+            </Route>
+            <Route path="/battery">
+                <BatteryView firmwareSupported={firmware.data?.supported !== false} />
             </Route>
             <Route path="/logs" prefix>
                 <LogsView />

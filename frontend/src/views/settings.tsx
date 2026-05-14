@@ -3,6 +3,7 @@ import { api } from "../api";
 import alertSvg from "../assets/icons/alert.svg?raw";
 import backSvg from "../assets/icons/back.svg?raw";
 import bellSvg from "../assets/icons/bell.svg?raw";
+import boltSvg from "../assets/icons/bolt.svg?raw";
 import calendarSvg from "../assets/icons/calendar.svg?raw";
 import chipSvg from "../assets/icons/chip.svg?raw";
 import databaseSvg from "../assets/icons/database.svg?raw";
@@ -815,7 +816,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                     </div>
                 </SettingsCategory>
 
-                <SettingsCategory title="Diagnostics" icon={stethoscopeSvg}>
+                <SettingsCategory title="Diagnostics" icon={stethoscopeSvg} lazy>
                     <div class="settings-section">
                         <div class="settings-section-title">Log Level</div>
                         <div class="settings-tz-select-wrap">
@@ -865,6 +866,15 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                                 {syslogIpError && <div class="settings-field-error">{syslogIpError}</div>}
                             </>
                         )}
+                    </div>
+                    <div class="settings-section">
+                        <button type="button" class="settings-nav-row" onClick={() => guardedNavigate("/battery")}>
+                            <div class="settings-nav-row-left">
+                                <Icon svg={boltSvg} />
+                                Battery Diagnostics
+                            </div>
+                            <span class="settings-nav-chevron">&rsaquo;</span>
+                        </button>
                     </div>
                     <div class="settings-section">
                         <button type="button" class="settings-nav-row" onClick={() => guardedNavigate("/logs")}>

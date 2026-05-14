@@ -9,6 +9,7 @@
 
 #define CMD_GET_VERSION "GetVersion"
 #define CMD_GET_CHARGER "GetCharger"
+#define CMD_GET_ANALOG_SENSORS "GetAnalogSensors"
 #define CMD_GET_DIGITAL_SENSORS "GetDigitalSensors"
 #define CMD_GET_MOTORS "GetMotors"
 #define CMD_GET_STATE "GetState"
@@ -46,6 +47,7 @@
 #define CMD_GET_USER_SETTINGS "GetUserSettings"
 #define CMD_SET_USER_SETTINGS "SetUserSettings"
 #define CMD_SET_NAVIGATION_MODE "SetNavigationMode"
+#define CMD_NEW_BATTERY "NewBattery"
 
 // -- Sound IDs ---------------------------------------------------------------
 
@@ -83,6 +85,14 @@ struct VersionData : public JsonSerializable {
     String ldsSerial;
     String mainBoardVersion;
     time_t timeUtc = 0; // Parsed from "Time UTC" field (0 = not available)
+    int smartBatteryAuthorization = 0;
+    int smartBatteryDataVersion = 0;
+    String smartBatteryChemistry;
+    String smartBatteryDeviceName;
+    String smartBatteryManufacturerName;
+    String smartBatteryMfgDate;
+    String smartBatterySerialNumber;
+    String smartBatterySoftwareVersion;
 
     std::vector<Field> toFields() const override;
 };
@@ -101,6 +111,23 @@ struct ChargerData : public JsonSerializable {
     float vExtV = 0.0f;
     int chargerMAH = 0;
     int dischargeMAH = 0;
+
+    std::vector<Field> toFields() const override;
+};
+
+struct BatteryAnalogData : public JsonSerializable {
+    float batteryVoltageV = 0.0f;
+    int batteryCurrentMA = 0;
+    float batteryTemperatureC = 0.0f;
+    float externalVoltageV = 0.0f;
+
+    std::vector<Field> toFields() const override;
+};
+
+struct BatteryWarrantyData : public JsonSerializable {
+    int cumulativeCleaningTimeSeconds = 0;
+    int cumulativeBatteryCycles = 0;
+    String validationCode;
 
     std::vector<Field> toFields() const override;
 };
@@ -210,6 +237,8 @@ struct RobotPosData : public JsonSerializable {
 
 bool parseVersionData(const String& raw, VersionData& out);
 bool parseChargerData(const String& raw, ChargerData& out);
+bool parseBatteryAnalogData(const String& raw, BatteryAnalogData& out);
+bool parseBatteryWarrantyData(const String& raw, BatteryWarrantyData& out);
 bool parseDigitalSensorData(const String& raw, DigitalSensorData& out);
 bool parseMotorData(const String& raw, MotorData& out);
 bool parseRobotState(const String& raw, RobotState& out);

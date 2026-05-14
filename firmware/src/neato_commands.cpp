@@ -168,8 +168,9 @@ static bool findCsvValue(const String& raw, const String& label, String& value) 
             if (key == label) {
                 value = line.substring(comma + 1);
                 value.trim();
-                // Strip trailing comma if present (GetAnalogSensors format)
-                if (value.endsWith(",")) {
+                // Strip trailing commas (GetAnalogSensors and GetVersion formats
+                // may have one or more trailing commas for empty fields)
+                while (value.endsWith(",")) {
                     value = value.substring(0, value.length() - 1);
                 }
                 return true;
@@ -190,6 +191,14 @@ std::vector<Field> VersionData::toFields() const {
             {"ldsVersion", ldsVersion, FIELD_STRING},
             {"ldsSerial", ldsSerial, FIELD_STRING},
             {"mainBoardVersion", mainBoardVersion, FIELD_STRING},
+            {"smartBatteryAuthorization", String(smartBatteryAuthorization), FIELD_INT},
+            {"smartBatteryDataVersion", String(smartBatteryDataVersion), FIELD_INT},
+            {"smartBatteryChemistry", smartBatteryChemistry, FIELD_STRING},
+            {"smartBatteryDeviceName", smartBatteryDeviceName, FIELD_STRING},
+            {"smartBatteryManufacturerName", smartBatteryManufacturerName, FIELD_STRING},
+            {"smartBatteryMfgDate", smartBatteryMfgDate, FIELD_STRING},
+            {"smartBatterySerialNumber", smartBatterySerialNumber, FIELD_STRING},
+            {"smartBatterySoftwareVersion", smartBatterySoftwareVersion, FIELD_STRING},
     };
 }
 
@@ -208,6 +217,23 @@ std::vector<Field> ChargerData::toFields() const {
             {"vExtV", String(vExtV, 2), FIELD_FLOAT},
             {"chargerMAH", String(chargerMAH), FIELD_INT},
             {"dischargeMAH", String(dischargeMAH), FIELD_INT},
+    };
+}
+
+std::vector<Field> BatteryAnalogData::toFields() const {
+    return {
+            {"batteryVoltageV", String(batteryVoltageV, 3), FIELD_FLOAT},
+            {"batteryCurrentMA", String(batteryCurrentMA), FIELD_INT},
+            {"batteryTemperatureC", String(batteryTemperatureC, 2), FIELD_FLOAT},
+            {"externalVoltageV", String(externalVoltageV, 3), FIELD_FLOAT},
+    };
+}
+
+std::vector<Field> BatteryWarrantyData::toFields() const {
+    return {
+            {"cumulativeCleaningTimeSeconds", String(cumulativeCleaningTimeSeconds), FIELD_INT},
+            {"cumulativeBatteryCycles", String(cumulativeBatteryCycles), FIELD_INT},
+            {"validationCode", validationCode, FIELD_STRING},
     };
 }
 
@@ -324,6 +350,24 @@ bool parseVersionData(const String& raw, VersionData& out) {
         out.mainBoardVersion = val;
         out.mainBoardVersion.replace(",", ".");
     }
+    if (findCsvValue(raw, "SmartBatt Authorization", val))
+        out.smartBatteryAuthorization = val.toInt();
+    if (findCsvValue(raw, "SmartBatt Data Version", val))
+        out.smartBatteryDataVersion = val.toInt();
+    if (findCsvValue(raw, "SmartBatt Device Chemistry", val))
+        out.smartBatteryChemistry = val;
+    if (findCsvValue(raw, "SmartBatt Device Name", val))
+        out.smartBatteryDeviceName = val;
+    if (findCsvValue(raw, "SmartBatt Manufacturer Name", val))
+        out.smartBatteryManufacturerName = val;
+    if (findCsvValue(raw, "SmartBatt Mfg Year/Month/Day", val)) {
+        val.replace(",", "-");
+        out.smartBatteryMfgDate = val;
+    }
+    if (findCsvValue(raw, "SmartBatt Serial Number", val))
+        out.smartBatterySerialNumber = val;
+    if (findCsvValue(raw, "SmartBatt Software Version", val))
+        out.smartBatterySoftwareVersion = val;
     // Parse "Time UTC" field, format: "Sat Apr 11 19:26:13 2026"
     if (findCsvValue(raw, "Time UTC", val)) {
         val.trim();
@@ -358,6 +402,63 @@ bool parseVersionData(const String& raw, VersionData& out) {
         }
     }
     return out.modelName.length() > 0 || out.softwareVersion.length() > 0;
+}
+
+static int parseHexValue(const String& value) {
+    char *end = nullptr;
+    long out = strtol(value.c_str(), &end, 16);
+    if (end == value.c_str())
+        return 0;
+    return static_cast<int>(out);
+}
+
+static String csvLastField(const String& value) {
+    int comma = value.lastIndexOf(',');
+    if (comma < 0)
+        return value;
+    String last = value.substring(comma + 1);
+    last.trim();
+    return last;
+}
+
+bool parseBatteryAnalogData(const String& raw, BatteryAnalogData& out) {
+    String val;
+    bool found = false;
+    if (findCsvValue(raw, "BatteryVoltage", val)) {
+        out.batteryVoltageV = csvLastField(val).toFloat() / 1000.0f;
+        found = true;
+    }
+    if (findCsvValue(raw, "BatteryCurrent", val)) {
+        out.batteryCurrentMA = csvLastField(val).toInt();
+        found = true;
+    }
+    if (findCsvValue(raw, "BatteryTemperature", val)) {
+        out.batteryTemperatureC = csvLastField(val).toFloat() / 1000.0f;
+        found = true;
+    }
+    if (findCsvValue(raw, "ExternalVoltage", val)) {
+        out.externalVoltageV = csvLastField(val).toFloat() / 1000.0f;
+        found = true;
+    }
+    return found;
+}
+
+bool parseBatteryWarrantyData(const String& raw, BatteryWarrantyData& out) {
+    String val;
+    bool found = false;
+    if (findCsvValue(raw, "CumulativeCleaningTimeInSecs", val)) {
+        out.cumulativeCleaningTimeSeconds = parseHexValue(val);
+        found = true;
+    }
+    if (findCsvValue(raw, "CumulativeBatteryCycles", val)) {
+        out.cumulativeBatteryCycles = parseHexValue(val);
+        found = true;
+    }
+    if (findCsvValue(raw, "ValidationCode", val)) {
+        out.validationCode = val;
+        found = true;
+    }
+    return found;
 }
 
 bool parseChargerData(const String& raw, ChargerData& out) {

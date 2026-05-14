@@ -471,6 +471,11 @@ Go to **Settings -> Diagnostics** and set **Log Level**:
 - **Debug** — everything in Info plus all serial commands with raw responses. Auto-reverts to
   off after 10 minutes.
 
+The Diagnostics section also shows a **Battery diagnostics** card with live readings from the
+robot: charge percentage, voltage, current, temperature, cycle count, and chemistry details.
+If you replace the battery, use the **New Battery** button to reset the fuel gauge calibration
+(only after physically installing the new pack).
+
 For long-running diagnostics (e.g. catching an intermittent error that only appears after
 hours of idling), enable **Remote Syslog** in the same section. This sends all log output
 over UDP (port 514) to a syslog receiver on your network instead of writing to flash. The
@@ -653,9 +658,9 @@ A few typical maintenance tasks:
 
 ```bash
 # New battery installed (resets fuel gauge calibration, requires TestMode)
-curl -X POST 'http://neato.local/api/testmode?enable=1'
+curl -X POST 'http://neato.local/api/serial?cmd=TestMode%20On'
 curl -X POST 'http://neato.local/api/serial?cmd=NewBattery'
-curl -X POST 'http://neato.local/api/testmode?enable=0'
+curl -X POST 'http://neato.local/api/serial?cmd=TestMode%20Off'
 
 # Reset robot user settings to factory defaults
 curl -X POST 'http://neato.local/api/serial?cmd=SetUserSettings%20Reset'

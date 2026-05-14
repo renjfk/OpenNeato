@@ -55,8 +55,8 @@ port, giving you a local web interface that works without any external dependenc
 - **OTA firmware updates** from the browser with SHA-256 download verification (against published `checksums.txt`), MD5
   transfer integrity, dual-partition layout with auto-rollback, and automatic new version notifications when a release
   is available on GitHub
-- **Settings page** for hostname, timezone, motor presets, notification topics, UART pins, theme (dark/light/auto), and
-  more
+- **Settings page** for hostname, timezone, motor presets, notification topics, UART pins, theme (dark/light/auto),
+  battery diagnostics (cycle count, voltage, temperature, and a "New Battery" calibration trigger), and more
 - **Event logging** with configurable log levels (off/info/debug), compressed JSONL files on SPIFFS, browsable and
   downloadable from the UI; optional remote syslog (UDP) for long-running diagnostics without flash wear; logging is
   off by default

@@ -241,7 +241,6 @@ const state = {
     errorCode: 200,
     errorMessage: "",
     displayMessage: "",
-    testMode: false,
     manualClean: false,
     // Manual clean motor + safety state
     manualBrush: false,
@@ -459,9 +458,6 @@ const deriveStates = () => {
     if (state.manualClean) {
         state.uiState = "UIMGR_STATE_MANUALCLEANING";
         state.robotState = "ST_C_ManualCleaning";
-    } else if (state.testMode) {
-        state.uiState = "UIMGR_STATE_TESTMODE";
-        state.robotState = "ST_C_TestMode";
     } else if (state.midCleanRecharge) {
         state.uiState = "UIMGR_STATE_CLEANINGSUSPENDED";
         state.robotState = "ST_M1_Charging_Cleaning";
@@ -498,6 +494,14 @@ const routes = {
             ldsVersion: "V2.6.15295",
             ldsSerial: "KSH-V5F4",
             mainBoardVersion: "15.0",
+            smartBatteryAuthorization: 1,
+            smartBatteryDataVersion: 512,
+            smartBatteryChemistry: "LION1",
+            smartBatteryDeviceName: "F164A10288",
+            smartBatteryManufacturerName: "Panasonic",
+            smartBatteryMfgDate: "2089-02-18",
+            smartBatterySerialNumber: "34832",
+            smartBatterySoftwareVersion: "2048",
         });
     },
 
@@ -519,6 +523,36 @@ const routes = {
             chargerMAH: state.chargingActive ? 1200 : 0,
             dischargeMAH: Math.round(((100 - fuel) / 100) * 2800),
         });
+    },
+
+    "GET /api/analog": (_req, res) => {
+        if (faults.pollCharger) return sendError(res, "UART timeout reading battery diagnostics", 500);
+        const fuel = Math.round(state.fuelPercent);
+        const batteryCurrentMA = state.chargingActive
+            ? rand(180, 720)
+            : state.extPwrPresent
+              ? rand(-20, 20)
+              : -rand(80, 420);
+        const batteryTemperatureC = parseFloat((24 + (state.chargingActive ? 1.8 : 0) + Math.random()).toFixed(1));
+
+        jsonResponse(res, {
+            batteryVoltageV: vBattFromFuel(fuel),
+            batteryCurrentMA,
+            batteryTemperatureC,
+            externalVoltageV: state.extPwrPresent ? 18.66 : 0.0,
+        });
+    },
+
+    "GET /api/warranty": (_req, res) => {
+        jsonResponse(res, {
+            cumulativeBatteryCycles: 728,
+            cumulativeCleaningTimeSeconds: 885884,
+            validationCode: "b40b2e9a",
+        });
+    },
+
+    "POST /api/battery/new": (_req, res) => {
+        jsonResponse(res, { ok: true });
     },
 
     "GET /api/motors": (_req, res) => {
@@ -668,13 +702,6 @@ const routes = {
 
     "POST /api/sound": (_req, res) => {
         // Accept and ignore — just acknowledge
-        sendOk(res);
-    },
-
-    "POST /api/testmode": (_req, res, query) => {
-        if (faults.actions) return sendError(res, "UART timeout: robot not responding", 500);
-        state.testMode = query.enable === "1";
-        deriveStates();
         sendOk(res);
     },
 

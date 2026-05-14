@@ -8,7 +8,7 @@ import { usePolling } from "../../hooks/use-polling";
 import type { BatteryAnalogData, BatteryWarrantyData, ChargerData, VersionData } from "../../types";
 import { normalizeError } from "../../utils";
 
-interface BatteryDiagnosticsSectionProps {
+interface BatteryDiagnosticsProps {
     firmwareSupported: boolean;
     errorStack: ErrorStackHandle;
 }
@@ -36,7 +36,7 @@ function mfgDateLooksUnreliable(version: VersionData | null | undefined): boolea
     return true;
 }
 
-export function BatteryDiagnosticsSection({ firmwareSupported, errorStack }: BatteryDiagnosticsSectionProps) {
+export function BatteryDiagnostics({ firmwareSupported, errorStack }: BatteryDiagnosticsProps) {
     const chargerPoll = usePolling<ChargerData>(api.getCharger, 30000);
     const analogPoll = usePolling<BatteryAnalogData>(api.getBatteryAnalog, 30000);
     const warrantyPoll = usePolling<BatteryWarrantyData>(api.getBatteryWarranty, 60000);
@@ -79,33 +79,30 @@ export function BatteryDiagnosticsSection({ firmwareSupported, errorStack }: Bat
                     {charger && analog && warranty ? (
                         <>
                             <div class="settings-battery-grid">
-                                <div class="settings-battery-stat">
+                                <div>
                                     <span>Charge</span>
                                     <strong>{charger.fuelPercent}%</strong>
                                 </div>
-                                <div class="settings-battery-stat">
+                                <div>
                                     <span>State</span>
                                     <strong>{batteryStateLabel(charger)}</strong>
                                 </div>
-                                <div class="settings-battery-stat">
+                                <div>
                                     <span>Voltage</span>
                                     <strong>{charger.vBattV.toFixed(2)} V</strong>
                                 </div>
-                                <div class="settings-battery-stat">
+                                <div>
                                     <span>Temp</span>
                                     <strong>{analog.batteryTemperatureC.toFixed(1)} C</strong>
                                 </div>
-                                <div class="settings-battery-stat">
+                                <div>
                                     <span>Cycles</span>
                                     <strong>{warranty.cumulativeBatteryCycles}</strong>
                                 </div>
-                                <div class="settings-battery-stat">
+                                <div>
                                     <span>Pack</span>
                                     <strong>{version?.smartBatteryManufacturerName || "Unknown"}</strong>
                                 </div>
-                            </div>
-
-                            <div class="settings-battery-advanced">
                                 <div>
                                     <span>Current</span>
                                     <strong>{analog.batteryCurrentMA} mA</strong>

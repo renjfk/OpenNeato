@@ -1,7 +1,7 @@
 import backSvg from "../assets/icons/back.svg?raw";
 import { ErrorBannerStack, useErrorStack } from "../components/error-banner";
 import { Icon } from "../components/icon";
-import { BatteryDiagnosticsSection } from "./settings/battery-diagnostics-section";
+import { BatteryDiagnostics } from "./settings/battery-diagnostics";
 
 interface BatteryViewProps {
     firmwareSupported: boolean;
@@ -23,7 +23,7 @@ export function BatteryView({ firmwareSupported }: BatteryViewProps) {
             <ErrorBannerStack errors={errors} />
 
             <div class="schedule-page">
-                <BatteryDiagnosticsSection firmwareSupported={firmwareSupported} errorStack={errorStack} />
+                <BatteryDiagnostics firmwareSupported={firmwareSupported} errorStack={errorStack} />
             </div>
         </>
     );

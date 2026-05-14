@@ -1029,7 +1029,7 @@ input:disabled {
     margin-bottom: 10px;
 }
 
-.settings-battery-stat {
+.settings-battery-grid > div {
     min-width: 0;
     padding: 10px 12px;
     border: 1px solid var(--border);
@@ -1037,8 +1037,7 @@ input:disabled {
     background: var(--card-bg);
 }
 
-.settings-battery-stat span,
-.settings-battery-advanced span {
+.settings-battery-grid > div span {
     display: block;
     font-size: 11px;
     font-weight: 600;
@@ -1047,8 +1046,7 @@ input:disabled {
     letter-spacing: 0.04em;
 }
 
-.settings-battery-stat strong,
-.settings-battery-advanced strong {
+.settings-battery-grid > div strong {
     display: block;
     overflow: hidden;
     margin-top: 2px;
@@ -1057,20 +1055,6 @@ input:disabled {
     font-weight: 700;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-.settings-battery-advanced {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-    margin-bottom: 10px;
-}
-
-.settings-battery-advanced > div {
-    min-width: 0;
-    padding: 9px 10px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.03);
 }
 
 .settings-battery-note {

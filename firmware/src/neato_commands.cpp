@@ -168,8 +168,9 @@ static bool findCsvValue(const String& raw, const String& label, String& value) 
             if (key == label) {
                 value = line.substring(comma + 1);
                 value.trim();
-                // Strip trailing comma if present (GetAnalogSensors format)
-                if (value.endsWith(",")) {
+                // Strip trailing commas (GetAnalogSensors and GetVersion formats
+                // may have one or more trailing commas for empty fields)
+                while (value.endsWith(",")) {
                     value = value.substring(0, value.length() - 1);
                 }
                 return true;
@@ -411,23 +412,32 @@ static int parseHexValue(const String& value) {
     return static_cast<int>(out);
 }
 
+static String csvLastField(const String& value) {
+    int comma = value.lastIndexOf(',');
+    if (comma < 0)
+        return value;
+    String last = value.substring(comma + 1);
+    last.trim();
+    return last;
+}
+
 bool parseBatteryAnalogData(const String& raw, BatteryAnalogData& out) {
     String val;
     bool found = false;
     if (findCsvValue(raw, "BatteryVoltage", val)) {
-        out.batteryVoltageV = val.toFloat() / 1000.0f;
+        out.batteryVoltageV = csvLastField(val).toFloat() / 1000.0f;
         found = true;
     }
     if (findCsvValue(raw, "BatteryCurrent", val)) {
-        out.batteryCurrentMA = val.toInt();
+        out.batteryCurrentMA = csvLastField(val).toInt();
         found = true;
     }
     if (findCsvValue(raw, "BatteryTemperature", val)) {
-        out.batteryTemperatureC = val.toFloat() / 1000.0f;
+        out.batteryTemperatureC = csvLastField(val).toFloat() / 1000.0f;
         found = true;
     }
     if (findCsvValue(raw, "ExternalVoltage", val)) {
-        out.externalVoltageV = val.toFloat() / 1000.0f;
+        out.externalVoltageV = csvLastField(val).toFloat() / 1000.0f;
         found = true;
     }
     return found;

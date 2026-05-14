@@ -23,13 +23,25 @@ function formatHours(seconds: number): string {
     return `${Math.round(seconds / 3600)} h`;
 }
 
+function mfgDateLooksUnreliable(version?: VersionData): boolean {
+    if (!version?.smartBatteryMfgDate) return false;
+
+    const parts = version.smartBatteryMfgDate.split("-");
+    const year = Number(parts[0]);
+    if (!Number.isFinite(year)) return false;
+
+    const currentYear = new Date().getFullYear();
+    if (year <= currentYear) return false;
+
+    return true;
+}
+
 export function BatteryDiagnosticsSection({ firmwareSupported, errorStack }: BatteryDiagnosticsSectionProps) {
     const chargerPoll = usePolling<ChargerData>(api.getCharger, 30000);
     const analogPoll = usePolling<BatteryAnalogData>(api.getBatteryAnalog, 30000);
     const warrantyPoll = usePolling<BatteryWarrantyData>(api.getBatteryWarranty, 60000);
     const versionPoll = usePolling<VersionData>(api.getVersion, 60000);
 
-    const [showAdvancedBattery, setShowAdvancedBattery] = useState(false);
     const [showNewBatteryConfirm, setShowNewBatteryConfirm] = useState(false);
     const [settingNewBattery, setSettingNewBattery] = useState(false);
 
@@ -37,6 +49,7 @@ export function BatteryDiagnosticsSection({ firmwareSupported, errorStack }: Bat
     const analog = analogPoll.data;
     const warranty = warrantyPoll.data;
     const version = versionPoll.data;
+    const showMfgDateNotice = mfgDateLooksUnreliable(version);
 
     const handleNewBattery = useCallback(() => {
         setShowNewBatteryConfirm(false);
@@ -92,67 +105,61 @@ export function BatteryDiagnosticsSection({ firmwareSupported, errorStack }: Bat
                                 </div>
                             </div>
 
-                            <button
-                                type="button"
-                                class="settings-battery-advanced-btn"
-                                onClick={() => setShowAdvancedBattery(!showAdvancedBattery)}
-                            >
-                                Advanced values
-                                <span class={showAdvancedBattery ? "open" : ""}>&rsaquo;</span>
-                            </button>
-
-                            {showAdvancedBattery && (
-                                <div class="settings-battery-advanced">
-                                    <div>
-                                        <span>Current</span>
-                                        <strong>{analog.batteryCurrentMA} mA</strong>
-                                    </div>
-                                    <div>
-                                        <span>External voltage</span>
-                                        <strong>{analog.externalVoltageV.toFixed(2)} V</strong>
-                                    </div>
-                                    <div>
-                                        <span>Charging enabled</span>
-                                        <strong>{charger.chargingEnabled ? "Yes" : "No"}</strong>
-                                    </div>
-                                    <div>
-                                        <span>Fuel confidence</span>
-                                        <strong>{charger.confidOnFuel ? "Yes" : "No"}</strong>
-                                    </div>
-                                    <div>
-                                        <span>Reserved fuel</span>
-                                        <strong>{charger.onReservedFuel ? "Yes" : "No"}</strong>
-                                    </div>
-                                    <div>
-                                        <span>Charged</span>
-                                        <strong>{charger.chargerMAH} mAh</strong>
-                                    </div>
-                                    <div>
-                                        <span>Discharged</span>
-                                        <strong>{charger.dischargeMAH} mAh</strong>
-                                    </div>
-                                    <div>
-                                        <span>Cleaning time</span>
-                                        <strong>{formatHours(warranty.cumulativeCleaningTimeSeconds)}</strong>
-                                    </div>
-                                    <div>
-                                        <span>Chemistry</span>
-                                        <strong>{version?.smartBatteryChemistry || "Unknown"}</strong>
-                                    </div>
-                                    <div>
-                                        <span>Device</span>
-                                        <strong>{version?.smartBatteryDeviceName || "Unknown"}</strong>
-                                    </div>
-                                    <div>
-                                        <span>Serial</span>
-                                        <strong>{version?.smartBatterySerialNumber || "Unknown"}</strong>
-                                    </div>
-                                    <div>
-                                        <span>Mfg date</span>
-                                        <strong>{version?.smartBatteryMfgDate || "Unknown"}</strong>
-                                    </div>
+                            <div class="settings-battery-advanced">
+                                <div>
+                                    <span>Current</span>
+                                    <strong>{analog.batteryCurrentMA} mA</strong>
                                 </div>
-                            )}
+                                <div>
+                                    <span>External voltage</span>
+                                    <strong>{analog.externalVoltageV.toFixed(2)} V</strong>
+                                </div>
+                                <div>
+                                    <span>Charging enabled</span>
+                                    <strong>{charger.chargingEnabled ? "Yes" : "No"}</strong>
+                                </div>
+                                <div>
+                                    <span>Fuel confidence</span>
+                                    <strong>{charger.confidOnFuel ? "Yes" : "No"}</strong>
+                                </div>
+                                <div>
+                                    <span>Reserved fuel</span>
+                                    <strong>{charger.onReservedFuel ? "Yes" : "No"}</strong>
+                                </div>
+                                <div>
+                                    <span>Charged</span>
+                                    <strong>{charger.chargerMAH} mAh</strong>
+                                </div>
+                                <div>
+                                    <span>Discharged</span>
+                                    <strong>{charger.dischargeMAH} mAh</strong>
+                                </div>
+                                <div>
+                                    <span>Cleaning time</span>
+                                    <strong>{formatHours(warranty.cumulativeCleaningTimeSeconds)}</strong>
+                                </div>
+                                <div>
+                                    <span>Chemistry</span>
+                                    <strong>{version?.smartBatteryChemistry || "Unknown"}</strong>
+                                </div>
+                                <div>
+                                    <span>Device</span>
+                                    <strong>{version?.smartBatteryDeviceName || "Unknown"}</strong>
+                                </div>
+                                <div>
+                                    <span>Serial</span>
+                                    <strong>{version?.smartBatterySerialNumber || "Unknown"}</strong>
+                                </div>
+                                <div>
+                                    <span>Mfg date</span>
+                                    <strong>{version?.smartBatteryMfgDate || "Unknown"}</strong>
+                                    {showMfgDateNotice && (
+                                        <small class="settings-battery-note">
+                                            Reported by robot firmware, may be unreliable.
+                                        </small>
+                                    )}
+                                </div>
+                            </div>
 
                             <button
                                 type="button"

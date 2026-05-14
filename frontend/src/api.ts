@@ -1,5 +1,7 @@
 import { parseMapData } from "./history-data";
 import type {
+    BatteryAnalogData,
+    BatteryWarrantyData,
     ChargerData,
     ErrorData,
     FirmwareVersion,
@@ -12,6 +14,7 @@ import type {
     StateData,
     SystemData,
     UserSettingsData,
+    VersionData,
     WiFiScanResult,
     WiFiStatus,
 } from "./types";
@@ -64,12 +67,6 @@ async function put<T>(url: string, body: unknown): Promise<T> {
     });
     if (!res.ok) throw new Error(await parseError(res));
     return res.json();
-}
-
-async function sendSerial(cmd: string): Promise<string> {
-    const res = await fetch(`/api/serial?cmd=${encodeURIComponent(cmd)}`, { method: "POST" });
-    if (!res.ok) throw new Error(await parseError(res));
-    return res.text();
 }
 
 async function fetchLogText(name: string): Promise<string> {
@@ -141,8 +138,11 @@ function uploadFirmware(file: File, md5: string, onProgress: (pct: number) => vo
 }
 
 export const api = {
+    getVersion: () => get<VersionData>("/api/version"),
     getState: () => get<StateData>("/api/state"),
     getCharger: () => get<ChargerData>("/api/charger"),
+    getBatteryAnalog: () => get<BatteryAnalogData>("/api/analog"),
+    getBatteryWarranty: () => get<BatteryWarrantyData>("/api/warranty"),
     getError: () => get<ErrorData>("/api/error"),
     getSystem: () => get<SystemData>("/api/system"),
     getFirmwareVersion: () => get<FirmwareVersion>("/api/firmware/version"),
@@ -166,6 +166,7 @@ export const api = {
     clearErrors: () => post("/api/clear-errors"),
     robotRestart: () => post("/api/power?action=restart"),
     robotShutdown: () => post("/api/power?action=shutdown"),
+    newBattery: () => post("/api/battery/new"),
     restart: () => post("/api/system/restart"),
     formatFs: () => post("/api/system/format-fs"),
     factoryReset: () => post("/api/system/reset"),
@@ -185,7 +186,6 @@ export const api = {
     getUserSettings: () => get<UserSettingsData>("/api/user-settings"),
     setUserSetting: (key: string, value: string) =>
         post(`/api/user-settings?key=${encodeURIComponent(key)}&value=${encodeURIComponent(value)}`),
-    sendSerial: (cmd: string) => sendSerial(cmd),
 
     getWifiStatus: () => get<WiFiStatus>("/api/wifi/status"),
     scanWifi: () => get<WiFiScanResult>("/api/wifi/scan"),

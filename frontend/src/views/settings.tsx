@@ -25,6 +25,7 @@ import { useDirtyGuard } from "../hooks/use-dirty-guard";
 import { usePolling } from "../hooks/use-polling";
 import type { FirmwareVersion, SystemData, UserSettingsData } from "../types";
 import { normalizeError } from "../utils";
+import { BatteryDiagnosticsSection } from "./settings/battery-diagnostics-section";
 import {
     BRUSH_PRESETS,
     NAV_MODE_PRESETS,
@@ -815,7 +816,7 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                     </div>
                 </SettingsCategory>
 
-                <SettingsCategory title="Diagnostics" icon={stethoscopeSvg}>
+                <SettingsCategory title="Diagnostics" icon={stethoscopeSvg} lazy>
                     <div class="settings-section">
                         <div class="settings-section-title">Log Level</div>
                         <div class="settings-tz-select-wrap">
@@ -866,6 +867,10 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                             </>
                         )}
                     </div>
+                    <BatteryDiagnosticsSection
+                        firmwareSupported={firmware?.supported !== false}
+                        errorStack={errorStack}
+                    />
                     <div class="settings-section">
                         <button type="button" class="settings-nav-row" onClick={() => guardedNavigate("/logs")}>
                             <div class="settings-nav-row-left">

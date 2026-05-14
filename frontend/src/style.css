@@ -992,6 +992,122 @@ input:disabled {
     background: var(--text);
 }
 
+/* Battery diagnostics */
+
+.settings-battery-card {
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface);
+}
+
+.settings-battery-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.settings-battery-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.settings-battery-desc {
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--text);
+    opacity: 0.55;
+}
+
+.settings-battery-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.settings-battery-stat {
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--card-bg);
+}
+
+.settings-battery-stat span,
+.settings-battery-advanced span {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.settings-battery-stat strong,
+.settings-battery-advanced strong {
+    display: block;
+    overflow: hidden;
+    margin-top: 2px;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.settings-battery-advanced-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    margin-bottom: 10px;
+    padding: 10px 2px;
+    border: none;
+    background: none;
+    color: var(--text-dim);
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.settings-battery-advanced-btn span {
+    font-size: 18px;
+    line-height: 1;
+    transition: transform 0.2s ease;
+}
+
+.settings-battery-advanced-btn span.open {
+    transform: rotate(90deg);
+}
+
+.settings-battery-advanced {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.settings-battery-advanced > div {
+    min-width: 0;
+    padding: 9px 10px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.settings-battery-empty {
+    padding: 12px;
+    border-radius: 12px;
+    background: var(--card-bg);
+    color: var(--text-dim);
+    font-size: 13px;
+    font-weight: 500;
+}
+
 /* Settings pin configuration */
 
 .settings-pin-row {

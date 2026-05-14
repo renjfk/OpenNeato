@@ -49,6 +49,8 @@ public:
 
     void getVersion(std::function<void(bool, const VersionData&)> callback);
     void getCharger(std::function<void(bool, const ChargerData&)> callback);
+    void getBatteryAnalog(std::function<void(bool, const BatteryAnalogData&)> callback);
+    void getBatteryWarranty(std::function<void(bool, const BatteryWarrantyData&)> callback);
     void getUserSettings(std::function<void(bool, const UserSettingsData&)> callback);
     void getDigitalSensors(std::function<void(bool, const DigitalSensorData&)> callback);
     void getDigitalSensors(std::function<void(bool, const DigitalSensorData&)> callback, CommandPriority priority);
@@ -85,6 +87,7 @@ public:
 
     // Clear all UI errors/warnings via "SetUIError clearall".
     bool clearErrors(std::function<void(bool)> callback = nullptr);
+    bool newBattery(std::function<void(bool)> callback = nullptr);
 
     // -- Raw command (temporary debug endpoint) --------------------------------
     bool sendRaw(const String& cmd, std::function<void(bool, const String&)> callback);
@@ -188,6 +191,8 @@ private:
 
     AsyncCache<VersionData> versionCache;
     AsyncCache<ChargerData> chargerCache;
+    AsyncCache<BatteryAnalogData> analogCache;
+    AsyncCache<BatteryWarrantyData> warrantyCache;
     AsyncCache<DigitalSensorData> digitalCache;
     AsyncCache<MotorData> motorCache;
     AsyncCache<RobotState> stateCache;
@@ -200,6 +205,8 @@ private:
     // Raw (uncached) fetch methods — enqueue the command and parse response
     void fetchVersion(std::function<void(bool, const VersionData&)> callback);
     void fetchCharger(std::function<void(bool, const ChargerData&)> callback);
+    void fetchBatteryAnalog(std::function<void(bool, const BatteryAnalogData&)> callback);
+    void fetchBatteryWarranty(std::function<void(bool, const BatteryWarrantyData&)> callback);
     void fetchDigitalSensors(std::function<void(bool, const DigitalSensorData&)> callback,
                              CommandPriority priority = PRIORITY_NORMAL);
     void fetchMotors(std::function<void(bool, const MotorData&)> callback, CommandPriority priority = PRIORITY_NORMAL);

@@ -65,6 +65,60 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /api/analog:
+    get:
+      tags:
+        - Sensors
+      summary: Get battery-related analog readings
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatteryAnalogData"
+        "504":
+          description: robot timeout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/warranty:
+    get:
+      tags:
+        - Sensors
+      summary: Get battery cycle and lifetime counters
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatteryWarrantyData"
+        "504":
+          description: robot timeout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/battery/new:
+    post:
+      tags:
+        - Actions
+      summary: Tell the robot a new battery has been installed (handles TestMode sequence internally)
+      responses:
+        "200":
+          description: Success acknowledgement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ok"
+        "504":
+          description: robot timeout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /api/motors:
     get:
       tags:
@@ -230,34 +284,6 @@ paths:
             type: integer
             minimum: 0
             maximum: 20
-      responses:
-        "200":
-          $ref: "#/components/responses/Ok"
-        "503":
-          description: robot busy
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "504":
-          description: robot timeout
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-  /api/testmode:
-    post:
-      tags:
-        - Actions
-      summary: Enter or exit test mode (required for manual control)
-      parameters:
-        - name: enable
-          in: query
-          required: true
-          schema:
-            type: boolean
-            minimum: 0
-            maximum: 1
       responses:
         "200":
           $ref: "#/components/responses/Ok"
@@ -866,6 +892,30 @@ components:
         mainBoardVersion:
           type: string
           description: Main board hardware version
+        smartBatteryAuthorization:
+          type: number
+          description: Smart battery authorization status reported by the robot
+        smartBatteryDataVersion:
+          type: number
+          description: Smart battery data block version
+        smartBatteryChemistry:
+          type: string
+          description: Battery chemistry, e.g. LION1
+        smartBatteryDeviceName:
+          type: string
+          description: Smart battery device name
+        smartBatteryManufacturerName:
+          type: string
+          description: Smart battery manufacturer name
+        smartBatteryMfgDate:
+          type: string
+          description: Smart battery manufacturing date as reported by the robot
+        smartBatterySerialNumber:
+          type: string
+          description: Smart battery serial number
+        smartBatterySoftwareVersion:
+          type: string
+          description: Smart battery controller software version
       required:
         - modelName
         - serialNumber
@@ -929,6 +979,42 @@ components:
         - vExtV
         - chargerMAH
         - dischargeMAH
+    BatteryAnalogData:
+      type: object
+      properties:
+        batteryVoltageV:
+          type: number
+          description: Battery pack voltage in volts from GetAnalogSensors
+        batteryCurrentMA:
+          type: number
+          description: Live battery current in mA from GetAnalogSensors
+        batteryTemperatureC:
+          type: number
+          description: Battery temperature in Celsius from GetAnalogSensors
+        externalVoltageV:
+          type: number
+          description: External supply voltage in volts from GetAnalogSensors
+      required:
+        - batteryVoltageV
+        - batteryCurrentMA
+        - batteryTemperatureC
+        - externalVoltageV
+    BatteryWarrantyData:
+      type: object
+      properties:
+        cumulativeBatteryCycles:
+          type: number
+          description: Lifetime battery cycles decoded from GetWarranty
+        cumulativeCleaningTimeSeconds:
+          type: number
+          description: Lifetime cleaning time decoded from GetWarranty
+        validationCode:
+          type: string
+          description: Validation code reported by GetWarranty
+      required:
+        - cumulativeBatteryCycles
+        - cumulativeCleaningTimeSeconds
+        - validationCode
     MotorData:
       type: object
       properties:

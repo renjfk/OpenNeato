@@ -82,6 +82,8 @@ void WebServer::registerApiRoutes() {
 
     registerGetRoute("/api/version", neato, &NeatoSerial::getVersion, {});
     registerGetRoute("/api/charger", neato, &NeatoSerial::getCharger, {});
+    registerGetRoute("/api/analog", neato, &NeatoSerial::getBatteryAnalog, {});
+    registerGetRoute("/api/warranty", neato, &NeatoSerial::getBatteryWarranty, {});
     registerGetRoute(
             "/api/motors", neato,
             static_cast<void (NeatoSerial::*)(std::function<void(bool, const MotorData&)>)>(&NeatoSerial::getMotors),
@@ -97,11 +99,11 @@ void WebServer::registerApiRoutes() {
 
     registerPostRoute("/api/clean", neato, &NeatoSerial::clean, {"action"});
     registerPostRoute("/api/sound", neato, &NeatoSerial::playSound, {"id"});
-    registerPostRoute("/api/testmode", neato, &NeatoSerial::testMode, {"enable"});
     registerPostRoute("/api/power", neato, &NeatoSerial::powerControl, {"action"});
     registerPostRoute("/api/lidar/rotate", neato, &NeatoSerial::setLdsRotation, {"enable"});
     registerPostRoute("/api/user-settings", neato, &NeatoSerial::setUserSetting, {"key", "value"});
     registerPostRoute("/api/clear-errors", neato, &NeatoSerial::clearErrors, {});
+    registerPostRoute("/api/battery/new", neato, &NeatoSerial::newBattery, {});
 
     // Serial endpoint — send arbitrary serial command, returns raw response.
     // Always available (no debug gate — useful for diagnostics without enabling verbose logging).

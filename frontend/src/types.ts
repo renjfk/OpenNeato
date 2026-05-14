@@ -2,6 +2,8 @@
 // not this file. The build pipeline runs `openapi-typescript` to refresh
 // types.generated.ts before tsc.
 export type {
+    BatteryAnalogData,
+    BatteryWarrantyData,
     ChargerData,
     ErrorData,
     FirmwareVersion,

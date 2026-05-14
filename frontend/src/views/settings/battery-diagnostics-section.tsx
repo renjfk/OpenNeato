@@ -23,7 +23,7 @@ function formatHours(seconds: number): string {
     return `${Math.round(seconds / 3600)} h`;
 }
 
-function mfgDateLooksUnreliable(version?: VersionData): boolean {
+function mfgDateLooksUnreliable(version: VersionData | null | undefined): boolean {
     if (!version?.smartBatteryMfgDate) return false;
 
     const parts = version.smartBatteryMfgDate.split("-");

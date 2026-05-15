@@ -131,6 +131,12 @@ private:
     // Called whenever STA state, credentials, or apFallbackOnDisconnect change.
     void reevaluateFallbackAp();
 
+    // Safe to call repeatedly: bring up the mDNS responder for
+    // <hostname>.local advertising
+    // the web UI on port 80. Called whenever a network interface (STA or AP)
+    // becomes available so clients can reach the device without knowing its IP.
+    void startMdns();
+
     // Menu actions
     void scanNetworksMenu();
     void manualSSID();

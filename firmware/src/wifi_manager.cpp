@@ -1,5 +1,6 @@
 #include "wifi_manager.h"
 #include "data_logger.h"
+#include <ESPmDNS.h>
 #include <esp_task_wdt.h>
 #include <esp_wifi.h>
 
@@ -56,6 +57,7 @@ void WiFiManager::begin() {
             LOG("WIFI", "Connected successfully!");
             LOG("WIFI", "IP: %s", WiFi.localIP().toString().c_str());
             LOG("WIFI", "MAC: %s", WiFi.macAddress().c_str());
+            startMdns();
 
             // Log successful boot connection with diagnostics
             dataLogger.logWifi("boot_connect", {{"ssid", ssid, FIELD_STRING},
@@ -417,6 +419,7 @@ void WiFiManager::tick() {
 
     if (WiFi.status() == WL_CONNECTED) {
         applyTxPower();
+        startMdns();
         LOG("WIFI", "Reconnected! IP: %s, RSSI: %d, attempt: %lu", WiFi.localIP().toString().c_str(), WiFi.RSSI(),
             reconnectAttemptCount);
 
@@ -517,6 +520,7 @@ void WiFiManager::startAccessPoint() {
     apActive = true;
     LOG("WIFI", "AP active: SSID=%s IP=%s", ssid.c_str(), WiFi.softAPIP().toString().c_str());
     dataLogger.logWifi("ap_start", {{"ssid", ssid, FIELD_STRING}, {"ip", WiFi.softAPIP().toString(), FIELD_STRING}});
+    startMdns();
 }
 
 void WiFiManager::stopAccessPoint() {
@@ -530,6 +534,29 @@ void WiFiManager::stopAccessPoint() {
     WiFi.mode(WIFI_STA);
     apActive = false;
     dataLogger.logWifi("ap_stop");
+}
+
+void WiFiManager::startMdns() {
+    if (hostname.isEmpty()) {
+        LOG("WIFI", "mDNS init skipped: empty hostname");
+        return;
+    }
+
+    // Restart mDNS so service registration stays consistent when the active
+    // interface changes (STA<->AP) and this method is called repeatedly.
+    MDNS.end();
+
+    if (!MDNS.begin(hostname.c_str())) {
+        LOG("WIFI", "mDNS init failed for hostname: %s", hostname.c_str());
+        return;
+    }
+
+    if (!MDNS.addService("http", "tcp", 80)) {
+        LOG("WIFI", "mDNS HTTP service registration failed");
+        return;
+    }
+
+    LOG("WIFI", "mDNS responder up: %s.local", hostname.c_str());
 }
 
 void WiFiManager::reevaluateFallbackAp() {

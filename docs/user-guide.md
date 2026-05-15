@@ -25,6 +25,7 @@ Everything you need to set up, configure, and troubleshoot OpenNeato.
 - [Troubleshooting](#troubleshooting)
     - [Enabling Logging](#enabling-logging)
     - [Collecting Logs](#collecting-logs)
+    - [Robot Stuck Starting a House Clean](#robot-stuck-starting-a-house-clean)
     - [Downloading Cleaning Maps](#downloading-cleaning-maps)
     - [Recovering Corrupted Cleaning History](#recovering-corrupted-cleaning-history)
     - [Factory Reset](#factory-reset)
@@ -502,6 +503,41 @@ For each log file you can:
 To download all logs: use the individual download buttons for each file you need. When
 reporting an issue, include at least the `current.jsonl` and any archived log files from the
 time the problem occurred.
+
+### Robot Stuck Starting a House Clean
+
+Some Botvac D7 robots can get stuck while starting a house clean with a robot notice like
+"Failed to load persistent map". Debug logs usually show `UI_ALERT_PM_LOAD_FAIL` (`234`) and
+the robot remains in `UIMGR_STATE_STARTHOUSECLEANING` while the robot state stays
+`ST_C_Standby`. This appears to be a robot firmware-side state rather than an OpenNeato
+scheduler failure. See [issue #24](https://github.com/renjfk/OpenNeato/issues/24) for the
+original field reports that led to documenting this recovery path.
+
+Try the recovery steps in this order:
+
+1. Open **Settings -> Diagnostics** and use **Clear Robot Errors**, then try starting a clean
+   again.
+2. If it remains stuck, open **Settings -> Robot** and use **Restart Robot**. This is equivalent
+   to a robot power cycle and has been the most reliable software recovery in reports so far.
+3. If the issue keeps returning, enable **Debug** logging or **Remote Syslog** before the next
+   scheduled run and save the logs when it happens.
+4. As an advanced hardware recovery step, fully remove power from the robot by disconnecting the
+   battery for a few minutes, then reconnect it. Some users reported the issue stopped after
+   maintenance that included a battery disconnect, cleaning sensors, clearing robot logs, and
+   removing debris from the brush or motor area.
+
+> [!CAUTION]
+> Disconnecting the robot battery requires opening the robot. Only do this if you are comfortable
+> with hardware disassembly, and avoid pulling on wires or shorting the battery connector.
+
+When reporting this issue, include the robot software version from:
+
+```bash
+curl -X POST 'http://neato.local/api/serial?cmd=GetVersion'
+```
+
+In known reports, affected robots were running Neato software `4.5.3.189`, but this is not yet a
+confirmed root cause.
 
 ### Downloading Cleaning Maps
 

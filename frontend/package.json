@@ -6,7 +6,7 @@
     "scripts": {
         "dev": "npm run gen:types && vite",
         "gen:types": "openapi-typescript --root-types --root-types-no-schema-prefix --output src/types.generated.ts api/openapi.yaml",
-        "build:demo": "biome check && npm run gen:types && node scripts/check_api_paths.js && tsc --noEmit && vite build --mode demo",
+        "build:demo": "node scripts/write_demo_build_info.js && biome check && npm run gen:types && node scripts/check_api_paths.js && tsc --noEmit && vite build --mode demo",
         "build": "biome check && npm run gen:types && node scripts/check_api_paths.js && tsc --noEmit && vite build && node scripts/embed_frontend.js",
         "preview": "vite preview",
         "check": "biome check",

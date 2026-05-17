@@ -9,6 +9,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createMockApi } from "./shared-api.js";
 import { createScenarioState, scenarioFromRequest } from "./shared-state.js";
+import { DEFAULT_MOCK_VERSION, mockVersionFromHash } from "./shared-version.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -17,9 +18,9 @@ const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const getVersion = () => {
     try {
         const hash = execSync("git rev-parse --short=7 HEAD", { encoding: "utf8" }).trim();
-        return `0.0-${hash}`;
+        return mockVersionFromHash(hash);
     } catch {
-        return "0.0";
+        return DEFAULT_MOCK_VERSION;
     }
 };
 

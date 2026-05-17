@@ -1,3 +1,4 @@
+import { DEMO_VERSION } from "./build-info.js";
 import mapdataEmpty04 from "./mapdata-empty-04.jsonl";
 import mapdataHouse03 from "./mapdata-house-03.jsonl";
 import mapdataSpot01 from "./mapdata-spot-01.jsonl";
@@ -121,14 +122,13 @@ function updateRecordingSession() {
 let initializedScenario = null;
 let bootTime = Date.now();
 let recordingSimulation = null;
-
 const context = {
     state: {},
     faults: {},
     historySessions: new Map(),
     rand: randomInt,
     sleep,
-    getVersion: () => "0.0",
+    getVersion: () => DEMO_VERSION,
     getBootTime: () => bootTime,
     reboot: () => {
         bootTime = Date.now();

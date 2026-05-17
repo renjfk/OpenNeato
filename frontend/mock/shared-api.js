@@ -645,9 +645,10 @@ function createMockApi(context) {
         }
 
         if (method === "GET" && path === "/api/firmware/version") {
+            const version = state.firmwareVersion ?? (await context.getVersion());
             return jsonResponse({
                 name: "OpenNeato",
-                version: state.firmwareVersion ?? context.getVersion(),
+                version,
                 chip: "ESP32-C3",
                 model: state.identifying ? "" : state.unsupported ? "Botvac Connected" : "Botvac D7",
                 hostname: "neato-kitchen",

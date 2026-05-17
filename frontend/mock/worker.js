@@ -65,6 +65,20 @@ const parseCookieValue = (cookieHeader, name) => {
 const sessionCookie = (id) =>
     `${SESSION_COOKIE}=${encodeURIComponent(id)}; Path=/; Max-Age=3600; SameSite=Lax; HttpOnly; Secure`;
 
+async function checkAnalyticsRateLimit(request, env) {
+    if (!env.ANALYTICS_RATE_LIMITER) return null;
+
+    const cookieSession = parseCookieValue(request.headers.get("Cookie") ?? "", SESSION_COOKIE);
+    const clientId = cookieSession || request.headers.get("CF-Connecting-IP") || "anonymous";
+    const { success } = await env.ANALYTICS_RATE_LIMITER.limit({ key: `collect:${clientId}` });
+    if (success) return null;
+
+    return new Response(null, {
+        status: 429,
+        headers: { "Retry-After": "60" },
+    });
+}
+
 async function readBodyWithLimit(request) {
     if (!request.body) return new Uint8Array();
 
@@ -98,7 +112,7 @@ const historyFixtures = [
     ["mapdata-spot-02.jsonl", mapdataSpot02],
 ];
 
-async function handleCollect(request) {
+async function handleCollect(request, env) {
     try {
         const url = new URL(request.url);
         const origin = request.headers.get("Origin");
@@ -114,7 +128,15 @@ async function handleCollect(request) {
         const contentLength = Number(request.headers.get("Content-Length") || "0");
         if (contentLength > MAX_BODY_BYTES) return new Response(null, { status: 413 });
 
-        const form = await request.formData();
+        const rateLimited = await checkAnalyticsRateLimit(request, env);
+        if (rateLimited) return rateLimited;
+
+        const formRequest = new Request(request.url, {
+            method: "POST",
+            headers: request.headers,
+            body: await readBodyWithLimit(request),
+        });
+        const form = await formRequest.formData();
         const hostname = url.hostname;
 
         const response = await fetch(UMAMI_ENDPOINT, {
@@ -383,7 +405,7 @@ export default {
     async fetch(request, env) {
         const url = new URL(request.url);
         if (request.method === "POST" && url.pathname === "/api/collect") {
-            return withSecurityHeaders(await handleCollect(request));
+            return withSecurityHeaders(await handleCollect(request, env));
         }
         if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/repos/")) {
             return withSecurityHeaders(await handleApi(request, env));

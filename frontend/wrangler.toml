@@ -16,6 +16,14 @@ fallthrough = true
 [vars]
 DEMO_MODE = "true"
 
+[[ratelimits]]
+name = "ANALYTICS_RATE_LIMITER"
+namespace_id = "20260518"
+
+  [ratelimits.simple]
+  limit = 60
+  period = 60
+
 [[routes]]
 pattern = "openneato-demo.renjfk.com"
 custom_domain = true

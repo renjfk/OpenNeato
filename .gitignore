@@ -5,6 +5,7 @@ firmware/compile_commands.json
 firmware/src/web_assets.h
 frontend/node_modules
 frontend/dist
+frontend/mock/build-info.js
 frontend/src/types.generated.ts
 flash/openneato-flash
 release/

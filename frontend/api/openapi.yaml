@@ -1389,6 +1389,15 @@ components:
         scheduleEnabled:
           type: boolean
           description: Master switch for the weekly cleaning schedule
+        autoRestartEnabled:
+          type: boolean
+          description: Restart the robot once per day at the configured local time when idle
+        autoRestartHour:
+          type: number
+          description: Hour for the daily maintenance restart in local time (0-23)
+        autoRestartMinute:
+          type: number
+          description: Minute for the daily maintenance restart in local time (0-59)
         sched0Hour:
           type: number
         sched0Min:
@@ -1496,6 +1505,9 @@ components:
         - ntfyOnAlert
         - ntfyOnDocking
         - scheduleEnabled
+        - autoRestartEnabled
+        - autoRestartHour
+        - autoRestartMinute
         - sched0Hour
         - sched0Min
         - sched0On

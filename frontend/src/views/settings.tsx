@@ -6,6 +6,7 @@ import bellSvg from "../assets/icons/bell.svg?raw";
 import boltSvg from "../assets/icons/bolt.svg?raw";
 import calendarSvg from "../assets/icons/calendar.svg?raw";
 import chipSvg from "../assets/icons/chip.svg?raw";
+import clockSvg from "../assets/icons/clock.svg?raw";
 import databaseSvg from "../assets/icons/database.svg?raw";
 import gearSvg from "../assets/icons/gear.svg?raw";
 import globeSvg from "../assets/icons/globe.svg?raw";
@@ -23,11 +24,13 @@ import { ConfirmDialog } from "../components/confirm-dialog";
 import { ErrorBannerStack, useErrorStack } from "../components/error-banner";
 import { Icon } from "../components/icon";
 import { useNavigate } from "../components/router";
+import { TimeInput } from "../components/time-input";
 import { useDirtyGuard } from "../hooks/use-dirty-guard";
 import { usePoll } from "../hooks/use-poll";
 import { usePolling } from "../hooks/use-polling";
 import type { FirmwareVersion, SystemData, UserSettingsData } from "../types";
 import { normalizeError } from "../utils";
+import { formatDuration } from "./history/helpers";
 import {
     BRUSH_PRESETS,
     NAV_MODE_PRESETS,
@@ -120,10 +123,15 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
         setNtfyOnAlert,
         ntfyOnDocking,
         setNtfyOnDocking,
+        autoRestartEnabled,
+        setAutoRestartEnabled,
+        autoRestartTime,
+        setAutoRestartTime,
         isDirty,
         pinError,
         hostnameError,
         syslogIpError,
+        autoRestartTimeError,
         validationError,
         saving,
         showSaveConfirm,
@@ -380,6 +388,14 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
 
                 <SettingsCategory title="Device" icon={gearSvg}>
                     <div class="settings-section">
+                        <div class="fw-info-row">
+                            <div class="fw-info-item">
+                                <Icon svg={clockSvg} />
+                                <span>{system?.uptime ? formatDuration(Math.floor(system.uptime / 1000)) : "..."}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="settings-section">
                         <div class="settings-section-title">Hostname</div>
                         <input
                             type="text"
@@ -484,6 +500,46 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                             </div>
                             <span class="settings-nav-chevron">&rsaquo;</span>
                         </button>
+                    </div>
+                    <div class="settings-section">
+                        <div class="settings-toggle-row">
+                            <div class="settings-toggle-label">
+                                <span class="settings-toggle-title">Auto restart</span>
+                                <span class="settings-toggle-desc">
+                                    Restart the robot automatically once per day when it is idle
+                                </span>
+                            </div>
+                            <button
+                                type="button"
+                                class={`settings-toggle${autoRestartEnabled ? " on" : ""}`}
+                                onClick={() => setAutoRestartEnabled(!autoRestartEnabled)}
+                                disabled={saving || firmware?.supported === false}
+                                aria-label="Toggle auto restart"
+                            />
+                        </div>
+                        {autoRestartEnabled && (
+                            <>
+                                <div class="settings-ntfy-row">
+                                    <TimeInput
+                                        class="settings-text-input"
+                                        value={autoRestartTime}
+                                        maxLength={5}
+                                        placeholder="HH:MM"
+                                        onInput={setAutoRestartTime}
+                                        disabled={saving}
+                                    />
+                                </div>
+                                {autoRestartTimeError && <div class="settings-field-error">{autoRestartTimeError}</div>}
+                                <div class="settings-robot-time">
+                                    Uses the configured local timezone and skips the restart if the robot is busy.
+                                </div>
+                                {robotSettings?.melodies && (
+                                    <div class="settings-robot-time settings-hint-warn">
+                                        Robot melodies are enabled. Restart at the scheduled time will play sound.
+                                    </div>
+                                )}
+                            </>
+                        )}
                     </div>
                     <div class="settings-section">
                         <button type="button" class="settings-nav-row" onClick={() => setShowRestartConfirm(true)}>

@@ -12,28 +12,32 @@ int Scheduler::toSchedDay(int tmWday) {
     return (tmWday + 6) % 7;
 }
 
-void Scheduler::tick() {
-    const Settings& s = settings.get();
-    if (!s.scheduleEnabled)
+void Scheduler::resetFiredGuards(int day) {
+    if (day == firedDay)
         return;
+    firedDay = day;
+    firedAutoRestart = -1;
+    for (int& fs: firedSlots)
+        fs = -1;
+}
 
-    // Get current local time (NTP preferred, robot fallback via SystemManager)
-    time_t t = system.now();
-    if (t <= 1700000000)
-        return; // Clock not set yet
+bool Scheduler::isRobotIdle(const RobotState& state) const {
+    return state.uiState == "UIMGR_STATE_IDLE" || state.uiState == "UIMGR_STATE_STANDBY";
+}
 
-    struct tm tm;
-    localtime_r(&t, &tm);
+bool Scheduler::isActionDue(int hour, int minute, int nowMins, int lastFiredMins, int& outSchedMins) {
+    outSchedMins = hour * 60 + minute;
+    int elapsed = nowMins - outSchedMins;
+    if (elapsed < 0 || elapsed > SCHEDULE_WINDOW_MINS)
+        return false;
+    if (outSchedMins == lastFiredMins)
+        return false;
+    return true;
+}
 
-    int day = toSchedDay(tm.tm_wday);
-    int nowMins = tm.tm_hour * 60 + tm.tm_min;
-
-    // Reset fired guards when the day rolls over
-    if (day != firedDay) {
-        firedDay = day;
-        for (int& fs: firedSlots)
-            fs = -1;
-    }
+bool Scheduler::handleScheduledCleaning(const Settings& s, int day, int nowMins) {
+    if (!s.scheduleEnabled)
+        return false;
 
     const SchedDay& daySlots = s.sched[day];
 
@@ -42,21 +46,12 @@ void Scheduler::tick() {
         if (!slot.on)
             continue;
 
-        int schedMins = slot.hour * 60 + slot.minute;
-        int elapsed = nowMins - schedMins;
-
-        // Fire if we're within 0..SCHEDULE_WINDOW_MINS after the scheduled time
-        if (elapsed < 0 || elapsed > SCHEDULE_WINDOW_MINS)
+        int schedMins;
+        if (!isActionDue(slot.hour, slot.minute, nowMins, firedSlots[si], schedMins))
             continue;
 
-        // Already fired for this slot today?
-        if (schedMins == firedSlots[si])
-            continue;
-
-        // Build common log fields for this slot
         String slotStr = String(schedMins / 60) + ":" + (schedMins % 60 < 10 ? "0" : "") + String(schedMins % 60);
 
-        // Check robot state before triggering (uses cached state — no extra serial command)
         serial.getState([this, si, day, schedMins, slotStr](bool ok, const RobotState& state) {
             if (!ok) {
                 LOG("SCHED", "GetState failed, cannot check robot state for slot %s", slotStr.c_str());
@@ -65,8 +60,7 @@ void Scheduler::tick() {
                 return;
             }
 
-            // Robot already cleaning — mark slot as fired so we don't retry every 30s
-            if (state.uiState != "UIMGR_STATE_IDLE" && state.uiState != "UIMGR_STATE_STANDBY") {
+            if (!isRobotIdle(state)) {
                 LOG("SCHED", "Robot busy (%s), skipping slot %s", state.uiState.c_str(), slotStr.c_str());
                 dataLogger.logGenericEvent("scheduler_skipped", {{"day", String(day), FIELD_INT},
                                                                  {"slot", slotStr, FIELD_STRING},
@@ -90,9 +84,74 @@ void Scheduler::tick() {
 
             firedSlots[si] = schedMins;
         });
-
-        // Only trigger one slot per tick — let the next tick handle the second slot
-        // if both happen to fall in the same window (unlikely but safe)
-        return;
+        return true;
     }
+
+    return false;
+}
+
+void Scheduler::handleAutoRestart(const Settings& s, int day, int nowMins) {
+    if (!s.autoRestartEnabled)
+        return;
+
+    int schedMins;
+    if (!isActionDue(s.autoRestartHour, s.autoRestartMinute, nowMins, firedAutoRestart, schedMins))
+        return;
+
+    String slotStr =
+            String(s.autoRestartHour) + ":" + (s.autoRestartMinute < 10 ? "0" : "") + String(s.autoRestartMinute);
+
+    serial.getState([this, day, schedMins, slotStr](bool ok, const RobotState& state) {
+        if (!ok) {
+            LOG("SCHED", "GetState failed, cannot check robot state for auto restart %s", slotStr.c_str());
+            dataLogger.logGenericEvent("auto_restart_state_error",
+                                       {{"day", String(day), FIELD_INT}, {"slot", slotStr, FIELD_STRING}});
+            return;
+        }
+
+        if (!isRobotIdle(state)) {
+            LOG("SCHED", "Robot busy (%s), skipping auto restart %s", state.uiState.c_str(), slotStr.c_str());
+            dataLogger.logGenericEvent("auto_restart_skipped", {{"day", String(day), FIELD_INT},
+                                                                {"slot", slotStr, FIELD_STRING},
+                                                                {"reason", "busy", FIELD_STRING},
+                                                                {"state", state.uiState, FIELD_STRING}});
+            firedAutoRestart = schedMins;
+            return;
+        }
+
+        LOG("SCHED", "Triggering auto restart (%s)", slotStr.c_str());
+        dataLogger.logGenericEvent("auto_restart_trigger",
+                                   {{"day", String(day), FIELD_INT}, {"slot", slotStr, FIELD_STRING}});
+
+        serial.powerControl("restart", [this, day, schedMins, slotStr](bool okRestart) {
+            LOG("SCHED", "Maintenance restart %s", okRestart ? "started" : "FAILED");
+            if (!okRestart) {
+                dataLogger.logGenericEvent("auto_restart_failed",
+                                           {{"day", String(day), FIELD_INT}, {"slot", slotStr, FIELD_STRING}});
+            }
+        });
+
+        firedAutoRestart = schedMins;
+    });
+}
+
+void Scheduler::tick() {
+    const Settings& s = settings.get();
+
+    // Get current local time (NTP preferred, robot fallback via SystemManager)
+    time_t t = system.now();
+    if (t <= 1700000000)
+        return; // Clock not set yet
+
+    struct tm tm;
+    localtime_r(&t, &tm);
+
+    int day = toSchedDay(tm.tm_wday);
+    int nowMins = tm.tm_hour * 60 + tm.tm_min;
+    resetFiredGuards(day);
+
+    if (handleScheduledCleaning(s, day, nowMins))
+        return;
+
+    handleAutoRestart(s, day, nowMins);
 }

@@ -3,7 +3,7 @@ import { api } from "../../api";
 import type { ErrorStackHandle } from "../../components/error-banner";
 import { useFetch } from "../../hooks/use-fetch";
 import type { SettingsData } from "../../types";
-import { normalizeError } from "../../utils";
+import { fmtTime, normalizeError, parseTime } from "../../utils";
 import { DEFAULT_SERVER } from "./constants";
 
 export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: () => void) {
@@ -29,6 +29,8 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
     const [ntfyOnError, setNtfyOnError] = useState(true);
     const [ntfyOnAlert, setNtfyOnAlert] = useState(true);
     const [ntfyOnDocking, setNtfyOnDocking] = useState(true);
+    const [autoRestartEnabled, setAutoRestartEnabled] = useState(false);
+    const [autoRestartTime, setAutoRestartTime] = useState("03:00");
 
     // Server-confirmed state — used to compute dirty/needsReboot
     const server = useRef<SettingsData>({ ...DEFAULT_SERVER });
@@ -65,9 +67,13 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
             setNtfyOnError(fetched.ntfyOnError ?? true);
             setNtfyOnAlert(fetched.ntfyOnAlert ?? true);
             setNtfyOnDocking(fetched.ntfyOnDocking ?? true);
+            setAutoRestartEnabled(fetched.autoRestartEnabled ?? false);
+            setAutoRestartTime(fmtTime(fetched.autoRestartHour ?? 3, fetched.autoRestartMinute ?? 0));
             setSettingsLoaded(true);
         }
     }, [fetched]);
+
+    const parsedMaintenanceTime = parseTime(autoRestartTime);
 
     // --- Dirty / validation / reboot detection ---
 
@@ -92,7 +98,9 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
             ntfyOnDone !== (server.current.ntfyOnDone ?? true) ||
             ntfyOnError !== (server.current.ntfyOnError ?? true) ||
             ntfyOnAlert !== (server.current.ntfyOnAlert ?? true) ||
-            ntfyOnDocking !== (server.current.ntfyOnDocking ?? true));
+            ntfyOnDocking !== (server.current.ntfyOnDocking ?? true) ||
+            autoRestartEnabled !== (server.current.autoRestartEnabled ?? false) ||
+            autoRestartTime !== fmtTime(server.current.autoRestartHour ?? 3, server.current.autoRestartMinute ?? 0));
 
     const needsReboot =
         uartTxPin !== server.current.uartTxPin ||
@@ -125,7 +133,9 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
               : null
         : null;
 
-    const validationError = pinError || hostnameError || syslogIpError;
+    const autoRestartTimeError = autoRestartEnabled ? (!parsedMaintenanceTime ? "Use HH:MM format" : null) : null;
+
+    const validationError = pinError || hostnameError || syslogIpError || autoRestartTimeError;
 
     // --- Unified save ---
 
@@ -152,6 +162,17 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         if (ntfyOnError !== (server.current.ntfyOnError ?? true)) patch.ntfyOnError = ntfyOnError;
         if (ntfyOnAlert !== (server.current.ntfyOnAlert ?? true)) patch.ntfyOnAlert = ntfyOnAlert;
         if (ntfyOnDocking !== (server.current.ntfyOnDocking ?? true)) patch.ntfyOnDocking = ntfyOnDocking;
+        if (autoRestartEnabled !== (server.current.autoRestartEnabled ?? false)) {
+            patch.autoRestartEnabled = autoRestartEnabled;
+        }
+        if (parsedMaintenanceTime) {
+            if (parsedMaintenanceTime.hour !== (server.current.autoRestartHour ?? 3)) {
+                patch.autoRestartHour = parsedMaintenanceTime.hour;
+            }
+            if (parsedMaintenanceTime.minute !== (server.current.autoRestartMinute ?? 0)) {
+                patch.autoRestartMinute = parsedMaintenanceTime.minute;
+            }
+        }
         return patch;
     }, [
         tz,
@@ -174,6 +195,8 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         ntfyOnError,
         ntfyOnAlert,
         ntfyOnDocking,
+        autoRestartEnabled,
+        parsedMaintenanceTime,
     ]);
 
     const handleSave = useCallback(() => {
@@ -252,12 +275,17 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         setNtfyOnAlert,
         ntfyOnDocking,
         setNtfyOnDocking,
+        autoRestartEnabled,
+        setAutoRestartEnabled,
+        autoRestartTime,
+        setAutoRestartTime,
         // Derived state
         isDirty,
         needsReboot,
         pinError,
         hostnameError,
         syslogIpError,
+        autoRestartTimeError,
         validationError,
         // Save flow
         saving,

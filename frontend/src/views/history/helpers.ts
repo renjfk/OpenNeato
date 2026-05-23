@@ -68,8 +68,12 @@ export function isDarkSurface(canvas: HTMLCanvasElement): boolean {
 
 export function formatDuration(secs: number): string {
     if (secs < 60) return `${secs}s`;
-    const m = Math.floor(secs / 60);
+    const d = Math.floor(secs / 86400);
+    const h = Math.floor((secs % 86400) / 3600);
+    const m = Math.floor((secs % 3600) / 60);
     const s = secs % 60;
+    if (d > 0) return `${d}d ${h}h ${m}m`;
+    if (h > 0) return s > 0 ? `${h}h ${m}m ${s}s` : `${h}h ${m}m`;
     return s > 0 ? `${m}m ${s}s` : `${m}m`;
 }
 

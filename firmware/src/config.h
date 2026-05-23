@@ -165,6 +165,9 @@ enum CommandStatus {
 
 // NVS keys — Schedule (ESP32-managed, not robot serial)
 #define NVS_KEY_SCHED_ENABLED "sched_on"
+#define NVS_KEY_AUTO_RESTART_ENABLED "auto_rst_on"
+#define NVS_KEY_AUTO_RESTART_HOUR "auto_rst_h"
+#define NVS_KEY_AUTO_RESTART_MIN "auto_rst_m"
 // Per-day keys use suffix: "s0h","s0m","s0on" .. "s6h","s6m","s6on" (Mon=0..Sun=6)
 // Built programmatically in SettingsManager — no individual defines needed.
 #define SCHEDULE_DAYS 7

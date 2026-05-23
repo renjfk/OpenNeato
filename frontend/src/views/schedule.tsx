@@ -5,15 +5,15 @@ import backSvg from "../assets/icons/back.svg?raw";
 import { ConfirmDialog } from "../components/confirm-dialog";
 import { ErrorBannerStack, useErrorStack } from "../components/error-banner";
 import { Icon } from "../components/icon";
+import { TimeInput } from "../components/time-input";
 import { useDirtyGuard } from "../hooks/use-dirty-guard";
 import { useFetch } from "../hooks/use-fetch";
 import type { SettingsData, SystemData } from "../types";
-import { normalizeError, pad2 } from "../utils";
+import { fmtTime, normalizeError, parseTime } from "../utils";
 import { findCurrentTzAbbrev, findPresetLabel } from "./settings/helpers";
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const SLOTS_PER_DAY = 2;
-const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 interface SlotState {
     hour: number;
@@ -63,16 +63,6 @@ function buildSchedulePatch(days: DayState[], server: DayState[]): Partial<Setti
         }
     }
     return patch as Partial<SettingsData>;
-}
-
-function fmtTime(h: number, m: number): string {
-    return `${pad2(h)}:${pad2(m)}`;
-}
-
-function parseTime(value: string): { hour: number; minute: number } | null {
-    const match = value.match(TIME_RE);
-    if (!match) return null;
-    return { hour: Number.parseInt(match[1], 10), minute: Number.parseInt(match[2], 10) };
 }
 
 function tzLabel(tz: string, isDst?: boolean): string {
@@ -182,12 +172,7 @@ export function ScheduleView() {
         }
     }, []);
 
-    const updateDraft = useCallback((day: number, slot: number, raw: string) => {
-        // Auto-insert colon: "0930" -> "09:30"
-        let value = raw;
-        if (/^\d{4}$/.test(value)) {
-            value = `${value.slice(0, 2)}:${value.slice(2)}`;
-        }
+    const updateDraft = useCallback((day: number, slot: number, value: string) => {
         setDrafts((cur) => cur.map((r, i) => (i === day ? r.map((v, si) => (si === slot ? value : v)) : r)));
         // Clear validation error for this slot on edit
         setInvalidSlots((cur) => {
@@ -302,32 +287,24 @@ export function ScheduleView() {
 
                                         <div class="sched-slots">
                                             {s0.on && (
-                                                <input
-                                                    type="text"
-                                                    inputMode="numeric"
+                                                <TimeInput
                                                     class={`sched-time-input${invalidSlots.has(`${i}-0`) ? " invalid" : ""}`}
                                                     value={drafts[i][0]}
                                                     maxLength={5}
                                                     placeholder="HH:MM"
-                                                    onInput={(e) =>
-                                                        updateDraft(i, 0, (e.target as HTMLInputElement).value)
-                                                    }
+                                                    onInput={(v) => updateDraft(i, 0, v)}
                                                     onKeyDown={onKeyDown}
                                                 />
                                             )}
 
                                             {s0.on && s1.on && (
                                                 <div class="sched-slot2-wrap">
-                                                    <input
-                                                        type="text"
-                                                        inputMode="numeric"
+                                                    <TimeInput
                                                         class={`sched-time-input${invalidSlots.has(`${i}-1`) ? " invalid" : ""}`}
                                                         value={drafts[i][1]}
                                                         maxLength={5}
                                                         placeholder="HH:MM"
-                                                        onInput={(e) =>
-                                                            updateDraft(i, 1, (e.target as HTMLInputElement).value)
-                                                        }
+                                                        onInput={(v) => updateDraft(i, 1, v)}
                                                         onKeyDown={onKeyDown}
                                                     />
                                                     <button

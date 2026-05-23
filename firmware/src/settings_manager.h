@@ -56,6 +56,11 @@ struct Settings : public JsonSerializable {
     bool scheduleEnabled = false;
     SchedDay sched[SCHEDULE_DAYS]; // Sun=0 .. Sat=6
 
+    // Daily maintenance automation
+    bool autoRestartEnabled = false;
+    int autoRestartHour = 3;
+    int autoRestartMinute = 0;
+
     std::vector<Field> toFields() const override;
     bool fromFields(const std::vector<Field>& fields) override;
 };

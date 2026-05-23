@@ -2869,6 +2869,10 @@ input:disabled {
     margin-bottom: 12px;
 }
 
+.settings-hint-warn {
+    color: var(--amber);
+}
+
 /* Manual control page */
 
 .manual-map-battery {

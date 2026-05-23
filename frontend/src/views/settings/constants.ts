@@ -134,4 +134,7 @@ export const DEFAULT_SERVER = {
     ntfyOnError: true,
     ntfyOnAlert: true,
     ntfyOnDocking: true,
+    autoRestartEnabled: false,
+    autoRestartHour: 3,
+    autoRestartMinute: 0,
 } as SettingsData;

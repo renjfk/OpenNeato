@@ -14,6 +14,20 @@ import zlib from "node:zlib";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.join(__dirname, "..", "dist");
 const outHeader = path.join(__dirname, "..", "..", "firmware", "src", "web_assets.h");
+const skipAssets = (process.env.OPENNEATO_SKIP_WEB_ASSETS || "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+function shouldSkipAsset(relPath) {
+    const normalized = relPath.split(path.sep).join("/");
+    return skipAssets.some((pattern) => {
+        if (pattern.startsWith("*.")) {
+            return normalized.endsWith(pattern.slice(1));
+        }
+        return normalized === pattern || `/${normalized}` === pattern;
+    });
+}
 
 // MIME type lookup by extension (keep minimal, expand as needed)
 const mimeTypes = {
@@ -77,6 +91,15 @@ if (relPaths.length === 0) {
     process.exit(1);
 }
 
+const embeddedRelPaths = relPaths.filter((relPath) => !shouldSkipAsset(relPath));
+if (skipAssets.length > 0) {
+    console.log(`Skipping web assets matching: ${skipAssets.join(", ")}`);
+}
+if (embeddedRelPaths.length === 0) {
+    console.error("No files left to embed after OPENNEATO_SKIP_WEB_ASSETS filtering");
+    process.exit(1);
+}
+
 let header = `#ifndef WEB_ASSETS_H
 #define WEB_ASSETS_H
 
@@ -96,7 +119,7 @@ struct WebAsset {
 
 const assetEntries = [];
 
-for (const relPath of relPaths) {
+for (const relPath of embeddedRelPaths) {
     const filePath = path.join(distDir, relPath);
     const raw = fs.readFileSync(filePath);
     const gzipped = zlib.gzipSync(raw, { level: 9 });

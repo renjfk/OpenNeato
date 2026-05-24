@@ -36,6 +36,11 @@
 #define NEATO_DEFAULT_TX_PIN 3
 #define NEATO_DEFAULT_RX_PIN 4
 #define MAX_GPIO_PIN 21
+#elif CONFIG_IDF_TARGET_ESP32C5
+#define RESET_BUTTON_PIN -1 // Disabled for C5: GPIO9 may be a boot/strap pin and can wipe NVS if read low
+#define NEATO_DEFAULT_TX_PIN 11
+#define NEATO_DEFAULT_RX_PIN 12
+#define MAX_GPIO_PIN 28
 #elif CONFIG_IDF_TARGET_ESP32S3
 #define RESET_BUTTON_PIN 0
 #define NEATO_DEFAULT_TX_PIN 17

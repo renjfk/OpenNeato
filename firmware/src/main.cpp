@@ -46,8 +46,10 @@ void setup() {
     // Open shared NVS namespace (stays open for the lifetime of the device)
     prefs.begin(NVS_NAMESPACE, false);
 
-    // Setup reset button
-    pinMode(RESET_BUTTON_PIN, INPUT_PULLUP);
+    // Setup reset button when the board definition provides one.
+    if (RESET_BUTTON_PIN >= 0) {
+        pinMode(RESET_BUTTON_PIN, INPUT_PULLUP);
+    }
 
     // Initialize settings first (loads pin config from NVS before UART init)
     LOG("BOOT", "Initializing settings...");
@@ -225,7 +227,7 @@ void loop() {
     static unsigned long buttonPressStart = 0;
     static bool buttonWasPressed = false;
 
-    if (digitalRead(RESET_BUTTON_PIN) == LOW) {
+    if (RESET_BUTTON_PIN >= 0 && digitalRead(RESET_BUTTON_PIN) == LOW) {
         if (!buttonWasPressed) {
             // Button just pressed
             buttonPressStart = millis();

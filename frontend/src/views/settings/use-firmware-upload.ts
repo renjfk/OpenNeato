@@ -22,6 +22,7 @@ const CHIP_IDS: Record<number, string> = {
     12: "ESP32-C2",
     13: "ESP32-C6",
     16: "ESP32-H2",
+    23: "ESP32-C5",
 };
 
 function parseChipFromBin(buf: ArrayBuffer): string | null {

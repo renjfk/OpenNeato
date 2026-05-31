@@ -65,16 +65,13 @@ void NotificationManager::checkTransitions() {
                     bool isRecharging = rs.indexOf("Charging_Cleaning") >= 0;
 
                     if (isDocking && !wasDocking && isRecharging && cfg.ntfyOnDocking) {
-                        // Recharge dock — robot will resume cleaning after charging
-                        sendNotification(topic, "electric_plug", hostname + ": Returning to base to recharge");
+                        sendNotification(topic, "electric_plug", hostname, "Returning to base to recharge");
                     }
 
-                    // Cleaning completed: cleaning/docking -> idle, but NOT if it's a recharge.
-                    // Also handle suspended -> idle (user stops clean while recharging).
                     bool dockingDone = wasDocking && wasCleaningBeforeDock && !isRecharging;
                     bool suspendedDone = (prevUiState.indexOf("CLEANINGSUSPENDED") >= 0) && wasCleaningBeforeDock;
                     if ((wasCleaning || dockingDone || suspendedDone) && isIdle && cfg.ntfyOnDone) {
-                        sendNotification(topic, "white_check_mark", hostname + ": Cleaning done");
+                        sendNotification(topic, "white_check_mark", hostname, "Cleaning done");
                     }
 
                     // Clear tracking flag when leaving docking — but preserve it
@@ -98,7 +95,7 @@ void NotificationManager::checkTransitions() {
                     bool allowed = isAlert ? cfg.ntfyOnAlert : cfg.ntfyOnError;
                     if (allowed) {
                         String tag = isAlert ? "information_source" : "warning";
-                        sendNotification(topic, tag, hostname + ": " + err.displayMessage);
+                        sendNotification(topic, tag, hostname, err.displayMessage);
                     }
                 }
                 prevHasError = err.hasError;
@@ -113,8 +110,9 @@ bool NotificationManager::isActiveState(const String& uiState) {
            uiState.indexOf("CLEANINGSUSPENDED") >= 0 || uiState.indexOf("DOCKING") >= 0;
 }
 
-void NotificationManager::sendNotification(const String& topic, const String& tags, const String& message) {
-    LOG("NOTIF", "Sending: [%s] %s", tags.c_str(), message.c_str());
+void NotificationManager::sendNotification(const String& topic, const String& tags, const String& title,
+                                           const String& message) {
+    LOG("NOTIF", "Sending: [%s] %s: %s", tags.c_str(), title.c_str(), message.c_str());
 
     WiFiClient client;
     client.setTimeout(NTFY_CONNECT_TIMEOUT_MS);
@@ -125,10 +123,10 @@ void NotificationManager::sendNotification(const String& topic, const String& ta
         return;
     }
 
-    // Build minimal HTTP/1.1 POST request
     client.print("POST /" + topic + " HTTP/1.1\r\n");
     client.print("Host: " NTFY_HOST "\r\n");
     client.print("Content-Type: text/plain\r\n");
+    client.print("Title: " + title + "\r\n");
     client.print("Tags: " + tags + "\r\n");
     client.print("Content-Length: " + String(message.length()) + "\r\n");
     client.print("Connection: close\r\n");
@@ -154,5 +152,5 @@ void NotificationManager::sendNotification(const String& topic, const String& ta
 
 void NotificationManager::sendTestNotification(const String& topic) {
     const String& hostname = settings.get().hostname;
-    sendNotification(topic, "bell", hostname + ": Test notification");
+    sendNotification(topic, "bell", hostname, "Test notification");
 }

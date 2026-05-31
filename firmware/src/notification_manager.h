@@ -38,7 +38,7 @@ private:
     bool fetchPending = false;
 
     void checkTransitions();
-    void sendNotification(const String& topic, const String& tags, const String& message);
+    void sendNotification(const String& topic, const String& tags, const String& title, const String& message);
     static bool isActiveState(const String& uiState);
 };
 

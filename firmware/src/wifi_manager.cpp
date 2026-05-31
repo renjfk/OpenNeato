@@ -395,6 +395,11 @@ void WiFiManager::tick() {
     if (inConfigMode || !wasConnected || WiFi.status() == WL_CONNECTED)
         return;
 
+    if (apActive && WiFi.softAPgetStationNum() > 0) {
+        LOG("WIFI", "Reconnect paused while fallback AP has clients");
+        return;
+    }
+
     reconnectAttemptCount++;
     LOG("WIFI", "Connection lost — reconnecting (attempt %lu, backoff %lu ms)...", reconnectAttemptCount,
         reconnectBackoff);

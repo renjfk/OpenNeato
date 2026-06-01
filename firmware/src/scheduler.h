@@ -33,12 +33,21 @@ private:
     int firedSlots[SCHEDULE_SLOTS_PER_DAY] = {-1, -1}; // Minutes-since-midnight per slot index
     int firedAutoRestart = -1;
 
+    // Pending clean after restart (RAM-only, no flash persistence)
+    bool pendingCleanAfterRestart = false;
+    int pendingCleanDay = -1;
+    int pendingCleanSlot = -1;
+    unsigned long restartIssuedAt = 0;
+
     // Convert C library tm_wday (Sun=0..Sat=6) to our index (Mon=0..Sun=6)
     static int toSchedDay(int tmWday);
     void resetFiredGuards(int day);
     bool isRobotIdle(const RobotState& state) const;
     bool handleScheduledCleaning(const Settings& s, int day, int nowMins);
     void handleAutoRestart(const Settings& s, int day, int nowMins);
+    void handlePendingCleanAfterRestart();
+    void clearPendingCleanAfterRestart();
+    void triggerClean(int day, int slotIndex);
 
     // Returns true if the given time is within the check window and not already fired.
     // Writes the computed minutes-since-midnight into outSchedMins.

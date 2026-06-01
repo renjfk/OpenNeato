@@ -113,6 +113,7 @@ const settingsPayload = (state, includeNavMode = true) => {
         "autoRestartEnabled",
         "autoRestartHour",
         "autoRestartMinute",
+        "restartBeforeClean",
     ];
     for (const key of keys) settings[key] = state[key];
     for (let day = 0; day < 7; day++) {

@@ -1398,6 +1398,9 @@ components:
         autoRestartMinute:
           type: number
           description: Minute for the daily maintenance restart in local time (0-59)
+        restartBeforeClean:
+          type: boolean
+          description: Restart the robot before each scheduled clean to ensure responsiveness
         sched0Hour:
           type: number
         sched0Min:
@@ -1508,6 +1511,7 @@ components:
         - autoRestartEnabled
         - autoRestartHour
         - autoRestartMinute
+        - restartBeforeClean
         - sched0Hour
         - sched0Min
         - sched0On

@@ -31,6 +31,7 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
     const [ntfyOnDocking, setNtfyOnDocking] = useState(true);
     const [autoRestartEnabled, setAutoRestartEnabled] = useState(false);
     const [autoRestartTime, setAutoRestartTime] = useState("03:00");
+    const [restartBeforeClean, setRestartBeforeClean] = useState(false);
 
     // Server-confirmed state — used to compute dirty/needsReboot
     const server = useRef<SettingsData>({ ...DEFAULT_SERVER });
@@ -69,6 +70,7 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
             setNtfyOnDocking(fetched.ntfyOnDocking ?? true);
             setAutoRestartEnabled(fetched.autoRestartEnabled ?? false);
             setAutoRestartTime(fmtTime(fetched.autoRestartHour ?? 3, fetched.autoRestartMinute ?? 0));
+            setRestartBeforeClean(fetched.restartBeforeClean ?? false);
             setSettingsLoaded(true);
         }
     }, [fetched]);
@@ -100,7 +102,8 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
             ntfyOnAlert !== (server.current.ntfyOnAlert ?? true) ||
             ntfyOnDocking !== (server.current.ntfyOnDocking ?? true) ||
             autoRestartEnabled !== (server.current.autoRestartEnabled ?? false) ||
-            autoRestartTime !== fmtTime(server.current.autoRestartHour ?? 3, server.current.autoRestartMinute ?? 0));
+            autoRestartTime !== fmtTime(server.current.autoRestartHour ?? 3, server.current.autoRestartMinute ?? 0) ||
+            restartBeforeClean !== (server.current.restartBeforeClean ?? false));
 
     const needsReboot =
         uartTxPin !== server.current.uartTxPin ||
@@ -173,6 +176,9 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
                 patch.autoRestartMinute = parsedMaintenanceTime.minute;
             }
         }
+        if (restartBeforeClean !== (server.current.restartBeforeClean ?? false)) {
+            patch.restartBeforeClean = restartBeforeClean;
+        }
         return patch;
     }, [
         tz,
@@ -197,6 +203,7 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         ntfyOnDocking,
         autoRestartEnabled,
         parsedMaintenanceTime,
+        restartBeforeClean,
     ]);
 
     const handleSave = useCallback(() => {
@@ -279,6 +286,8 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         setAutoRestartEnabled,
         autoRestartTime,
         setAutoRestartTime,
+        restartBeforeClean,
+        setRestartBeforeClean,
         // Derived state
         isDirty,
         needsReboot,

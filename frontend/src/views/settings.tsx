@@ -127,6 +127,8 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
         setAutoRestartEnabled,
         autoRestartTime,
         setAutoRestartTime,
+        restartBeforeClean,
+        setRestartBeforeClean,
         isDirty,
         pinError,
         hostnameError,
@@ -539,6 +541,28 @@ export function SettingsView({ theme, onThemeChange, firmware }: SettingsViewPro
                                     </div>
                                 )}
                             </>
+                        )}
+                    </div>
+                    <div class="settings-section">
+                        <div class="settings-toggle-row">
+                            <div class="settings-toggle-label">
+                                <span class="settings-toggle-title">Restart before scheduled clean</span>
+                                <span class="settings-toggle-desc">
+                                    Power-cycle the robot before each scheduled clean to ensure responsiveness
+                                </span>
+                            </div>
+                            <button
+                                type="button"
+                                class={`settings-toggle${restartBeforeClean ? " on" : ""}`}
+                                onClick={() => setRestartBeforeClean(!restartBeforeClean)}
+                                disabled={saving || firmware?.supported === false}
+                                aria-label="Toggle restart before clean"
+                            />
+                        </div>
+                        {restartBeforeClean && (
+                            <div class="settings-robot-time">
+                                The robot will restart and wait for boot before starting the scheduled clean.
+                            </div>
                         )}
                     </div>
                     <div class="settings-section">

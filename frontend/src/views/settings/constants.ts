@@ -137,4 +137,5 @@ export const DEFAULT_SERVER = {
     autoRestartEnabled: false,
     autoRestartHour: 3,
     autoRestartMinute: 0,
+    restartBeforeClean: false,
 } as SettingsData;

@@ -77,6 +77,7 @@ void SettingsManager::load() {
     current.autoRestartEnabled = prefs.getBool(NVS_KEY_AUTO_RESTART_ENABLED, false);
     current.autoRestartHour = prefs.getInt(NVS_KEY_AUTO_RESTART_HOUR, 3);
     current.autoRestartMinute = prefs.getInt(NVS_KEY_AUTO_RESTART_MIN, 0);
+    current.restartBeforeClean = prefs.getBool(NVS_KEY_RESTART_BEFORE_CLEAN, false);
     for (int d = 0; d < SCHEDULE_DAYS; d++) {
         for (int s = 0; s < SCHEDULE_SLOTS_PER_DAY; s++) {
             current.sched[d].slots[s].hour = prefs.getInt(schedKey(d, s, "h").c_str(), 0);
@@ -111,6 +112,7 @@ void SettingsManager::save() {
     prefs.putBool(NVS_KEY_AUTO_RESTART_ENABLED, current.autoRestartEnabled);
     prefs.putInt(NVS_KEY_AUTO_RESTART_HOUR, current.autoRestartHour);
     prefs.putInt(NVS_KEY_AUTO_RESTART_MIN, current.autoRestartMinute);
+    prefs.putBool(NVS_KEY_RESTART_BEFORE_CLEAN, current.restartBeforeClean);
     for (int d = 0; d < SCHEDULE_DAYS; d++) {
         for (int s = 0; s < SCHEDULE_SLOTS_PER_DAY; s++) {
             prefs.putInt(schedKey(d, s, "h").c_str(), current.sched[d].slots[s].hour);
@@ -332,6 +334,11 @@ ApplyResult SettingsManager::apply(const String& json) {
         changed = true;
         LOG("SETTINGS", "Maintenance restart time -> %02d:%02d", current.autoRestartHour, current.autoRestartMinute);
     }
+    if (incoming.restartBeforeClean != current.restartBeforeClean) {
+        current.restartBeforeClean = incoming.restartBeforeClean;
+        changed = true;
+        LOG("SETTINGS", "Restart before clean -> %s", current.restartBeforeClean ? "on" : "off");
+    }
 
     for (int d = 0; d < SCHEDULE_DAYS; d++) { // NOLINT(modernize-loop-convert) index needed for DAY_NAMES[d]
         for (int s = 0; s < SCHEDULE_SLOTS_PER_DAY; s++) {
@@ -390,6 +397,7 @@ std::vector<Field> Settings::toFields() const {
             {"autoRestartEnabled", autoRestartEnabled ? "true" : "false", FIELD_BOOL},
             {"autoRestartHour", String(autoRestartHour), FIELD_INT},
             {"autoRestartMinute", String(autoRestartMinute), FIELD_INT},
+            {"restartBeforeClean", restartBeforeClean ? "true" : "false", FIELD_BOOL},
     };
     for (int d = 0; d < SCHEDULE_DAYS; d++) {
         for (int s = 0; s < SCHEDULE_SLOTS_PER_DAY; s++) {
@@ -504,6 +512,10 @@ bool Settings::fromFields(const std::vector<Field>& fields) {
     }
     if ((f = findField(fields, "autoRestartMinute")) && f->type == FIELD_INT) {
         autoRestartMinute = f->value.toInt();
+        applied = true;
+    }
+    if ((f = findField(fields, "restartBeforeClean")) && f->type == FIELD_BOOL) {
+        restartBeforeClean = (f->value == "true");
         applied = true;
     }
     for (int d = 0; d < SCHEDULE_DAYS; d++) { // NOLINT(modernize-loop-convert) index needed for field name prefix

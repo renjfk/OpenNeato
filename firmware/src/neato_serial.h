@@ -14,6 +14,7 @@ struct CommandEntry {
     String command;
     uint8_t priority;
     std::function<void(bool, const String&)> callback;
+    bool waitForResponse;
 };
 
 enum CommandPriority : uint8_t {
@@ -82,6 +83,7 @@ public:
     bool setNavigationMode(const String& mode, std::function<void(bool)> callback = nullptr);
 
     // Power control: sends TestMode On, then SetSystemMode after inter-command delay.
+    // SetSystemMode is fire-and-forget because restart/shutdown can drop serial or ESP power.
     // action = "restart" (PowerCycle) or "shutdown" (Shutdown).
     bool powerControl(const String& action, std::function<void(bool)> callback = nullptr);
 
@@ -163,6 +165,7 @@ private:
     String currentCommand;
     String responseBuffer;
     std::function<void(bool, const String&)> currentCallback;
+    bool currentWaitForResponse = true;
     unsigned long commandSentAt = 0;
     unsigned long delayStartedAt = 0;
     int queueDepthAtStart = 0; // Queue depth when current command started
@@ -170,7 +173,7 @@ private:
     // Enqueue a raw command with callback and priority.
     // Lower number = higher priority (1 highest).
     bool enqueue(const String& command, std::function<void(bool, const String&)> callback,
-                 CommandPriority priority = PRIORITY_NORMAL);
+                 CommandPriority priority = PRIORITY_NORMAL, bool waitForResponse = true);
 
     // Wrap action command callback (just success/fail, no response body)
     static std::function<void(bool, const String&)> wrapAction(std::function<void(bool)> callback);

@@ -168,12 +168,14 @@ enum CommandStatus {
 #define NVS_KEY_AUTO_RESTART_ENABLED "auto_rst_on"
 #define NVS_KEY_AUTO_RESTART_HOUR "auto_rst_h"
 #define NVS_KEY_AUTO_RESTART_MIN "auto_rst_m"
+#define NVS_KEY_RESTART_BEFORE_CLEAN "rst_b4_clean"
 // Per-day keys use suffix: "s0h","s0m","s0on" .. "s6h","s6m","s6on" (Mon=0..Sun=6)
 // Built programmatically in SettingsManager — no individual defines needed.
 #define SCHEDULE_DAYS 7
 #define SCHEDULE_SLOTS_PER_DAY 2 // Two time slots per day (e.g. morning + afternoon)
 #define SCHEDULE_CHECK_INTERVAL_MS 30000 // Check schedule against NTP time every 30s
 #define SCHEDULE_WINDOW_MINS 5 // Fire if current time is 0..N minutes after scheduled slot
+#define RESTART_BOOT_TIMEOUT_MS 120000 // Max wait time for robot to boot after restart (2 min)
 
 // Notification manager — adaptive polling intervals
 #define NOTIF_INTERVAL_ACTIVE_MS 3000 // Check state every 3s when robot is active (cleaning/docking)

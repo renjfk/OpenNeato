@@ -162,7 +162,7 @@ void NeatoSerial::tick() {
 // -- Queue management --------------------------------------------------------
 
 bool NeatoSerial::enqueue(const String& command, std::function<void(bool, const String&)> callback,
-                          CommandPriority priority) {
+                          CommandPriority priority, bool waitForResponse) {
     if (static_cast<int>(queue.size()) >= NEATO_QUEUE_MAX_SIZE) {
         LOG("NEATO", "Queue full, rejecting: %s", command.c_str());
         if (loggerCallback)
@@ -177,7 +177,7 @@ bool NeatoSerial::enqueue(const String& command, std::function<void(bool, const 
         if (it->priority > priority)
             break;
     }
-    queue.insert(it, {command, static_cast<uint8_t>(priority), callback});
+    queue.insert(it, {command, static_cast<uint8_t>(priority), callback, waitForResponse});
     return true;
 }
 
@@ -199,6 +199,7 @@ void NeatoSerial::dequeueNext() {
 
     currentCommand = entry.command;
     currentCallback = entry.callback;
+    currentWaitForResponse = entry.waitForResponse;
     responseBuffer = "";
 
     state = QUEUE_SENDING;
@@ -222,6 +223,10 @@ void NeatoSerial::sendCurrentCommand() {
     LOG("NEATO", "TX: %s", currentCommand.c_str());
     uart.print(currentCommand + "\n");
     commandSentAt = millis();
+    if (!currentWaitForResponse) {
+        completeCommand(CMD_SUCCESS, "");
+        return;
+    }
     state = QUEUE_WAITING_RESPONSE;
 }
 
@@ -269,6 +274,7 @@ void NeatoSerial::completeCommand(CommandStatus status, const String& response) 
 
     currentCommand = "";
     currentCallback = nullptr;
+    currentWaitForResponse = true;
     responseBuffer = "";
     queueDepthAtStart = 0;
 
@@ -721,7 +727,7 @@ bool NeatoSerial::powerControl(const String& action, std::function<void(bool)> c
                 callback(false);
             return;
         }
-        enqueue(sysCmd, wrapAction(callback), PRIORITY_HIGH);
+        enqueue(sysCmd, wrapAction(callback), PRIORITY_HIGH, false);
     });
 }
 

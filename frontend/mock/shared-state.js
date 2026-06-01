@@ -150,6 +150,7 @@ const DEFAULT_STATE = {
     autoRestartEnabled: false,
     autoRestartHour: 3,
     autoRestartMinute: 0,
+    restartBeforeClean: false,
     sched0Hour: 9,
     sched0Min: 0,
     sched0On: true,

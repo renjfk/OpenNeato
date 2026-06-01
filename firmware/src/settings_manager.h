@@ -60,6 +60,7 @@ struct Settings : public JsonSerializable {
     bool autoRestartEnabled = false;
     int autoRestartHour = 3;
     int autoRestartMinute = 0;
+    bool restartBeforeClean = false;
 
     std::vector<Field> toFields() const override;
     bool fromFields(const std::vector<Field>& fields) override;

@@ -3,6 +3,83 @@ const textEncoder = new TextEncoder();
 const defaultRand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const TZ_TO_IANA = {
+    UTC0: "UTC",
+    HST10: "Pacific/Honolulu",
+    "AKST9AKDT,M3.2.0,M11.1.0": "America/Anchorage",
+    "PST8PDT,M3.2.0,M11.1.0": "America/Los_Angeles",
+    "MST7MDT,M3.2.0,M11.1.0": "America/Denver",
+    "CST6CDT,M3.2.0,M11.1.0": "America/Chicago",
+    "EST5EDT,M3.2.0,M11.1.0": "America/New_York",
+    "GMT0BST,M3.5.0/1,M10.5.0": "Europe/London",
+    "CET-1CEST,M3.5.0,M10.5.0/3": "Europe/Berlin",
+    "EET-2EEST,M3.5.0/3,M10.5.0/4": "Europe/Helsinki",
+    "<+03>-3": "Europe/Istanbul",
+    "IST-5:30": "Asia/Kolkata",
+    "CST-8": "Asia/Shanghai",
+    "JST-9": "Asia/Tokyo",
+    "AEST-10AEDT,M10.1.0,M4.1.0/3": "Australia/Sydney",
+    "NZST-12NZDT,M9.5.0,M4.1.0/3": "Pacific/Auckland",
+};
+
+function getZonedDateTimeParts(date, timeZone) {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        weekday: "short",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+    });
+
+    return Object.fromEntries(
+        formatter
+            .formatToParts(date)
+            .filter((part) => part.type !== "literal")
+            .map((part) => [part.type, part.value]),
+    );
+}
+
+function getTimeZoneOffsetMinutes(date, timeZone) {
+    const parts = getZonedDateTimeParts(date, timeZone);
+    const utcMillis = Date.UTC(
+        Number.parseInt(parts.year, 10),
+        Number.parseInt(parts.month, 10) - 1,
+        Number.parseInt(parts.day, 10),
+        Number.parseInt(parts.hour, 10),
+        Number.parseInt(parts.minute, 10),
+        Number.parseInt(parts.second, 10),
+    );
+    return Math.round((utcMillis - date.getTime()) / 60000);
+}
+
+function buildLocalTime(tz) {
+    const now = new Date();
+    const timeZone = TZ_TO_IANA[tz];
+    if (!timeZone) {
+        const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const pad = (number) => number.toString().padStart(2, "0");
+        return {
+            localTime: `${days[now.getDay()]} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`,
+            isDst: now.getTimezoneOffset() !== new Date(now.getFullYear(), 0, 1).getTimezoneOffset(),
+        };
+    }
+
+    const parts = getZonedDateTimeParts(now, timeZone);
+    const currentOffset = getTimeZoneOffsetMinutes(now, timeZone);
+    const janOffset = getTimeZoneOffsetMinutes(new Date(Date.UTC(now.getUTCFullYear(), 0, 1, 12, 0, 0)), timeZone);
+    const julOffset = getTimeZoneOffsetMinutes(new Date(Date.UTC(now.getUTCFullYear(), 6, 1, 12, 0, 0)), timeZone);
+    const standardOffset = Math.min(janOffset, julOffset);
+
+    return {
+        localTime: `${parts.weekday} ${parts.hour}:${parts.minute}:${parts.second}`,
+        isDst: janOffset !== julOffset && currentOffset !== standardOffset,
+    };
+}
+
 const jsonResponse = (data, status = 200) => ({
     status,
     headers: { "Content-Type": "application/json" },
@@ -505,10 +582,7 @@ function createMockApi(context) {
         }
 
         if (method === "GET" && path === "/api/system") {
-            const now = new Date();
-            const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-            const pad = (number) => number.toString().padStart(2, "0");
-            const localTime = `${days[now.getDay()]} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+            const { localTime, isDst } = buildLocalTime(state.tz);
             return jsonResponse({
                 heap: rand(160000, 200000),
                 heapTotal: 327680,
@@ -521,7 +595,7 @@ function createMockApi(context) {
                 timeSource: "ntp",
                 tz: state.tz,
                 localTime,
-                isDst: now.getTimezoneOffset() !== new Date(now.getFullYear(), 0, 1).getTimezoneOffset(),
+                isDst,
             });
         }
 

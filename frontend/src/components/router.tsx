@@ -6,12 +6,17 @@ import { useRoute } from "../hooks/use-route";
 interface RouterContext {
     path: string;
     navigate: (to: string) => void;
+    goBack: (fallback: string) => void;
 }
 
-const Ctx = createContext<RouterContext>({ path: "/", navigate: () => {} });
+const Ctx = createContext<RouterContext>({ path: "/", navigate: () => {}, goBack: () => {} });
 
 export function useNavigate(): (to: string) => void {
     return useContext(Ctx).navigate;
+}
+
+export function useGoBack(): (fallback: string) => void {
+    return useContext(Ctx).goBack;
 }
 
 export function usePath(): string {
@@ -23,8 +28,8 @@ interface RouterProps {
 }
 
 export function Router({ children }: RouterProps) {
-    const [path, navigate] = useRoute();
-    return <Ctx.Provider value={{ path, navigate }}>{children}</Ctx.Provider>;
+    const [path, navigate, goBack] = useRoute();
+    return <Ctx.Provider value={{ path, navigate, goBack }}>{children}</Ctx.Provider>;
 }
 
 interface RouteProps {

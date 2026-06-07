@@ -27,7 +27,7 @@ import { useNavigate } from "../components/router";
 import type { PollResult } from "../hooks/use-polling";
 import { usePolling } from "../hooks/use-polling";
 import { T, useI18n } from "../i18n";
-import type { ChargerData, ErrorData, FirmwareVersion, StateData, SystemData } from "../types";
+import type { ChargerData, ErrorData, FirmwareVersion, SettingsData, StateData, SystemData } from "../types";
 import type { UpdateInfo } from "../update";
 import { normalizeError } from "../utils";
 
@@ -93,6 +93,68 @@ function wifiStrength(rssi: number): string {
     return "Weak";
 }
 
+const LOCAL_TIME_DAY_TO_SCHED_DAY: Record<string, number> = {
+    Mon: 0,
+    Tue: 1,
+    Wed: 2,
+    Thu: 3,
+    Fri: 4,
+    Sat: 5,
+    Sun: 6,
+};
+
+function readSlot(settings: SettingsData, day: number, slot: number) {
+    const prefix = slot === 0 ? `sched${day}` : `sched${day}Slot${slot}`;
+    return {
+        hour: (settings[`${prefix}Hour` as keyof SettingsData] as number) ?? 0,
+        minute: (settings[`${prefix}Min` as keyof SettingsData] as number) ?? 0,
+        on: (settings[`${prefix}On` as keyof SettingsData] as boolean) ?? false,
+    };
+}
+
+function readDaySlots(settings: SettingsData, day: number) {
+    const slot0 = readSlot(settings, day, 0);
+    const slot1 = readSlot(settings, day, 1);
+    if (!slot0.on) slot1.on = false;
+    return [slot0, slot1];
+}
+
+function formatSchedTime(hour: number, minute: number): string {
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function nextScheduleLabel(settings: SettingsData, localTime: string, t: (text: string) => string): string | null {
+    if (!settings.scheduleEnabled) return null;
+
+    const match = localTime.match(/^(Sun|Mon|Tue|Wed|Thu|Fri|Sat) (\d{2}):(\d{2})(?::\d{2})?$/);
+    if (!match) return null;
+
+    const currentDay = LOCAL_TIME_DAY_TO_SCHED_DAY[match[1]];
+    const currentMinutes = Number.parseInt(match[2], 10) * 60 + Number.parseInt(match[3], 10);
+
+    for (let dayOffset = 0; dayOffset <= 7; dayOffset++) {
+        const day = (currentDay + dayOffset) % 7;
+        const slots = readDaySlots(settings, day)
+            .filter((slot) => slot.on)
+            .sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute));
+
+        for (const slot of slots) {
+            const slotMinutes = slot.hour * 60 + slot.minute;
+            if (dayOffset === 0 && slotMinutes < currentMinutes) continue;
+
+            const when =
+                dayOffset === 0
+                    ? t("Today")
+                    : dayOffset === 1
+                      ? t("Tomorrow")
+                      : t(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][day]);
+            return `${when} ${formatSchedTime(slot.hour, slot.minute)}`;
+        }
+    }
+
+    return null;
+}
+
 // -- Dashboard view --
 
 interface DashboardViewProps {
@@ -109,6 +171,7 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
     const navigate = useNavigate();
     const charger = usePolling<ChargerData>(api.getCharger, 5000);
     const error = usePolling<ErrorData>(api.getError, 2000);
+    const settings = usePolling<SettingsData>(api.getSettings, 30000);
     const system = usePolling<SystemData>(api.getSystem, 10000);
 
     const connErr = state.error && charger.error;
@@ -189,6 +252,10 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
     const mi = modeErr
         ? { label: "Error", color: "red", icon: "alert" }
         : modeInfo(charging, docked, isSpot, isCleaning, isManual);
+    const nextSchedule =
+        settings.data?.scheduleEnabled && system.data?.localTime
+            ? nextScheduleLabel(settings.data, system.data.localTime, t)
+            : null;
 
     return (
         <>
@@ -279,6 +346,17 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
 
             {/* Action errors — dismissible, stackable */}
             <ErrorBannerStack errors={actionErrors} />
+
+            {settings.data?.scheduleEnabled && (
+                <button type="button" class="schedule-banner" onClick={() => navigate("/schedule")}>
+                    <Icon svg={clockSvg} />
+                    <span>
+                        {nextSchedule
+                            ? t("Next clean: {time}", { time: nextSchedule })
+                            : t("Schedule enabled - tap to view")}
+                    </span>
+                </button>
+            )}
 
             {/* Hero area — robot right, cards left */}
             {!robotReady ? (

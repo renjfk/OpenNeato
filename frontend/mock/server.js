@@ -12,6 +12,7 @@ import { createScenarioState, scenarioFromRequest } from "./shared-state.js";
 import { DEFAULT_MOCK_VERSION, mockVersionFromHash } from "./shared-version.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const mockSourceFiles = new Set([join(__dirname, "shared-api.js"), join(__dirname, "shared-state.js")]);
 
 const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
@@ -187,6 +188,13 @@ function mockApiPlugin() {
         },
         configureServer(server) {
             viteLogger = server.config.logger;
+            server.watcher.on("change", (file) => {
+                if (!mockSourceFiles.has(file)) return;
+                viteLogger?.info(`mock source changed, restarting dev server: ${file}`, { timestamp: true });
+                if (typeof server.restart === "function") {
+                    void server.restart();
+                }
+            });
             server.middlewares.use(async (req, res, next) => {
                 if (!req.url.startsWith("/api") && !req.url.startsWith("/repos")) return next();
 

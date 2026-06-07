@@ -42,9 +42,19 @@ function readDays(s: SettingsData): DayState[] {
             minute: (s[`sched${day}Slot1Min` as keyof SettingsData] as number) ?? 0,
             on: (s[`sched${day}Slot1On` as keyof SettingsData] as boolean) ?? false,
         };
+        if (!slot0.on) slot1.on = false;
         days.push({ slots: [slot0, slot1] });
     }
     return days;
+}
+
+function normalizeDays(days: DayState[]): DayState[] {
+    return days.map((day) => {
+        const [slot0, slot1] = day.slots;
+        return {
+            slots: [slot0, { ...slot1, on: slot0.on && slot1.on }],
+        };
+    });
 }
 
 function daysToDrafts(days: DayState[]): string[][] {
@@ -99,14 +109,16 @@ function validateDrafts(days: DayState[], drafts: string[][]): Set<string> {
 
 // Apply parsed draft times back into day state (only for enabled, valid slots)
 function applyDrafts(days: DayState[], drafts: string[][]): DayState[] {
-    return days.map((day, d) => ({
-        slots: day.slots.map((slot, s) => {
-            if (!slot.on) return slot;
-            const parsed = parseTime(drafts[d][s]);
-            if (!parsed) return slot;
-            return { ...slot, hour: parsed.hour, minute: parsed.minute };
-        }),
-    }));
+    return normalizeDays(
+        days.map((day, d) => ({
+            slots: day.slots.map((slot, s) => {
+                if (!slot.on) return slot;
+                const parsed = parseTime(drafts[d][s]);
+                if (!parsed) return slot;
+                return { ...slot, hour: parsed.hour, minute: parsed.minute };
+            }),
+        })),
+    );
 }
 
 export function ScheduleView() {
@@ -137,7 +149,7 @@ export function ScheduleView() {
 
     useEffect(() => {
         if (settings) {
-            const d = readDays(settings);
+            const d = normalizeDays(readDays(settings));
             setEnabled(settings.scheduleEnabled);
             serverEnabled.current = settings.scheduleEnabled;
             setTz(settings.tz);
@@ -155,13 +167,15 @@ export function ScheduleView() {
     // Dirty = toggle changed, or any draft text differs from server
     const isDirty = enabled !== serverEnabled.current || !draftsMatchDays(drafts, days, serverDays.current);
 
-    const { guardedNavigate, showDiscardConfirm, setShowDiscardConfirm, handleDiscard } = useDirtyGuard(isDirty);
+    const { guardedGoBack, showDiscardConfirm, setShowDiscardConfirm, handleDiscard } = useDirtyGuard(isDirty);
 
     // Local-only state changes (no API call)
     const updateSlot = useCallback((day: number, slot: number, patch: Partial<SlotState>) => {
         setDays((cur) =>
-            cur.map((d, i) =>
-                i === day ? { slots: d.slots.map((s, si) => (si === slot ? { ...s, ...patch } : s)) } : d,
+            normalizeDays(
+                cur.map((d, i) =>
+                    i === day ? { slots: d.slots.map((s, si) => (si === slot ? { ...s, ...patch } : s)) } : d,
+                ),
             ),
         );
         // When adding slot 2, seed draft with default time
@@ -235,7 +249,7 @@ export function ScheduleView() {
                 <button
                     type="button"
                     class="header-back-btn"
-                    onClick={() => guardedNavigate("/settings")}
+                    onClick={() => guardedGoBack("/settings")}
                     aria-label={t("Back")}
                 >
                     <Icon svg={backSvg} />
@@ -290,7 +304,7 @@ export function ScheduleView() {
                                         <button
                                             type="button"
                                             class={`schedule-day-toggle${s0.on ? " on" : ""}`}
-                                            onClick={() => updateSlot(i, 0, { on: !s0.on })}
+                                            onClick={() => updateSlot(i, 0, s0.on ? { on: false } : { on: true })}
                                             aria-label={t("Toggle {day}", { day: t(DAY_NAMES[i]) })}
                                         />
                                         <span class={`sched-day-label${s0.on ? "" : " off"}`}>{t(DAY_NAMES[i])}</span>

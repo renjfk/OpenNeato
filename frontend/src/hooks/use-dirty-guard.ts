@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
-import { useNavigate, usePath } from "../components/router";
+import { useGoBack, useNavigate, usePath } from "../components/router";
+
+interface PendingBackNavigation {
+    kind: "back";
+    fallback: string;
+}
+
+type PendingNavigation = string | PendingBackNavigation;
 
 /**
  * Prevents accidental navigation away from a page with unsaved changes.
@@ -12,6 +19,7 @@ import { useNavigate, usePath } from "../components/router";
  */
 export function useDirtyGuard(isDirty: boolean) {
     const navigate = useNavigate();
+    const goBack = useGoBack();
     const currentPath = usePath();
     const dirtyRef = useRef(false);
     dirtyRef.current = isDirty;
@@ -21,7 +29,7 @@ export function useDirtyGuard(isDirty: boolean) {
     pathRef.current = currentPath;
 
     const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
-    const pendingNav = useRef<string | null>(null);
+    const pendingNav = useRef<PendingNavigation | null>(null);
 
     // Browser close/reload guard
     useEffect(() => {
@@ -68,17 +76,34 @@ export function useDirtyGuard(isDirty: boolean) {
         [isDirty, navigate],
     );
 
+    const guardedGoBack = useCallback(
+        (fallback: string) => {
+            if (isDirty) {
+                pendingNav.current = { kind: "back", fallback };
+                setShowDiscardConfirm(true);
+            } else {
+                goBack(fallback);
+            }
+        },
+        [goBack, isDirty],
+    );
+
     // Called when user confirms discard
     const handleDiscard = useCallback(() => {
         setShowDiscardConfirm(false);
         if (pendingNav.current) {
-            navigate(pendingNav.current);
+            if (typeof pendingNav.current === "string") {
+                navigate(pendingNav.current);
+            } else {
+                goBack(pendingNav.current.fallback);
+            }
             pendingNav.current = null;
         }
-    }, [navigate]);
+    }, [goBack, navigate]);
 
     return {
         guardedNavigate,
+        guardedGoBack,
         showDiscardConfirm,
         setShowDiscardConfirm,
         handleDiscard,

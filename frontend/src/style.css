@@ -500,6 +500,35 @@ body {
     flex-shrink: 0;
 }
 
+.schedule-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: calc(100% - 40px);
+    margin: 0 20px 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--card-bg);
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.schedule-banner span {
+    display: flex;
+    align-items: center;
+}
+
+.schedule-banner svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    color: var(--amber);
+}
+
 /* Bottom action bar */
 
 .action-bar {
@@ -580,6 +609,7 @@ input:disabled {
    buttons have custom :active styles (transform-based scales) that we
    don't want to dim. */
 .update-banner:active,
+.schedule-banner:active,
 .settings-category-header:active,
 .settings-nav-row:active,
 .settings-ntfy-test-btn:not(:disabled):active,

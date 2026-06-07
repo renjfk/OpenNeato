@@ -1,5 +1,6 @@
 import type { JSX } from "preact";
 import { useCallback } from "preact/hooks";
+import { useI18n } from "../i18n";
 
 interface TimeInputProps {
     value: string;
@@ -22,6 +23,7 @@ export function TimeInput({
     disabled,
     ariaLabel,
 }: TimeInputProps) {
+    const { t } = useI18n();
     const handleInput = useCallback(
         (e: JSX.TargetedEvent<HTMLInputElement>) => {
             let val = e.currentTarget.value;
@@ -41,10 +43,10 @@ export function TimeInput({
             value={value}
             onInput={handleInput}
             maxLength={maxLength}
-            placeholder={placeholder}
+            placeholder={placeholder ? t(placeholder) : undefined}
             onKeyDown={onKeyDown}
             disabled={disabled}
-            aria-label={ariaLabel}
+            aria-label={ariaLabel ? t(ariaLabel) : undefined}
         />
     );
 }

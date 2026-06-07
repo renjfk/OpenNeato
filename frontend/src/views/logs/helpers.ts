@@ -1,26 +1,5 @@
 // Shared helpers for logs views
 
-import { pad2 } from "../../utils";
-
-export function formatBytes(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    const kb = bytes / 1024;
-    if (kb < 1024) return `${kb.toFixed(1)} KB`;
-    return `${(kb / 1024).toFixed(1)} MB`;
-}
-
-export function filenameToDate(name: string): string {
-    if (name === "current.jsonl") return "Active";
-    // Normal rotation: "1700000000.jsonl.hs" - epoch prefix
-    const match = name.match(/^(\d+)\./);
-    if (match) {
-        const epoch = parseInt(match[1], 10);
-        const d = new Date(epoch * 1000);
-        return `${pad2(d.getMonth() + 1)}/${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-    }
-    return name;
-}
-
 // Type badge for log entries
 export interface TypeBadge {
     label: string;
@@ -46,11 +25,6 @@ export function typeBadge(type: string): TypeBadge {
         default:
             return { label: type.toUpperCase().slice(0, 4), color: "dim" };
     }
-}
-
-export function formatTimestamp(ts: number): string {
-    const d = new Date(ts * 1000);
-    return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
 }
 
 function formatResp(raw: string): string {

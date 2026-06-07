@@ -1,4 +1,4 @@
-// Motion player — replays a finished cleaning session as a smoothly animated
+// Motion player - replays a finished cleaning session as a smoothly animated
 // robot on the map. Drives the time-aware variant of renderMap via
 // requestAnimationFrame and exposes play/pause, restart, and a scrubber.
 
@@ -8,8 +8,9 @@ import playSvg from "../../assets/icons/play.svg?raw";
 import restartSvg from "../../assets/icons/restart.svg?raw";
 import { Icon } from "../../components/icon";
 import { useKeyShortcut } from "../../hooks/use-key-shortcut";
+import { useI18n } from "../../i18n";
 import type { MapData, MapTransform } from "../../types";
-import { formatClock, renderMap, sessionDuration } from "./helpers";
+import { renderMap, sessionDuration } from "./helpers";
 
 interface MotionPlayerProps {
     canvas: HTMLCanvasElement | null;
@@ -26,6 +27,7 @@ interface MotionPlayerProps {
 }
 
 export function MotionPlayer({ canvas, map, transform, rotation, speed = 8, canvasSuspended }: MotionPlayerProps) {
+    const { t, formatClock } = useI18n();
     const duration = sessionDuration(map);
     const [playing, setPlaying] = useState(false);
     // Start at the end of the timeline so a freshly opened session shows the
@@ -210,14 +212,14 @@ export function MotionPlayer({ canvas, map, transform, rotation, speed = 8, canv
                     type="button"
                     class="history-player-btn"
                     onClick={handleTogglePlay}
-                    aria-label={playing ? "Pause" : "Play"}
+                    aria-label={t(playing ? "Pause" : "Play")}
                 >
                     <Icon svg={playing ? pauseSvg : playSvg} />
                 </button>
-                <button type="button" class="history-player-btn" onClick={handleRestart} aria-label="Restart">
+                <button type="button" class="history-player-btn" onClick={handleRestart} aria-label={t("Restart")}>
                     <Icon svg={restartSvg} />
                 </button>
-                <span class="history-player-time" title="Elapsed time">
+                <span class="history-player-time" title={t("Elapsed time")}>
                     {formatClock(currentTime)}
                 </span>
                 <input
@@ -230,13 +232,13 @@ export function MotionPlayer({ canvas, map, transform, rotation, speed = 8, canv
                     onInput={handleScrub}
                     onMouseDown={handleScrubStart}
                     onTouchStart={handleScrubStart}
-                    aria-label="Seek"
+                    aria-label={t("Seek")}
                     style={{
                         "--track": trackLayers,
                         "--played": `${playedPercent}%`,
                     }}
                 />
-                <span class="history-player-time" title="Total time">
+                <span class="history-player-time" title={t("Total time")}>
                     {formatClock(duration)}
                 </span>
             </div>

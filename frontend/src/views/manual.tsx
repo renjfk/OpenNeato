@@ -14,13 +14,14 @@ import { Joystick } from "../components/joystick";
 import { LidarMap } from "../components/lidar-map";
 import { useNavigate } from "../components/router";
 import { usePolling } from "../hooks/use-polling";
+import { T, useI18n } from "../i18n";
 import type { ChargerData, LidarScan, ManualStatus } from "../types";
 
 // Convert joystick X/Y to differential wheel distances (mm).
 // We send a large fixed distance so the robot keeps moving continuously until
 // the next command changes direction or a stop cancels it. The firmware watchdog
 // stops wheels if no command arrives within MANUAL_MOVE_TIMEOUT_MS (2s).
-const MOVE_DIST_MM = 10000; // Protocol max — robot moves until next command
+const MOVE_DIST_MM = 10000; // Protocol max - robot moves until next command
 const MAX_SPEED_MM_S = 200;
 
 interface WheelCommand {
@@ -64,15 +65,15 @@ function safetyWarning(status: ManualStatus | null): string | null {
     if (!status) return null;
     if (status.lifted) return "Robot is lifted";
     // Stall: direction-aware message
-    if (status.stallFront) return "Stall detected — reverse to clear";
-    if (status.stallRear) return "Stall detected — move forward to clear";
+    if (status.stallFront) return "Stall detected - reverse to clear";
+    if (status.stallRear) return "Stall detected - move forward to clear";
     // Physical bumper contact
     const bumpers: string[] = [];
     if (status.bumperFrontLeft) bumpers.push("front-left");
     if (status.bumperFrontRight) bumpers.push("front-right");
     if (status.bumperSideLeft) bumpers.push("side-left");
     if (status.bumperSideRight) bumpers.push("side-right");
-    if (bumpers.length > 0) return `Bumper: ${bumpers.join(", ")} — reverse to clear`;
+    if (bumpers.length > 0) return `Bumper: ${bumpers.join(", ")} - reverse to clear`;
     return null;
 }
 
@@ -87,6 +88,7 @@ export function ManualView({
     onToggleSideBrush,
     onToggleAll,
 }: ManualViewProps) {
+    const { t, formatNumber } = useI18n();
     const navigate = useNavigate();
     const charger = usePolling<ChargerData>(api.getCharger, 5000);
     const [stopping, setStopping] = useState(false);
@@ -193,13 +195,15 @@ export function ManualView({
                 <button
                     type="button"
                     class="header-back-btn"
-                    aria-label="Back"
+                    aria-label={t("Back")}
                     disabled={stopping}
                     onClick={() => navigate("/")}
                 >
                     <Icon svg={backSvg} />
                 </button>
-                <h1>Manual</h1>
+                <h1>
+                    <T>Manual</T>
+                </h1>
                 <div class="header-right-spacer" />
             </div>
 
@@ -216,23 +220,33 @@ export function ManualView({
                             </div>
                         )}
                         {!lidar.data && !isManual && (
-                            <div class="manual-map-warn manual-map-center">Not in manual mode</div>
+                            <div class="manual-map-warn manual-map-center">
+                                <T>Not in manual mode</T>
+                            </div>
                         )}
                         {!lidar.data && isManual && lidar.error && (
-                            <div class="manual-map-warn manual-map-center">LIDAR unavailable</div>
+                            <div class="manual-map-warn manual-map-center">
+                                <T>LIDAR unavailable</T>
+                            </div>
                         )}
                         {safetyWarning(status) && (
-                            <div class="manual-map-warn manual-map-top error">{safetyWarning(status)}</div>
+                            <div class="manual-map-warn manual-map-top error">{t(safetyWarning(status) ?? "")}</div>
                         )}
                         {lidar.data &&
                             (lidar.data.validPoints < 90 ||
                                 (lidar.data.rotationSpeed > 0 && lidar.data.rotationSpeed < 4.0)) && (
                                 <div class="manual-map-warn">
                                     {[
-                                        lidar.data.validPoints < 90 && `Low quality (${lidar.data.validPoints}/360)`,
+                                        lidar.data.validPoints < 90 &&
+                                            t("Low quality ({points}/360)", { points: lidar.data.validPoints }),
                                         lidar.data.rotationSpeed > 0 &&
                                             lidar.data.rotationSpeed < 4.0 &&
-                                            `Slow LDS (${lidar.data.rotationSpeed.toFixed(1)} Hz)`,
+                                            t("Slow LDS ({hz} Hz)", {
+                                                hz: formatNumber(lidar.data.rotationSpeed, {
+                                                    minimumFractionDigits: 1,
+                                                    maximumFractionDigits: 1,
+                                                }),
+                                            }),
                                     ]
                                         .filter(Boolean)
                                         .join(" · ")}
@@ -257,7 +271,7 @@ export function ManualView({
                             onClick={() => wrapMotorToggle(onToggleBrush)}
                         >
                             <Icon svg={brushSvg} />
-                            Brush
+                            <T>Brush</T>
                         </button>
                         <button
                             type="button"
@@ -266,7 +280,7 @@ export function ManualView({
                             onClick={() => wrapMotorToggle(onToggleVacuum)}
                         >
                             <Icon svg={vacuumSvg} />
-                            Vacuum
+                            <T>Vacuum</T>
                         </button>
                         <button
                             type="button"
@@ -275,7 +289,7 @@ export function ManualView({
                             onClick={() => wrapMotorToggle(onToggleSideBrush)}
                         >
                             <Icon svg={sideBrushSvg} />
-                            Side
+                            <T>Side Brush</T>
                         </button>
                         <button
                             type="button"
@@ -284,7 +298,7 @@ export function ManualView({
                             onClick={() => wrapMotorToggle(onToggleAll)}
                         >
                             <Icon svg={sparkleSvg} />
-                            All
+                            <T>All</T>
                         </button>
                     </div>
                 </div>
@@ -298,7 +312,7 @@ export function ManualView({
                         onClick={handleStop}
                     >
                         <Icon svg={stopSvg} />
-                        Stop
+                        <T>Stop</T>
                     </button>
                 </div>
             </div>

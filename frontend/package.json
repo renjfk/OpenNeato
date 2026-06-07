@@ -1,30 +1,36 @@
 {
-    "name": "neato-web",
-    "private": true,
-    "version": "0.0.1",
-    "type": "module",
-    "scripts": {
-        "dev": "npm run gen:types && vite",
-        "gen:types": "openapi-typescript --root-types --root-types-no-schema-prefix --output src/types.generated.ts api/openapi.yaml",
-        "build:demo": "node scripts/write_demo_build_info.js && biome check && jscpd src/ && npm run gen:types && node scripts/check_api_paths.js && tsc --noEmit && vite build --mode demo",
-        "build": "biome check && jscpd src/ && npm run gen:types && node scripts/check_api_paths.js && tsc --noEmit && vite build && node scripts/embed_frontend.js",
-        "preview": "vite preview",
-        "check": "biome check",
-        "dupes": "jscpd src/",
-        "fix": "biome check --write",
-        "fix:unsafe": "biome check --write --unsafe"
-    },
-    "dependencies": {
-        "preact": "10.29.2"
-    },
-    "devDependencies": {
-        "@biomejs/biome": "2.4.16",
-        "@preact/preset-vite": "2.10.5",
-        "jscpd": "4.2.4",
-        "openapi-typescript": "7.13.0",
-        "typescript": "6.0.3",
-        "vite": "8.0.15",
-        "wrangler": "4.95.0",
-        "yaml": "2.9.0"
-    }
+  "name": "neato-web",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npm run gen:types && vite",
+    "gen:types": "openapi-typescript --root-types --root-types-no-schema-prefix --output src/types.generated.ts api/openapi.yaml",
+    "build:demo": "node scripts/write_demo_build_info.js && npm run check && jscpd src/ && npm run gen:types && node scripts/check_api_paths.js && tsc --noEmit && vite build --mode demo",
+    "build": "npm run check && jscpd src/ && npm run gen:types && node scripts/check_api_paths.js && tsc --noEmit && vite build && node scripts/embed_frontend.js",
+    "preview": "vite preview",
+    "check": "npm run format:check && npm run lint && npm run i18n:check && npm run i18n:plugin:test",
+    "dupes": "jscpd src/",
+    "format": "oxfmt --write \"src/**\" \"!src/types.generated.ts\" \"mock/*.js\" \"scripts/**\" vite.config.ts tsconfig.json package.json .oxfmtrc.json .oxlintrc.json",
+    "format:check": "oxfmt --check \"src/**\" \"!src/types.generated.ts\" \"mock/*.js\" \"scripts/**\" vite.config.ts tsconfig.json package.json .oxfmtrc.json .oxlintrc.json",
+    "i18n:check": "oxlint src/i18n/index.tsx --ignore-pattern src/types.generated.ts",
+    "i18n:plugin:test": "node --test --experimental-test-coverage --test-coverage-include=scripts/oxlint_i18n_plugin.js --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 scripts/oxlint_i18n_plugin.test.js",
+    "lint": "oxlint src mock scripts vite.config.ts --ignore-pattern src/types.generated.ts",
+    "lint:fix": "oxlint --fix src mock scripts vite.config.ts --ignore-pattern src/types.generated.ts",
+    "fix": "npm run format && npm run lint:fix"
+  },
+  "dependencies": {
+    "preact": "10.29.2"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "2.10.5",
+    "jscpd": "4.2.4",
+    "openapi-typescript": "7.13.0",
+    "oxfmt": "0.53.0",
+    "oxlint": "1.68.0",
+    "typescript": "6.0.3",
+    "vite": "8.0.15",
+    "wrangler": "4.95.0",
+    "yaml": "2.9.0"
+  }
 }

@@ -4,8 +4,9 @@ import rotateLeftSvg from "../../assets/icons/rotate-left.svg?raw";
 import rotateRightSvg from "../../assets/icons/rotate-right.svg?raw";
 import { Icon } from "../../components/icon";
 import { useMapGestures } from "../../hooks/use-map-gestures";
+import { T, useI18n } from "../../i18n";
 import type { HistoryFileInfo, MapData } from "../../types";
-import { formatDuration, renderMap } from "./helpers";
+import { renderMap } from "./helpers";
 import { Wave } from "./loading-wave";
 import { MotionPlayer } from "./motion-player";
 
@@ -24,6 +25,7 @@ function loadRotation(): number {
 }
 
 export function HistoryItemView({ file, map, mapEmpty, recording }: HistoryItemViewProps) {
+    const { t, formatDuration, formatNumber } = useI18n();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [rotation, setRotation] = useState<number>(loadRotation);
     const transform = useMapGestures(canvasRef, rotation);
@@ -126,26 +128,46 @@ export function HistoryItemView({ file, map, mapEmpty, recording }: HistoryItemV
             {summary && (
                 <div class="history-detail-stats">
                     <div class="history-stat">
-                        <span class="history-stat-label">Duration</span>
+                        <span class="history-stat-label">
+                            <T>Duration</T>
+                        </span>
                         <span class="history-stat-value">{formatDuration(summary.duration)}</span>
                     </div>
                     <div class="history-stat">
-                        <span class="history-stat-label">Distance</span>
-                        <span class="history-stat-value">{summary.distanceTraveled.toFixed(1)}m</span>
+                        <span class="history-stat-label">
+                            <T>Distance</T>
+                        </span>
+                        <span class="history-stat-value">
+                            {`${formatNumber(summary.distanceTraveled, {
+                                minimumFractionDigits: 1,
+                                maximumFractionDigits: 1,
+                            })} m`}
+                        </span>
                     </div>
                     <div class="history-stat">
-                        <span class="history-stat-label">Area</span>
-                        <span class="history-stat-value">{summary.areaCovered.toFixed(1)}m&sup2;</span>
+                        <span class="history-stat-label">
+                            <T>Area</T>
+                        </span>
+                        <span class="history-stat-value">
+                            {`${formatNumber(summary.areaCovered, {
+                                minimumFractionDigits: 1,
+                                maximumFractionDigits: 1,
+                            })} m\u00b2`}
+                        </span>
                     </div>
                     <div class="history-stat">
-                        <span class="history-stat-label">Battery</span>
+                        <span class="history-stat-label">
+                            <T>Battery</T>
+                        </span>
                         <span class="history-stat-value">
                             {session?.battery ?? "?"}% &rarr; {summary.batteryEnd ?? "?"}%
                         </span>
                     </div>
                     {summary.recharges > 0 && (
                         <div class="history-stat">
-                            <span class="history-stat-label">Recharges</span>
+                            <span class="history-stat-label">
+                                <T>Recharges</T>
+                            </span>
                             <span class="history-stat-value">{summary.recharges}</span>
                         </div>
                     )}
@@ -157,7 +179,11 @@ export function HistoryItemView({ file, map, mapEmpty, recording }: HistoryItemV
                 takes over. The empty-data message replaces it only when
                 we know the session has no usable map. */}
             <div class="history-canvas-wrap">
-                {mapEmpty && <div class="history-empty">Not enough data to display map</div>}
+                {mapEmpty && (
+                    <div class="history-empty">
+                        <T>Not enough data to display map</T>
+                    </div>
+                )}
                 <canvas ref={canvasRef} class="history-canvas" style={mapEmpty ? { display: "none" } : undefined} />
                 {map && !mapEmpty && (
                     <>
@@ -165,7 +191,7 @@ export function HistoryItemView({ file, map, mapEmpty, recording }: HistoryItemV
                             type="button"
                             class="history-rotate-btn left"
                             onClick={() => rotateBy(-90)}
-                            aria-label="Rotate map counter-clockwise"
+                            aria-label={t("Rotate map counter-clockwise")}
                         >
                             <Icon svg={rotateLeftSvg} />
                         </button>
@@ -173,7 +199,7 @@ export function HistoryItemView({ file, map, mapEmpty, recording }: HistoryItemV
                             type="button"
                             class="history-rotate-btn right"
                             onClick={() => rotateBy(90)}
-                            aria-label="Rotate map clockwise"
+                            aria-label={t("Rotate map clockwise")}
                         >
                             <Icon svg={rotateRightSvg} />
                         </button>
@@ -198,31 +224,33 @@ export function HistoryItemView({ file, map, mapEmpty, recording }: HistoryItemV
             {map && (
                 <div class="history-legend">
                     <span class="history-legend-item">
-                        <span class="history-legend-dot start" /> Start
+                        <span class="history-legend-dot start" /> <T>Start</T>
                     </span>
                     <span class="history-legend-item">
                         <span class={`history-legend-dot ${recording ? "current" : "end"}`} />{" "}
-                        {recording ? "Current" : "End"}
+                        {t(recording ? "Current" : "End")}
                     </span>
                     <span class="history-legend-item">
-                        <span class="history-legend-swatch coverage" /> Coverage
+                        <span class="history-legend-swatch coverage" /> <T>Coverage</T>
                     </span>
                     {map.recharges.length > 0 && (
                         <span class="history-legend-item">
                             <span class="history-legend-bolt">
                                 <Icon svg={boltSvg} />
                             </span>{" "}
-                            Recharge
+                            <T>Recharge</T>
                         </span>
                     )}
                 </div>
             )}
             {map && (
-                <div class="history-map-hint">Pinch or scroll to zoom, drag to pan, double-tap to zoom in or reset</div>
+                <div class="history-map-hint">
+                    <T>Pinch or scroll to zoom, drag to pan, double-tap to zoom in or reset</T>
+                </div>
             )}
             {showPlayer && (
                 <div class="history-map-hint">
-                    Space to play or pause, arrow keys to seek, hold shift for a larger jump
+                    <T>Space to play or pause, arrow keys to seek, hold shift for a larger jump</T>
                 </div>
             )}
         </>

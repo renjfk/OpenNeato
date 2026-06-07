@@ -5,6 +5,7 @@ import { ConfirmDialog } from "../../components/confirm-dialog";
 import type { ErrorStackHandle } from "../../components/error-banner";
 import { Icon } from "../../components/icon";
 import { usePolling } from "../../hooks/use-polling";
+import { T, useI18n } from "../../i18n";
 import type { BatteryAnalogData, BatteryWarrantyData, ChargerData, VersionData } from "../../types";
 import { normalizeError } from "../../utils";
 
@@ -16,11 +17,7 @@ interface BatteryDiagnosticsProps {
 function batteryStateLabel(charger: ChargerData): string {
     if (charger.chargingActive) return "Charging";
     if (charger.extPwrPresent) return "Docked";
-    return "On battery";
-}
-
-function formatHours(seconds: number): string {
-    return `${Math.round(seconds / 3600)} h`;
+    return "On Battery";
 }
 
 function mfgDateLooksUnreliable(version: VersionData | null | undefined): boolean {
@@ -37,6 +34,7 @@ function mfgDateLooksUnreliable(version: VersionData | null | undefined): boolea
 }
 
 export function BatteryDiagnostics({ firmwareSupported, errorStack }: BatteryDiagnosticsProps) {
+    const { t, formatDuration, formatNumber } = useI18n();
     const chargerPoll = usePolling<ChargerData>(api.getCharger, 30000);
     const analogPoll = usePolling<BatteryAnalogData>(api.getBatteryAnalog, 30000);
     const warrantyPoll = usePolling<BatteryWarrantyData>(api.getBatteryWarranty, 60000);
@@ -69,9 +67,14 @@ export function BatteryDiagnostics({ firmwareSupported, errorStack }: BatteryDia
                 <div class="settings-battery-card">
                     <div class="settings-battery-header">
                         <div>
-                            <div class="settings-battery-title">Battery diagnostics</div>
+                            <div class="settings-battery-title">
+                                <T>Battery diagnostics</T>
+                            </div>
                             <div class="settings-battery-desc">
-                                Maintenance signals from charger, analog sensors, warranty data, and version metadata
+                                <T>
+                                    Maintenance signals from charger, analog sensors, warranty data, and version
+                                    metadata
+                                </T>
                             </div>
                         </div>
                     </div>
@@ -80,79 +83,133 @@ export function BatteryDiagnostics({ firmwareSupported, errorStack }: BatteryDia
                         <>
                             <div class="settings-battery-grid">
                                 <div>
-                                    <span>Charge</span>
+                                    <span>
+                                        <T>Charge</T>
+                                    </span>
                                     <strong>{charger.fuelPercent}%</strong>
                                 </div>
                                 <div>
-                                    <span>State</span>
-                                    <strong>{batteryStateLabel(charger)}</strong>
+                                    <span>
+                                        <T>State</T>
+                                    </span>
+                                    <strong>{t(batteryStateLabel(charger))}</strong>
                                 </div>
                                 <div>
-                                    <span>Voltage</span>
-                                    <strong>{charger.vBattV.toFixed(2)} V</strong>
+                                    <span>
+                                        <T>Voltage</T>
+                                    </span>
+                                    <strong>
+                                        {formatNumber(charger.vBattV, {
+                                            minimumFractionDigits: 2,
+                                            maximumFractionDigits: 2,
+                                        })}{" "}
+                                        V
+                                    </strong>
                                 </div>
                                 <div>
-                                    <span>Temp</span>
-                                    <strong>{analog.batteryTemperatureC.toFixed(1)} C</strong>
+                                    <span>
+                                        <T>Temp</T>
+                                    </span>
+                                    <strong>
+                                        {formatNumber(analog.batteryTemperatureC, {
+                                            minimumFractionDigits: 1,
+                                            maximumFractionDigits: 1,
+                                        })}{" "}
+                                        C
+                                    </strong>
                                 </div>
                                 <div>
-                                    <span>Cycles</span>
+                                    <span>
+                                        <T>Cycles</T>
+                                    </span>
                                     <strong>{warranty.cumulativeBatteryCycles}</strong>
                                 </div>
                                 <div>
-                                    <span>Pack</span>
-                                    <strong>{version?.smartBatteryManufacturerName || "Unknown"}</strong>
+                                    <span>
+                                        <T>Pack</T>
+                                    </span>
+                                    <strong>{version?.smartBatteryManufacturerName || t("Unknown")}</strong>
                                 </div>
                                 <div>
-                                    <span>Current</span>
-                                    <strong>{analog.batteryCurrentMA} mA</strong>
+                                    <span>
+                                        <T>Current</T>
+                                    </span>
+                                    <strong>{formatNumber(analog.batteryCurrentMA)} mA</strong>
                                 </div>
                                 <div>
-                                    <span>External voltage</span>
-                                    <strong>{analog.externalVoltageV.toFixed(2)} V</strong>
+                                    <span>
+                                        <T>External voltage</T>
+                                    </span>
+                                    <strong>
+                                        {formatNumber(analog.externalVoltageV, {
+                                            minimumFractionDigits: 2,
+                                            maximumFractionDigits: 2,
+                                        })}{" "}
+                                        V
+                                    </strong>
                                 </div>
                                 <div>
-                                    <span>Charging enabled</span>
-                                    <strong>{charger.chargingEnabled ? "Yes" : "No"}</strong>
+                                    <span>
+                                        <T>Charging enabled</T>
+                                    </span>
+                                    <strong>{t(charger.chargingEnabled ? "Yes" : "No")}</strong>
                                 </div>
                                 <div>
-                                    <span>Fuel confidence</span>
-                                    <strong>{charger.confidOnFuel ? "Yes" : "No"}</strong>
+                                    <span>
+                                        <T>Fuel confidence</T>
+                                    </span>
+                                    <strong>{t(charger.confidOnFuel ? "Yes" : "No")}</strong>
                                 </div>
                                 <div>
-                                    <span>Reserved fuel</span>
-                                    <strong>{charger.onReservedFuel ? "Yes" : "No"}</strong>
+                                    <span>
+                                        <T>Reserved fuel</T>
+                                    </span>
+                                    <strong>{t(charger.onReservedFuel ? "Yes" : "No")}</strong>
                                 </div>
                                 <div>
-                                    <span>Charged</span>
-                                    <strong>{charger.chargerMAH} mAh</strong>
+                                    <span>
+                                        <T>Charged</T>
+                                    </span>
+                                    <strong>{formatNumber(charger.chargerMAH)} mAh</strong>
                                 </div>
                                 <div>
-                                    <span>Discharged</span>
-                                    <strong>{charger.dischargeMAH} mAh</strong>
+                                    <span>
+                                        <T>Discharged</T>
+                                    </span>
+                                    <strong>{formatNumber(charger.dischargeMAH)} mAh</strong>
                                 </div>
                                 <div>
-                                    <span>Cleaning time</span>
-                                    <strong>{formatHours(warranty.cumulativeCleaningTimeSeconds)}</strong>
+                                    <span>
+                                        <T>Cleaning time</T>
+                                    </span>
+                                    <strong>{formatDuration(warranty.cumulativeCleaningTimeSeconds)}</strong>
                                 </div>
                                 <div>
-                                    <span>Chemistry</span>
-                                    <strong>{version?.smartBatteryChemistry || "Unknown"}</strong>
+                                    <span>
+                                        <T>Chemistry</T>
+                                    </span>
+                                    <strong>{version?.smartBatteryChemistry || t("Unknown")}</strong>
                                 </div>
                                 <div>
-                                    <span>Device</span>
-                                    <strong>{version?.smartBatteryDeviceName || "Unknown"}</strong>
+                                    <span>
+                                        <T>Device</T>
+                                    </span>
+                                    <strong>{version?.smartBatteryDeviceName || t("Unknown")}</strong>
                                 </div>
                                 <div>
-                                    <span>Serial</span>
-                                    <strong>{version?.smartBatterySerialNumber || "Unknown"}</strong>
+                                    <span>
+                                        <T>Serial</T>
+                                    </span>
+                                    <strong>{version?.smartBatterySerialNumber || t("Unknown")}</strong>
                                 </div>
                                 <div>
-                                    <span>Mfg date</span>
-                                    <strong>{version?.smartBatteryMfgDate || "Unknown"}</strong>
+                                    <span>
+                                        <T>Mfg date</T>
+                                    </span>
+                                    <strong>{version?.smartBatteryMfgDate || t("Unknown")}</strong>
                                     {showMfgDateNotice && (
                                         <small class="settings-battery-note">
-                                            Reported by robot firmware, may be unreliable.
+                                            <T>Reported by robot firmware, may be unreliable.</T>
                                         </small>
                                     )}
                                 </div>
@@ -166,24 +223,28 @@ export function BatteryDiagnostics({ firmwareSupported, errorStack }: BatteryDia
                             >
                                 <div class="settings-nav-row-left">
                                     <Icon svg={alertSvg} />
-                                    {settingNewBattery ? "Applying..." : "New Battery"}
+                                    {t(settingNewBattery ? "Applying..." : "New Battery")}
                                 </div>
                             </button>
                             <div class="settings-robot-time">
-                                Use only after physically installing a replacement battery.
+                                <T>Use only after physically installing a replacement battery.</T>
                             </div>
                         </>
                     ) : (
-                        <div class="settings-battery-empty">{errorMessage ?? "Loading battery diagnostics..."}</div>
+                        <div class="settings-battery-empty">
+                            {errorMessage ?? <T>Loading battery diagnostics...</T>}
+                        </div>
                     )}
                 </div>
             </div>
 
             {showNewBatteryConfirm && (
                 <ConfirmDialog
-                    message="This resets the battery fuel gauge and calibration data. Only use this after physically replacing the battery. The charge percentage may be inaccurate for a few cycles until the system relearns the battery capacity."
-                    confirmLabel="New Battery"
-                    confirmText="NEW BATTERY"
+                    message={t(
+                        "This resets the battery fuel gauge and calibration data. Only use this after physically replacing the battery. The charge percentage may be inaccurate for a few cycles until the system relearns the battery capacity.",
+                    )}
+                    confirmLabel={t("New Battery")}
+                    confirmText={t("NEW BATTERY")}
                     destructive
                     disabled={settingNewBattery}
                     onConfirm={handleNewBattery}

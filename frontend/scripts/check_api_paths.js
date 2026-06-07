@@ -26,10 +26,8 @@ function extractFirmwarePaths() {
     const src = fs.readFileSync(cppPath, "utf8");
     const re = /(?:registerGetRoute|registerPostRoute|loggedRoute|loggedBodyRoute|server\.on)\s*\(\s*"(\/api\/[^"]+)"/g;
     const paths = new Set();
-    let m;
-    // biome-ignore lint/suspicious/noAssignInExpressions: classic regex loop
-    while ((m = re.exec(src))) {
-        if (!IGNORED_PATHS.has(m[1])) paths.add(m[1]);
+    for (const match of src.matchAll(re)) {
+        if (!IGNORED_PATHS.has(match[1])) paths.add(match[1]);
     }
     return paths;
 }

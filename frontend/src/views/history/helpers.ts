@@ -5,7 +5,6 @@ import houseSvg from "../../assets/icons/house.svg?raw";
 import manualSvg from "../../assets/icons/manual.svg?raw";
 import spotSvg from "../../assets/icons/spot.svg?raw";
 import type { MapBounds, MapData, MapPathPoint, MapTransform } from "../../types";
-import { pad2 } from "../../utils";
 
 const DEFAULT_TRANSFORM: MapTransform = { panX: 0, panY: 0, zoom: 1 };
 const MAP_PAD = 20;
@@ -64,31 +63,6 @@ export function drawMapGrid(ctx: CanvasRenderingContext2D, proj: MapProjection, 
 
 export function isDarkSurface(canvas: HTMLCanvasElement): boolean {
     return getComputedStyle(canvas).getPropertyValue("--surface").trim().startsWith("#1");
-}
-
-export function formatDuration(secs: number): string {
-    if (secs < 60) return `${secs}s`;
-    const d = Math.floor(secs / 86400);
-    const h = Math.floor((secs % 86400) / 3600);
-    const m = Math.floor((secs % 3600) / 60);
-    const s = secs % 60;
-    if (d > 0) return `${d}d ${h}h ${m}m`;
-    if (h > 0) return s > 0 ? `${h}h ${m}m ${s}s` : `${h}h ${m}m`;
-    return s > 0 ? `${m}m ${s}s` : `${m}m`;
-}
-
-// Playback clock format — M:SS, or H:MM:SS past the hour mark.
-export function formatClock(secs: number): string {
-    const total = Math.max(0, Math.floor(secs));
-    const h = Math.floor(total / 3600);
-    const m = Math.floor((total % 3600) / 60);
-    const s = total % 60;
-    return h > 0 ? `${h}:${pad2(m)}:${pad2(s)}` : `${m}:${pad2(s)}`;
-}
-
-export function formatDate(epoch: number): string {
-    const d = new Date(epoch * 1000);
-    return `${pad2(d.getMonth() + 1)}/${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
 export function modeInfo(mode: string): { label: string; icon: string } {

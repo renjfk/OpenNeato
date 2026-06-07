@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "useTabs": false,
+  "tabWidth": 4,
+  "printWidth": 120,
+  "singleQuote": false,
+  "jsxSingleQuote": false,
+  "quoteProps": "as-needed",
+  "trailingComma": "all",
+  "semi": true,
+  "arrowParens": "always",
+  "bracketSameLine": false,
+  "bracketSpacing": true,
+  "sortPackageJson": true,
+  "ignorePatterns": ["src/types.generated.ts"],
+  "overrides": [
+    {
+      "files": ["*.json", "**/*.json"],
+      "options": {
+        "tabWidth": 2
+      }
+    }
+  ]
+}

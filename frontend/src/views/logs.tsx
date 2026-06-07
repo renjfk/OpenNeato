@@ -3,10 +3,12 @@ import backSvg from "../assets/icons/back.svg?raw";
 import { ErrorBannerStack, useErrorStack } from "../components/error-banner";
 import { Icon } from "../components/icon";
 import { useNavigate, usePath } from "../components/router";
+import { useI18n } from "../i18n";
 import { LogsItemView } from "./logs/item";
 import { LogsListView } from "./logs/list";
 
 export function LogsView() {
+    const { t } = useI18n();
     const navigate = useNavigate();
     const path = usePath();
     const [errors, errorStack] = useErrorStack();
@@ -34,10 +36,10 @@ export function LogsView() {
     return (
         <>
             <div class="header">
-                <button type="button" class="header-back-btn" onClick={handleBack} aria-label="Back">
+                <button type="button" class="header-back-btn" onClick={handleBack} aria-label={t("Back")}>
                     <Icon svg={backSvg} />
                 </button>
-                <h1>{isDetail && selectedFile ? selectedFile : "Logs"}</h1>
+                <h1>{isDetail && selectedFile ? selectedFile : t("Logs")}</h1>
                 <div class="header-right-spacer" />
             </div>
 

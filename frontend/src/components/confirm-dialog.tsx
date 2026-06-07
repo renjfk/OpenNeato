@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import { useI18n } from "../i18n";
 
 interface ConfirmDialogProps {
     message: string;
@@ -34,25 +35,24 @@ export function ConfirmDialog({
     onConfirm,
     onCancel,
 }: ConfirmDialogProps) {
+    const { t } = useI18n();
     const [typed, setTyped] = useState("");
     const [value, setValue] = useState("");
-    const textMatch = !confirmText || typed === confirmText;
+    const localizedConfirmText = confirmText ? t(confirmText) : undefined;
+    const textMatch = !localizedConfirmText || typed === localizedConfirmText;
     const valueOk = !inputType || !inputRequired || value.length > 0;
 
     return (
-        // biome-ignore lint/a11y/useKeyWithClickEvents: overlay dismiss is supplementary to Cancel button
         <div class="confirm-overlay" role="dialog" aria-modal="true" onClick={disabled ? undefined : onCancel}>
-            {/* biome-ignore lint/a11y/useKeyWithClickEvents: stopPropagation only, not interactive */}
-            {/* biome-ignore lint/a11y/noStaticElementInteractions: dialog container */}
             <div
                 class={`confirm-dialog ${destructive ? "destructive" : "primary"}`}
                 onClick={(e) => e.stopPropagation()}
             >
-                <div class="confirm-message">{message}</div>
+                <div class="confirm-message">{t(message)}</div>
                 {confirmText && (
                     <div class="confirm-text-input-wrap">
                         <label class="confirm-text-label" htmlFor="confirm-text">
-                            Type <strong>{confirmText}</strong> to confirm
+                            {t("Type {confirmText} to confirm", { confirmText: localizedConfirmText ?? "" })}
                         </label>
                         <input
                             id="confirm-text"
@@ -70,7 +70,7 @@ export function ConfirmDialog({
                     <div class="confirm-text-input-wrap">
                         {inputLabel && (
                             <label class="confirm-text-label" htmlFor="confirm-input-value">
-                                {inputLabel}
+                                {t(inputLabel)}
                             </label>
                         )}
                         <input
@@ -79,7 +79,7 @@ export function ConfirmDialog({
                             class="confirm-text-input"
                             value={value}
                             onInput={(e) => setValue((e.target as HTMLInputElement).value)}
-                            placeholder={inputPlaceholder}
+                            placeholder={inputPlaceholder ? t(inputPlaceholder) : undefined}
                             autocomplete={inputType === "password" ? "current-password" : "off"}
                             spellcheck={false}
                             disabled={disabled}
@@ -88,7 +88,7 @@ export function ConfirmDialog({
                 )}
                 <div class="confirm-actions">
                     <button type="button" class="confirm-btn cancel" onClick={onCancel} disabled={disabled}>
-                        Cancel
+                        {t("Cancel")}
                     </button>
                     <button
                         type="button"
@@ -96,7 +96,7 @@ export function ConfirmDialog({
                         onClick={() => onConfirm(inputType ? value : undefined)}
                         disabled={disabled || !textMatch || !valueOk}
                     >
-                        {confirmLabel}
+                        {t(confirmLabel)}
                     </button>
                 </div>
             </div>

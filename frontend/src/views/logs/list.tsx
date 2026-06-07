@@ -6,15 +6,16 @@ import trashSvg from "../../assets/icons/trash.svg?raw";
 import { ConfirmDialog } from "../../components/confirm-dialog";
 import { Icon } from "../../components/icon";
 import { useNavigate } from "../../components/router";
+import { T, useI18n } from "../../i18n";
 import type { LogFileInfo } from "../../types";
 import { normalizeError } from "../../utils";
-import { filenameToDate, formatBytes } from "./helpers";
 
 interface LogsListViewProps {
     onError: (msg: string) => void;
 }
 
 export function LogsListView({ onError }: LogsListViewProps) {
+    const { t, formatDateTime, formatBytes } = useI18n();
     const navigate = useNavigate();
     const [files, setFiles] = useState<LogFileInfo[]>([]);
     const [loading, setLoading] = useState(true);
@@ -72,6 +73,11 @@ export function LogsListView({ onError }: LogsListViewProps) {
     }, [confirmTarget, onError]);
 
     const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+    const formatFilenameDate = (name: string) => {
+        if (name === "current.jsonl") return t("Active");
+        const match = name.match(/^(\d+)\./);
+        return match ? formatDateTime(Number.parseInt(match[1], 10)) : name;
+    };
 
     return (
         <>
@@ -79,7 +85,7 @@ export function LogsListView({ onError }: LogsListViewProps) {
             {!loading && files.length > 0 && (
                 <div class="logs-summary">
                     <span>
-                        {files.length} file{files.length !== 1 ? "s" : ""} &middot; {formatBytes(totalSize)}
+                        {files.length} {t(files.length !== 1 ? "files" : "file")} &middot; {formatBytes(totalSize)}
                     </span>
                     <button
                         type="button"
@@ -87,18 +93,22 @@ export function LogsListView({ onError }: LogsListViewProps) {
                         onClick={() => setConfirmTarget("__all__")}
                         disabled={deletingAll}
                     >
-                        Delete All
+                        <T>Delete All</T>
                     </button>
                 </div>
             )}
 
             {/* File list */}
-            {loading && <div class="logs-empty">Loading...</div>}
+            {loading && (
+                <div class="logs-empty">
+                    <T>Loading...</T>
+                </div>
+            )}
 
             {!loading && files.length === 0 && (
                 <div class="logs-empty">
                     <Icon svg={databaseSvg} />
-                    No log files
+                    <T>No log files</T>
                 </div>
             )}
 
@@ -109,15 +119,16 @@ export function LogsListView({ onError }: LogsListViewProps) {
                             <button type="button" class="logs-file-info" onClick={() => navigate(`/logs/${f.name}`)}>
                                 <div class="logs-file-name">{f.name}</div>
                                 <div class="logs-file-meta">
-                                    {filenameToDate(f.name)} &middot; {formatBytes(f.size)}
-                                    {f.compressed && <> &middot; compressed</>}
+                                    {formatFilenameDate(f.name)} &middot; {formatBytes(f.size)}
+                                    {f.compressed ? " · " : ""}
+                                    {f.compressed && <T>compressed</T>}
                                 </div>
                             </button>
                             <a
                                 class="logs-file-download"
                                 href={`/api/logs/${f.name}`}
                                 download={f.name.replace(/\.hs$/, "")}
-                                aria-label={`Download ${f.name}`}
+                                aria-label={`${t("Download")} ${f.name}`}
                             >
                                 <Icon svg={downloadSvg} />
                             </a>
@@ -126,7 +137,7 @@ export function LogsListView({ onError }: LogsListViewProps) {
                                 class={`logs-file-delete${deleting === f.name ? " pending" : ""}`}
                                 onClick={() => setConfirmTarget(f.name)}
                                 disabled={deleting === f.name}
-                                aria-label={`Delete ${f.name}`}
+                                aria-label={`${t("Delete")} ${f.name}`}
                             >
                                 <Icon svg={trashSvg} />
                             </button>
@@ -137,7 +148,11 @@ export function LogsListView({ onError }: LogsListViewProps) {
 
             {confirmTarget && (
                 <ConfirmDialog
-                    message={confirmTarget === "__all__" ? "Delete all log files?" : `Delete ${confirmTarget}?`}
+                    message={
+                        confirmTarget === "__all__"
+                            ? "Delete all log files?"
+                            : t("Delete {name}?", { name: confirmTarget })
+                    }
                     onConfirm={confirmDelete}
                     onCancel={() => setConfirmTarget(null)}
                 />

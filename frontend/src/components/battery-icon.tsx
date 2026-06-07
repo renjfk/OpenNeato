@@ -1,10 +1,13 @@
 // Battery icon matching SVGRepo style with dynamic charge fill
 
+import { useI18n } from "../i18n";
+
 interface BatteryIconProps {
     pct: number;
 }
 
 export function BatteryIcon({ pct }: BatteryIconProps) {
+    const { t } = useI18n();
     // Fill width inside the battery (8 to 56 = 48 units range, includes nub at 100%)
     const fillWidth = Math.round((pct / 100) * 48);
     const fillRight = 8 + fillWidth;
@@ -19,7 +22,7 @@ export function BatteryIcon({ pct }: BatteryIconProps) {
             height="28"
             xmlns="http://www.w3.org/2000/svg"
             role="img"
-            aria-label="Battery"
+            aria-label={t("Battery")}
         >
             <defs>
                 {/* Clip to battery interior: main body + nub */}

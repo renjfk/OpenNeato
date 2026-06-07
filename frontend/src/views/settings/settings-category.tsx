@@ -1,6 +1,7 @@
 import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import { Icon } from "../../components/icon";
+import { useI18n } from "../../i18n";
 
 interface SettingsCategoryProps {
     title: string;
@@ -22,6 +23,7 @@ export function SettingsCategory({
     lazy = false,
     children,
 }: SettingsCategoryProps) {
+    const { t } = useI18n();
     const [open, setOpen] = useState(defaultOpen);
     const [hasOpened, setHasOpened] = useState(defaultOpen);
     const showChildren = lazy ? hasOpened : true;
@@ -39,7 +41,7 @@ export function SettingsCategory({
             >
                 <div class="settings-category-title">
                     <Icon svg={icon} />
-                    {title}
+                    {t(title)}
                 </div>
                 {!disabled && <span class="settings-category-chevron">&rsaquo;</span>}
             </button>

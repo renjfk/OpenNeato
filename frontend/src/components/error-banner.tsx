@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "preact/hooks";
 import alertSvg from "../assets/icons/alert.svg?raw";
 import warningSvg from "../assets/icons/warning.svg?raw";
+import { useI18n } from "../i18n";
 import { Icon } from "./icon";
 
 // -- Single banner --
@@ -13,6 +14,7 @@ interface ErrorBannerProps {
 }
 
 export function ErrorBanner({ title = "Alert", message, variant = "error", onDismiss }: ErrorBannerProps) {
+    const { t } = useI18n();
     const cls = variant === "warning" ? "error-banner warning" : "error-banner";
     return (
         <div class={cls}>
@@ -21,11 +23,11 @@ export function ErrorBanner({ title = "Alert", message, variant = "error", onDis
                     <Icon svg={variant === "warning" ? warningSvg : alertSvg} />
                 </div>
                 <div class="error-banner-content">
-                    <div class="error-banner-title">{title}</div>
-                    <div class="error-banner-msg">{message}</div>
+                    <div class="error-banner-title">{t(title)}</div>
+                    <div class="error-banner-msg">{t(message)}</div>
                 </div>
                 {onDismiss && (
-                    <button type="button" class="error-banner-dismiss" onClick={onDismiss} aria-label="Dismiss">
+                    <button type="button" class="error-banner-dismiss" onClick={onDismiss} aria-label={t("Dismiss")}>
                         &times;
                     </button>
                 )}
@@ -82,13 +84,14 @@ interface ErrorBannerStackProps {
 }
 
 export function ErrorBannerStack({ errors }: ErrorBannerStackProps) {
+    const { t } = useI18n();
     if (errors.length === 0) return null;
     return (
         <div class="error-banner-stack">
             {errors.map((e) => (
                 <ErrorBanner
                     key={e.id}
-                    title="Error"
+                    title={t("Error")}
                     message={e.message}
                     onDismiss={(e as DismissableError)._dismiss}
                 />

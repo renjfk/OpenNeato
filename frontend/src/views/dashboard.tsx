@@ -26,6 +26,7 @@ import { Icon } from "../components/icon";
 import { useNavigate } from "../components/router";
 import type { PollResult } from "../hooks/use-polling";
 import { usePolling } from "../hooks/use-polling";
+import { T, useI18n } from "../i18n";
 import type { ChargerData, ErrorData, FirmwareVersion, StateData, SystemData } from "../types";
 import type { UpdateInfo } from "../update";
 import { normalizeError } from "../utils";
@@ -104,6 +105,7 @@ interface DashboardViewProps {
 }
 
 export function DashboardView({ firmware, state, isManual, updateInfo, robotReady, identifying }: DashboardViewProps) {
+    const { t, formatSystemTime } = useI18n();
     const navigate = useNavigate();
     const charger = usePolling<ChargerData>(api.getCharger, 5000);
     const error = usePolling<ErrorData>(api.getError, 2000);
@@ -200,7 +202,7 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
                     <button
                         type="button"
                         class="header-right-btn"
-                        aria-label="Cleaning History"
+                        aria-label={t("Cleaning History")}
                         onClick={() => navigate("/history")}
                         disabled={!robotReady}
                     >
@@ -209,7 +211,7 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
                     <button
                         type="button"
                         class="header-right-btn"
-                        aria-label="Settings"
+                        aria-label={t("Settings")}
                         onClick={() => navigate("/settings")}
                     >
                         <Icon svg={gearSvg} />
@@ -221,21 +223,27 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
             {system.data && !offline && (
                 <div class="status-bar">
                     <div class="status-bar-item">
-                        <div class="status-bar-label">WiFi</div>
+                        <div class="status-bar-label">
+                            <T>WiFi</T>
+                        </div>
                         <div class="status-bar-value">
                             <Icon svg={wifiSvg} />
                             {wifiStrength(system.data.rssi)}
                         </div>
                     </div>
                     <div class="status-bar-item">
-                        <div class="status-bar-label">Time</div>
+                        <div class="status-bar-label">
+                            <T>Time</T>
+                        </div>
                         <div class="status-bar-value">
                             <Icon svg={clockSvg} />
-                            {system.data.localTime}
+                            {formatSystemTime(system.data.localTime)}
                         </div>
                     </div>
                     <div class="status-bar-item">
-                        <div class="status-bar-label">Storage</div>
+                        <div class="status-bar-label">
+                            <T>Storage</T>
+                        </div>
                         <div class="status-bar-value">
                             <Icon svg={databaseSvg} />
                             {Math.round((system.data.fsUsed / system.data.fsTotal) * 100)}%
@@ -243,7 +251,9 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
                     </div>
                     {firmware.data && (
                         <div class="status-bar-item">
-                            <div class="status-bar-label">Firmware</div>
+                            <div class="status-bar-label">
+                                <T>Firmware</T>
+                            </div>
                             <div class="status-bar-value">
                                 <Icon svg={tagSvg} />
                                 {firmware.data.version}
@@ -257,15 +267,15 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
             {updateInfo && (
                 <a class="update-banner" href={updateInfo.url} target="_blank" rel="noopener noreferrer">
                     <Icon svg={tagSvg} />
-                    Update available: v{updateInfo.version} — tap to view release
+                    {t("Update available: v{version} - tap to view release", { version: updateInfo.version })}
                 </a>
             )}
 
             {/* Robot error/warning — fixed, clears automatically when robot resolves it */}
             {robotError && (
-                <ErrorBanner title={robotError.title} message={robotError.message} variant={robotError.kind} />
+                <ErrorBanner title={t(robotError.title)} message={robotError.message} variant={robotError.kind} />
             )}
-            {!error.data && error.error && !connErr && <ErrorBanner title="Warning" message={error.error} />}
+            {!error.data && error.error && !connErr && <ErrorBanner title={t("Warning")} message={error.error} />}
 
             {/* Action errors — dismissible, stackable */}
             <ErrorBannerStack errors={actionErrors} />
@@ -277,15 +287,19 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
                         <Icon svg={robotSvg} />
                     </div>
                     {identifying ? (
-                        <p class="gate-message">Connecting to robot...</p>
+                        <p class="gate-message">
+                            <T>Connecting to robot...</T>
+                        </p>
                     ) : (
                         <div class="gate-message">
                             <Icon svg={alertSvg} />
-                            <h2>Unsupported Robot</h2>
+                            <h2>
+                                <T>Unsupported Robot</T>
+                            </h2>
                             <p>
-                                OpenNeato requires a Neato Botvac D3, D4, D5, D6, or D7.
+                                <T>OpenNeato requires a Neato Botvac D3, D4, D5, D6, or D7.</T>
                                 <br />
-                                The connected robot could not be identified.
+                                <T>The connected robot could not be identified.</T>
                             </p>
                         </div>
                     )}
@@ -293,7 +307,7 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
             ) : offline ? (
                 <div class="conn-error">
                     <Icon svg={wifiOffSvg} />
-                    Unable to reach robot
+                    <T>Unable to reach robot</T>
                 </div>
             ) : (
                 <div class="hero-area">
@@ -304,8 +318,10 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
                     <div class="info-cards">
                         <div class="info-card">
                             <div class="info-card-left">
-                                <div class="info-card-label">Status</div>
-                                <div class={`info-card-value ${si.color}`}>{si.label}</div>
+                                <div class="info-card-label">
+                                    <T>Status</T>
+                                </div>
+                                <div class={`info-card-value ${si.color}`}>{t(si.label)}</div>
                             </div>
                             <div class={`info-card-icon ${si.color}`}>
                                 <Icon svg={STATUS_ICONS[si.icon]} />
@@ -314,7 +330,9 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
 
                         <div class="info-card">
                             <div class="info-card-left">
-                                <div class="info-card-label">Battery</div>
+                                <div class="info-card-label">
+                                    <T>Battery</T>
+                                </div>
                                 <div class={`info-card-value ${bc}`}>
                                     {charger.data ? `${pct}%` : charger.error ? "Error" : "..."}
                                 </div>
@@ -326,8 +344,10 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
 
                         <div class="info-card">
                             <div class="info-card-left">
-                                <div class="info-card-label">Mode</div>
-                                <div class={`info-card-value ${mi.color}`}>{mi.label}</div>
+                                <div class="info-card-label">
+                                    <T>Mode</T>
+                                </div>
+                                <div class={`info-card-value ${mi.color}`}>{t(mi.label)}</div>
                             </div>
                             <div class={`info-card-icon ${mi.color}`}>
                                 <Icon svg={MODE_ICONS[mi.icon]} />
@@ -350,7 +370,7 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
                                 disabled={!robotReady || offline || pending}
                             >
                                 <Icon svg={isPaused ? playSvg : pauseSvg} />
-                                {isPaused ? "Resume" : "Pause"}
+                                {t(isPaused ? "Resume" : "Pause")}
                             </button>
                             <button
                                 type="button"
@@ -359,7 +379,7 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
                                 disabled={!robotReady || offline || pending}
                             >
                                 <Icon svg={dockSvg} />
-                                Dock
+                                <T>Dock</T>
                             </button>
                             <button
                                 type="button"
@@ -368,7 +388,7 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
                                 disabled={!robotReady || offline || pending}
                             >
                                 <Icon svg={stopSvg} />
-                                Stop
+                                <T>Stop</T>
                             </button>
                         </>
                     ) : (
@@ -381,7 +401,7 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
                                 disabled={!robotReady || offline || isDocking || isManual || pending || hasRobotError}
                             >
                                 <Icon svg={houseSvg} />
-                                House
+                                <T>House</T>
                             </button>
                             <button
                                 type="button"
@@ -390,7 +410,7 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
                                 disabled={!robotReady || offline || isDocking || isManual || pending || hasRobotError}
                             >
                                 <Icon svg={spotSvg} />
-                                Spot
+                                <T>Spot</T>
                             </button>
                             <button
                                 type="button"
@@ -413,7 +433,7 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
                                 }
                             >
                                 <Icon svg={isDocking ? stopSvg : manualSvg} />
-                                {isDocking ? "Stop" : "Manual"}
+                                {t(isDocking ? "Stop" : "Manual")}
                             </button>
                         </>
                     )}

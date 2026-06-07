@@ -86,7 +86,7 @@ Verify GitHub Actions workflow changes: install `actionlint` if missing, then ru
 cd frontend
 npm run dev          # Vite dev server with mock API
 npm run build        # Lint + duplicate check + type check + build + embed into firmware header
-npm run check        # Biome lint/format check
+npm run check        # Oxfmt/Oxlint and i18n checks
 npm run dupes        # Duplicate code check via jscpd
 npm run fix          # Auto-fix safe issues
 ```
@@ -120,7 +120,7 @@ CSS frameworks, routing, or HTTP wrapper libraries.
 
 ### Frontend
 
-- 4-space indent, double quotes, semicolons, 120-col (Biome)
+- 4-space indent, double quotes, semicolons, 120-col (Oxfmt)
 - Named `interface`/`type` only, never inline object type literals
 - Reuse existing CSS utilities and component classes before adding new ones.
   When two rules share a body, consolidate via a shared selector list, a

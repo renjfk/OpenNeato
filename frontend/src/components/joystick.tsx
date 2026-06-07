@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { useI18n } from "../i18n";
 
 export interface JoystickValue {
     x: number; // -1 (left) to 1 (right)
@@ -16,6 +17,7 @@ const KNOB_RATIO = 0.3; // knob radius as fraction of base radius
 const DEAD_ZONE = 0.08;
 
 export function Joystick({ size, onMove, onRelease }: JoystickProps) {
+    const { t } = useI18n();
     const baseRef = useRef<HTMLDivElement>(null);
     const [knobPos, setKnobPos] = useState({ x: 0, y: 0 });
     const activeTouch = useRef<number | null>(null);
@@ -140,7 +142,7 @@ export function Joystick({ size, onMove, onRelease }: JoystickProps) {
         <div
             ref={baseRef}
             role="slider"
-            aria-label="Joystick"
+            aria-label={t("Joystick")}
             aria-valuemin={-1}
             aria-valuemax={1}
             aria-valuenow={0}

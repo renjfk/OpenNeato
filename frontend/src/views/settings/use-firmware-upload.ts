@@ -107,7 +107,7 @@ export function useFirmwareUpload(
     useEffect(() => stopProgressAnim, [stopProgressAnim]);
 
     const onUploadProgress = useCallback((pct: number) => {
-        // Cap at 90% during upload — the last 10% represents server-side flash
+        // Cap at 90% during upload - the last 10% represents server-side flash
         // write + verification. Jumps to 100% only when the server responds OK.
         realProgress.current = Math.min(90, pct);
     }, []);
@@ -148,7 +148,7 @@ export function useFirmwareUpload(
     );
 
     // Compute SHA-256 of firmware file and check against loaded checksums.
-    // Uses pure-JS sha256 — crypto.subtle is unavailable over plain HTTP (non-secure context).
+    // Uses pure-JS sha256 - crypto.subtle is unavailable over plain HTTP (non-secure context).
     // Looks up by canonical release filename derived from the chip ID in the binary header,
     // so renamed files (e.g. "firmware(1).bin") still match.
     const verifyFirmwareFile = useCallback(async (fw: File, checksums: Map<string, string>) => {
@@ -171,7 +171,7 @@ export function useFirmwareUpload(
             const text = await f.text();
             const parsed = parseChecksums(text);
             if (parsed.size === 0) {
-                errorStack.push("Could not parse checksums file — expected GoReleaser checksums.txt format");
+                errorStack.push("Could not parse checksums file - expected GoReleaser checksums.txt format");
                 return;
             }
 

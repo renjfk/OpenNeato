@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "preact/hooks";
 import { api } from "../../api";
 import databaseSvg from "../../assets/icons/database.svg?raw";
 import { Icon } from "../../components/icon";
+import { T, useI18n } from "../../i18n";
 import { normalizeError } from "../../utils";
 import type { LogEntry } from "./helpers";
-import { DETAIL_KEY, formatTimestamp, parseLogLine, typeBadge } from "./helpers";
+import { DETAIL_KEY, parseLogLine, typeBadge } from "./helpers";
 
 interface LogsItemViewProps {
     filename: string;
@@ -12,6 +13,7 @@ interface LogsItemViewProps {
 }
 
 export function LogsItemView({ filename, onError }: LogsItemViewProps) {
+    const { formatTime } = useI18n();
     const [logLines, setLogLines] = useState<LogEntry[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -104,12 +106,16 @@ export function LogsItemView({ filename, onError }: LogsItemViewProps) {
 
     return (
         <>
-            {loading && <div class="logs-empty">Loading...</div>}
+            {loading && (
+                <div class="logs-empty">
+                    <T>Loading...</T>
+                </div>
+            )}
 
             {!loading && logLines.length === 0 && (
                 <div class="logs-empty">
                     <Icon svg={databaseSvg} />
-                    Empty log
+                    <T>Empty log</T>
                 </div>
             )}
 
@@ -123,7 +129,7 @@ export function LogsItemView({ filename, onError }: LogsItemViewProps) {
                             setActiveDetails(new Set());
                         }}
                     >
-                        All
+                        <T>All</T>
                     </button>
                     {availableTypes.map((t) => {
                         const badge = typeBadge(t);
@@ -148,7 +154,7 @@ export function LogsItemView({ filename, onError }: LogsItemViewProps) {
                         class={`logs-filter-chip logs-drilldown-chip${activeDetails.size === 0 ? " active" : ""}`}
                         onClick={() => setActiveDetails(new Set())}
                     >
-                        All ({drillDownValues.reduce((s, d) => s + d.count, 0)})
+                        <T>All</T> ({drillDownValues.reduce((s, d) => s + d.count, 0)})
                     </button>
                     {drillDownValues.map((d) => (
                         <button
@@ -172,12 +178,14 @@ export function LogsItemView({ filename, onError }: LogsItemViewProps) {
                             <div class="logs-entry" key={i}>
                                 <div class="logs-entry-header">
                                     <span class={`logs-entry-badge ${badge.color}`}>{badge.label}</span>
-                                    <span class="logs-entry-time">{formatTimestamp(line.ts)}</span>
+                                    <span class="logs-entry-time">{formatTime(line.ts)}</span>
                                 </div>
                                 <div class="logs-entry-body">{line.summary}</div>
                                 {line.resp && (
                                     <details class="logs-entry-details">
-                                        <summary>response</summary>
+                                        <summary>
+                                            <T>response</T>
+                                        </summary>
                                         <pre class="logs-entry-resp">{line.resp}</pre>
                                     </details>
                                 )}
@@ -188,7 +196,9 @@ export function LogsItemView({ filename, onError }: LogsItemViewProps) {
             )}
 
             {!loading && filteredLines.length === 0 && logLines.length > 0 && (
-                <div class="logs-empty">No matching entries</div>
+                <div class="logs-empty">
+                    <T>No matching entries</T>
+                </div>
             )}
         </>
     );

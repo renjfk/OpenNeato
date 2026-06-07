@@ -9,6 +9,7 @@ import { ConfirmDialog } from "../../components/confirm-dialog";
 import type { ErrorStackHandle } from "../../components/error-banner";
 import { Icon } from "../../components/icon";
 import { usePolling } from "../../hooks/use-polling";
+import { T, useI18n } from "../../i18n";
 import type { WiFiNetwork, WiFiStatus } from "../../types";
 import { normalizeError } from "../../utils";
 
@@ -28,6 +29,7 @@ function rssiBars(rssi: number): number {
 }
 
 export function WiFiSection({ apFallbackOnDisconnect, onApFallbackChange, saving, errorStack }: WiFiSectionProps) {
+    const { t } = useI18n();
     const statusPoll = usePolling<WiFiStatus>(api.getWifiStatus, 5000);
     const status = statusPoll.data;
 
@@ -116,17 +118,19 @@ export function WiFiSection({ apFallbackOnDisconnect, onApFallbackChange, saving
     return (
         <>
             <div class="settings-section">
-                <div class="settings-section-title">Status</div>
+                <div class="settings-section-title">
+                    <T>Status</T>
+                </div>
                 <div class="fw-info-row">
                     <div class="fw-info-item">
                         <Icon svg={status?.staConnected ? wifiSvg : wifiOffSvg} />
                         <span>
                             {status
                                 ? status.staConnected
-                                    ? `${status.ssid || "Connected"}`
+                                    ? `${status.ssid || t("Connected")}`
                                     : status.ssid
-                                      ? `Disconnected (${status.ssid})`
-                                      : "Not configured"
+                                      ? `${t("Disconnected")} (${status.ssid})`
+                                      : t("Not configured")
                                 : "..."}
                         </span>
                     </div>
@@ -148,7 +152,7 @@ export function WiFiSection({ apFallbackOnDisconnect, onApFallbackChange, saving
                         <div class="fw-info-item">
                             <Icon svg={wifiSvg} />
                             <span>
-                                AP: {status.apSsid} @ {status.apIp}
+                                <T>AP</T>: {status.apSsid} @ {status.apIp}
                                 {status.apClients > 0 && ` (${status.apClients})`}
                             </span>
                         </div>
@@ -162,10 +166,15 @@ export function WiFiSection({ apFallbackOnDisconnect, onApFallbackChange, saving
             <div class="settings-section">
                 <div class="settings-toggle-row">
                     <div class="settings-toggle-label">
-                        <span class="settings-toggle-title">Fallback AP on disconnect</span>
+                        <span class="settings-toggle-title">
+                            <T>Fallback AP on disconnect</T>
+                        </span>
                         <span class="settings-toggle-desc">
-                            Expose <code>{`<hostname>-ap`}</code> when the saved network is unreachable so you can
-                            recover from a browser. Always on when no credentials are saved.
+                            <T>
+                                Expose fallback access point when the saved network is unreachable so you can recover
+                                from a browser.
+                            </T>{" "}
+                            <T>Always on when no credentials are saved.</T> <code>{`<hostname>-ap`}</code>
                         </span>
                     </div>
                     <button
@@ -173,13 +182,15 @@ export function WiFiSection({ apFallbackOnDisconnect, onApFallbackChange, saving
                         class={`settings-toggle${apFallbackOnDisconnect ? " on" : ""}`}
                         onClick={() => onApFallbackChange(!apFallbackOnDisconnect)}
                         disabled={saving}
-                        aria-label="Toggle fallback AP"
+                        aria-label={t("Toggle fallback AP")}
                     />
                 </div>
             </div>
 
             <div class="settings-section">
-                <div class="settings-section-title">Connect to a network</div>
+                <div class="settings-section-title">
+                    <T>Connect to a network</T>
+                </div>
                 <div class="settings-wifi-pick-row">
                     <div class="settings-tz-select-wrap settings-wifi-select">
                         <select
@@ -194,16 +205,16 @@ export function WiFiSection({ apFallbackOnDisconnect, onApFallbackChange, saving
                         >
                             <option value="">
                                 {scanning
-                                    ? "Scanning..."
+                                    ? t("Scanning...")
                                     : networks
                                       ? networks.length === 0
-                                          ? "No networks found"
-                                          : "Choose a network"
-                                      : "Scan to choose a network"}
+                                          ? t("No networks found")
+                                          : t("Choose a network")
+                                      : t("Scan to choose a network")}
                             </option>
                             {networks?.map((n) => (
                                 <option key={n.ssid} value={n.ssid}>
-                                    {n.ssid} ({n.rssi} dBm{n.open ? ", open" : ""})
+                                    {n.ssid} ({n.rssi} dBm{n.open ? `, ${t("open")}` : ""})
                                 </option>
                             ))}
                         </select>
@@ -213,9 +224,9 @@ export function WiFiSection({ apFallbackOnDisconnect, onApFallbackChange, saving
                         class={`settings-wifi-scan-btn${scanning ? " pending" : ""}`}
                         onClick={handleScan}
                         disabled={busy}
-                        aria-label="Scan for networks"
+                        aria-label={t("Scan for networks")}
                     >
-                        Scan
+                        <T>Scan</T>
                     </button>
                 </div>
             </div>
@@ -230,7 +241,7 @@ export function WiFiSection({ apFallbackOnDisconnect, onApFallbackChange, saving
                     >
                         <div class="settings-nav-row-left">
                             <Icon svg={alertSvg} />
-                            {disconnecting ? "Forgetting..." : "Forget current network"}
+                            {t(disconnecting ? "Forgetting..." : "Forget current network")}
                         </div>
                     </button>
                 </div>
@@ -240,13 +251,13 @@ export function WiFiSection({ apFallbackOnDisconnect, onApFallbackChange, saving
                 <ConfirmDialog
                     message={
                         pendingNetwork.open
-                            ? `Connect to ${pendingNetwork.ssid}? It is an open network.`
-                            : `Enter the password for ${pendingNetwork.ssid}.`
+                            ? t("Connect to {ssid}? It is an open network.", { ssid: pendingNetwork.ssid })
+                            : t("Enter the password for {ssid}.", { ssid: pendingNetwork.ssid })
                     }
-                    confirmLabel="Connect"
+                    confirmLabel={t("Connect")}
                     destructive={false}
                     inputType={pendingNetwork.open ? undefined : "password"}
-                    inputPlaceholder="Network password"
+                    inputPlaceholder={t("Network password")}
                     inputRequired={!pendingNetwork.open}
                     onConfirm={handleConnectConfirm}
                     onCancel={resetConnectFlow}
@@ -257,9 +268,12 @@ export function WiFiSection({ apFallbackOnDisconnect, onApFallbackChange, saving
                 <div class="loading-overlay">
                     <div class="loading-dialog">
                         <div class="loading-spinner" />
-                        <div class="loading-text">Connecting to {pendingNetwork.ssid}...</div>
+                        <div class="loading-text">{t("Connecting to {ssid}...", { ssid: pendingNetwork.ssid })}</div>
                         <div class="loading-subtext">
-                            The device will reboot after joining the network. You may need to reconnect your browser.
+                            <T>
+                                The device will reboot after joining the network. You may need to reconnect your
+                                browser.
+                            </T>
                         </div>
                     </div>
                 </div>
@@ -267,8 +281,13 @@ export function WiFiSection({ apFallbackOnDisconnect, onApFallbackChange, saving
 
             {showForgetConfirm && (
                 <ConfirmDialog
-                    message={`Forget "${status?.ssid ?? "current network"}"? Saved credentials will be erased and the device will drop to the fallback AP.`}
-                    confirmLabel="Forget"
+                    message={t(
+                        'Forget "{ssid}"? Saved credentials will be erased and the device will drop to the fallback AP.',
+                        {
+                            ssid: status?.ssid ?? t("current network"),
+                        },
+                    )}
+                    confirmLabel={t("Forget")}
                     onConfirm={() => handleForget()}
                     onCancel={() => setShowForgetConfirm(false)}
                 />

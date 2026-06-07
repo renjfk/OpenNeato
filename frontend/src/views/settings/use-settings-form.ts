@@ -33,7 +33,7 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
     const [autoRestartTime, setAutoRestartTime] = useState("03:00");
     const [restartBeforeClean, setRestartBeforeClean] = useState(false);
 
-    // Server-confirmed state — used to compute dirty/needsReboot
+    // Server-confirmed state - used to compute dirty/needsReboot
     const server = useRef<SettingsData>({ ...DEFAULT_SERVER });
     const [settingsLoaded, setSettingsLoaded] = useState(false);
 

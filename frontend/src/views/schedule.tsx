@@ -8,6 +8,7 @@ import { Icon } from "../components/icon";
 import { TimeInput } from "../components/time-input";
 import { useDirtyGuard } from "../hooks/use-dirty-guard";
 import { useFetch } from "../hooks/use-fetch";
+import { T, useI18n } from "../i18n";
 import type { SettingsData, SystemData } from "../types";
 import { fmtTime, normalizeError, parseTime } from "../utils";
 import { findCurrentTzAbbrev, findPresetLabel } from "./settings/helpers";
@@ -109,6 +110,7 @@ function applyDrafts(days: DayState[], drafts: string[][]): DayState[] {
 }
 
 export function ScheduleView() {
+    const { t, formatSystemTime } = useI18n();
     const [errors, errorStack] = useErrorStack();
     const [saving, setSaving] = useState(false);
 
@@ -193,7 +195,7 @@ export function ScheduleView() {
         const invalid = validateDrafts(finalDays, drafts);
         if (invalid.size > 0) {
             setInvalidSlots(invalid);
-            errorStack.push("Fix invalid times before saving (use HH:MM format, 00:00-23:59)");
+            errorStack.push(t("Fix invalid times before saving (use HH:MM format, 00:00-23:59)"));
             return;
         }
 
@@ -219,7 +221,7 @@ export function ScheduleView() {
                 errorStack.push(normalizeError(e, "Failed to save schedule"));
             })
             .finally(() => setSaving(false));
-    }, [days, drafts, enabled, errorStack]);
+    }, [days, drafts, enabled, errorStack, t]);
 
     const onKeyDown = useCallback((e: JSX.TargetedKeyboardEvent<HTMLInputElement>) => {
         if (e.key === "Enter") {
@@ -234,11 +236,13 @@ export function ScheduleView() {
                     type="button"
                     class="header-back-btn"
                     onClick={() => guardedNavigate("/settings")}
-                    aria-label="Back"
+                    aria-label={t("Back")}
                 >
                     <Icon svg={backSvg} />
                 </button>
-                <h1>Schedule</h1>
+                <h1>
+                    <T>Schedule</T>
+                </h1>
                 <div class="header-right-spacer" />
             </div>
 
@@ -246,27 +250,33 @@ export function ScheduleView() {
 
             <div class="schedule-page">
                 {loading ? (
-                    <div class="schedule-loading">Loading schedule...</div>
+                    <div class="schedule-loading">
+                        <T>Loading schedule...</T>
+                    </div>
                 ) : (
                     <>
                         {/* Master toggle */}
                         <div class="schedule-master">
                             <div class="settings-toggle-label">
-                                <span class="settings-toggle-title">Schedule enabled</span>
-                                <span class="settings-toggle-desc">Automatically clean on set days and times</span>
+                                <span class="settings-toggle-title">
+                                    <T>Schedule enabled</T>
+                                </span>
+                                <span class="settings-toggle-desc">
+                                    <T>Automatically clean on set days and times</T>
+                                </span>
                             </div>
                             <button
                                 type="button"
                                 class={`settings-toggle${enabled ? " on" : ""}`}
                                 onClick={() => setEnabled((v) => !v)}
-                                aria-label="Toggle schedule"
+                                aria-label={t("Toggle schedule")}
                             />
                         </div>
 
                         <div class="schedule-tz-hint">
                             {system?.localTime
-                                ? `${system.localTime} - ${tzLabel(tz, system.isDst)}`
-                                : `Times are in ${tzLabel(tz)}`}
+                                ? `${formatSystemTime(system.localTime)} - ${tzLabel(tz, system.isDst)}`
+                                : t("Times are in {timezone}", { timezone: tzLabel(tz) })}
                         </div>
 
                         {/* Day rows */}
@@ -281,9 +291,9 @@ export function ScheduleView() {
                                             type="button"
                                             class={`schedule-day-toggle${s0.on ? " on" : ""}`}
                                             onClick={() => updateSlot(i, 0, { on: !s0.on })}
-                                            aria-label={`Toggle ${DAY_NAMES[i]}`}
+                                            aria-label={t("Toggle {day}", { day: t(DAY_NAMES[i]) })}
                                         />
-                                        <span class={`sched-day-label${s0.on ? "" : " off"}`}>{DAY_NAMES[i]}</span>
+                                        <span class={`sched-day-label${s0.on ? "" : " off"}`}>{t(DAY_NAMES[i])}</span>
 
                                         <div class="sched-slots">
                                             {s0.on && (
@@ -291,7 +301,7 @@ export function ScheduleView() {
                                                     class={`sched-time-input${invalidSlots.has(`${i}-0`) ? " invalid" : ""}`}
                                                     value={drafts[i][0]}
                                                     maxLength={5}
-                                                    placeholder="HH:MM"
+                                                    placeholder={t("HH:MM")}
                                                     onInput={(v) => updateDraft(i, 0, v)}
                                                     onKeyDown={onKeyDown}
                                                 />
@@ -303,7 +313,7 @@ export function ScheduleView() {
                                                         class={`sched-time-input${invalidSlots.has(`${i}-1`) ? " invalid" : ""}`}
                                                         value={drafts[i][1]}
                                                         maxLength={5}
-                                                        placeholder="HH:MM"
+                                                        placeholder={t("HH:MM")}
                                                         onInput={(v) => updateDraft(i, 1, v)}
                                                         onKeyDown={onKeyDown}
                                                     />
@@ -311,7 +321,9 @@ export function ScheduleView() {
                                                         type="button"
                                                         class="sched-remove-btn"
                                                         onClick={() => updateSlot(i, 1, { on: false })}
-                                                        aria-label={`Remove ${DAY_NAMES[i]} second slot`}
+                                                        aria-label={t("Remove {day} second slot", {
+                                                            day: t(DAY_NAMES[i]),
+                                                        })}
                                                     >
                                                         x
                                                     </button>
@@ -322,7 +334,7 @@ export function ScheduleView() {
                                                     type="button"
                                                     class="sched-add-btn"
                                                     onClick={() => updateSlot(i, 1, { on: true, hour: 15, minute: 0 })}
-                                                    aria-label={`Add ${DAY_NAMES[i]} second slot`}
+                                                    aria-label={t("Add {day} second slot", { day: t(DAY_NAMES[i]) })}
                                                 >
                                                     +
                                                 </button>
@@ -340,7 +352,7 @@ export function ScheduleView() {
                             onClick={handleSave}
                             disabled={saving || !isDirty}
                         >
-                            {saving ? "Saving..." : "Save"}
+                            {t(saving ? "Saving..." : "Save")}
                         </button>
                     </>
                 )}
@@ -348,8 +360,8 @@ export function ScheduleView() {
 
             {showDiscardConfirm && (
                 <ConfirmDialog
-                    message="You have unsaved changes. Discard them?"
-                    confirmLabel="Discard"
+                    message={t("You have unsaved changes. Discard them?")}
+                    confirmLabel={t("Discard")}
                     onConfirm={handleDiscard}
                     onCancel={() => setShowDiscardConfirm(false)}
                 />

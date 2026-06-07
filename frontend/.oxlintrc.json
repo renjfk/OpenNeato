@@ -1,0 +1,34 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "oxc"],
+  "ignorePatterns": ["src/types.generated.ts"],
+  "env": {
+    "browser": true,
+    "node": true,
+    "es2020": true
+  },
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error"
+  },
+  "jsPlugins": [
+    {
+      "name": "openneato-i18n",
+      "specifier": "./scripts/oxlint_i18n_plugin.js"
+    }
+  ],
+  "rules": {
+    "no-dupe-keys": "off",
+    "no-shadow": "off",
+    "no-underscore-dangle": "off",
+    "oxc/no-async-endpoint-handlers": "off",
+    "openneato-i18n/locales-aligned": "error",
+    "openneato-i18n/use-i18n-boundary": [
+      "error",
+      {
+        "allowedText": ["OpenNeato", "Copyright © 2026 Soner Köksal"],
+        "ignoredElements": ["code", "kbd", "pre", "samp"]
+      }
+    ]
+  }
+}

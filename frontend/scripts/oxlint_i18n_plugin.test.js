@@ -63,12 +63,15 @@ function tempLocales(files) {
     return { root, dir };
 }
 
+// Sanity check: oxlint sees the same rule names that frontend/.oxlintrc.json enables.
 test("plugin exports the configured oxlint rules", () => {
     assert.equal(plugin.meta.name, "openneato-i18n");
     assert.equal(plugin.rules["locales-aligned"], __test__.localesAlignedRule);
     assert.equal(plugin.rules["use-i18n-boundary"], __test__.useI18nBoundaryRule);
 });
 
+// These helpers stand in for parsed JSX. For example, element("T", [text("Settings")])
+// means <T>Settings</T>, and attribute("aria-label", literal("Back")) means aria-label="Back".
 test("helper functions cover JSX names, text checks, literals, and filenames", () => {
     assert.equal(__test__.jsxNameName(null), "");
     assert.equal(__test__.jsxNameName(id("T")), "T");
@@ -124,6 +127,10 @@ test("helper functions cover JSX names, text checks, literals, and filenames", (
     assert.equal(__test__.firstMismatch(["a"], ["a"]), null);
 });
 
+// JSX meaning:
+// - <div>Settings</div> is user-facing text and should be flagged.
+// - <T>Settings</T> is already translated and should pass.
+// - <code>curl -X POST</code>, symbols, units, and configured app names are intentionally ignored.
 test("use-i18n-boundary reports literal JSX text unless it is translated or ignorable", () => {
     const { reports, visitors } = ruleReports({ allowedText: ["DeviceName"] });
     const literalText = text("Settings");
@@ -144,6 +151,11 @@ test("use-i18n-boundary reports literal JSX text unless it is translated or igno
     assert.deepEqual(reportIds(reports), ["literalText"]);
 });
 
+// JSX meaning:
+// - <div>{"Settings"}</div> and <div>{`Settings`}</div> are literal source strings rendered directly and should be
+//   flagged.
+// - <T>{"Settings"}</T> is intentionally ignored here because the JSXElement visitor reports it once for <T>.
+// - <div>{label}</div> is dynamic data, not a literal source string, so this rule leaves it alone.
 test("use-i18n-boundary reports literal JSX expressions outside T", () => {
     const { reports, visitors } = ruleReports();
     const literalExpression = expression(literal("Settings"));
@@ -180,6 +192,10 @@ test("use-i18n-boundary reports literal JSX expressions outside T", () => {
     assert.deepEqual(reportIds(reports), ["literalExpression", "literalExpression"]);
 });
 
+// JSX meaning:
+// - aria-label="Back", placeholder={"Network password"}, and configured user-facing props should use t(...).
+// - class="settings-card" is not user-facing and should pass.
+// - title="OpenNeato" is allowed because OpenNeato is configured as a brand/static exception.
 test("use-i18n-boundary reports user-facing string attributes", () => {
     const { reports, visitors } = ruleReports({ allowedText: ["OpenNeato"], translatableAttributes: ["data-title"] });
     visitors.JSXAttribute(attribute("aria-label", literal("Back")));
@@ -198,6 +214,11 @@ test("use-i18n-boundary reports user-facing string attributes", () => {
     ]);
 });
 
+// JSX meaning:
+// - <T>Settings</T> is plain JSX text and should pass.
+// - <T>{"Settings"}</T>, <T>{`Settings`}</T>, and <T>{label}</T> should be flagged because <T> must not contain curly
+//   brace expressions.
+// - <T values={{ values }}>Uploading... {progress}%</T> should be flagged because interpolation belongs in t(...).
 test("use-i18n-boundary keeps T static by rejecting props and dynamic children", () => {
     const { reports, visitors } = ruleReports();
     visitors.JSXElement(element("T", [text("Settings")]));
@@ -209,9 +230,12 @@ test("use-i18n-boundary keeps T static by rejecting props and dynamic children",
     );
     visitors.JSXElement(element("div", [expression(id("label"))]));
 
-    assert.deepEqual(reportIds(reports), ["dynamicT", "tProps"]);
+    assert.deepEqual(reportIds(reports), ["dynamicT", "dynamicT", "dynamicT", "tProps"]);
 });
 
+// Locale meaning:
+// - With zero or one locale file there is nothing to compare, so alignment passes.
+// - Multiple locale files pass only when they have the same keys in the same order.
 test("checkLocaleAlignment accepts absent, empty, single, and aligned locale directories", () => {
     assert.deepEqual(__test__.checkLocaleAlignment(path.join(os.tmpdir(), "missing-openneato-locales")), []);
 
@@ -233,6 +257,9 @@ test("checkLocaleAlignment accepts absent, empty, single, and aligned locale dir
     }
 });
 
+// Locale meaning:
+// - tr.json is missing "Settings" while de.json and fr.json have it.
+// - The rule checks every pair, so both de-vs-tr and fr-vs-tr report the missing key.
 test("checkLocaleAlignment reports missing keys pairwise", () => {
     const fixture = tempLocales({
         "de.json": { Back: "Zurück", Settings: "Einstellungen" },
@@ -251,6 +278,9 @@ test("checkLocaleAlignment reports missing keys pairwise", () => {
     }
 });
 
+// Locale meaning:
+// - Extra keys are reported from the opposite side as missing from the shorter file.
+// - Files with the same keys still fail if their JSON key order differs.
 test("checkLocaleAlignment reports extra keys and order mismatches pairwise", () => {
     const extra = tempLocales({
         "de.json": { Back: "Zurück" },
@@ -274,6 +304,9 @@ test("checkLocaleAlignment reports extra keys and order mismatches pairwise", ()
     }
 });
 
+// Oxlint integration meaning:
+// - Locale alignment runs once from src/i18n/index.tsx, where npm run i18n:check points oxlint.
+// - Other files such as dashboard.tsx skip this filesystem-level check to avoid duplicate reports.
 test("locales-aligned rule only runs from the i18n entrypoint", () => {
     const skippedReports = [];
     const skippedVisitors = __test__.localesAlignedRule.create({

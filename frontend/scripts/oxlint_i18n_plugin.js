@@ -215,7 +215,7 @@ const useI18nBoundaryRule = {
             literalText: "Wrap literal JSX text in <T>...</T>.",
             literalExpression: "Wrap literal JSX source text in <T>...</T> instead of rendering it directly.",
             stringAttribute: "Use t(...) for user-facing string prop or attribute '{{name}}'.",
-            dynamicT: "Use <T> only with literal source text. Use t(...) for programmatic text.",
+            dynamicT: "Use <T> only with plain JSX text. Use t(...) for programmatic text.",
             tProps: "Use <T> without props. Use t(...) for interpolation or programmatic text.",
         },
     },
@@ -260,8 +260,6 @@ const useI18nBoundaryRule = {
                 }
                 for (const child of node.children) {
                     if (child.type === "JSXText") continue;
-                    if (child.type === "JSXExpressionContainer" && isLiteralSourceExpression(child.expression))
-                        continue;
                     context.report({ node: child, messageId: "dynamicT" });
                 }
             },

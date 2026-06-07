@@ -13,7 +13,8 @@
 //     Settings
 //     aria-label="Back"
 //     <T>{label}</T>
-//     <T values={{ progress }}>{"Uploading... {progress}%"}</T>
+//     <T>{"Settings"}</T>
+//     <T>Uploading... {progress}%</T>
 //
 // - Every locale JSON file in src/i18n/locales must have the exact same keys in the exact same order. Files are checked
 //   pairwise, so no locale acts as the single reference file.

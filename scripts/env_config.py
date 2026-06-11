@@ -86,8 +86,22 @@ elif env["PIOENV"].endswith("-ota") and "upload" in COMMAND_LINE_TARGETS:
 # GoReleaser picks these up via extra_files globs at release time.
 
 
-def resolve_chip_name(env):
-    """Extract chip name from CHIP_MODEL build flag (e.g. ESP32-C3 -> esp32-c3)."""
+def resolve_release_name(env):
+    """Extract release artifact name from build flags.
+
+    OPENNEATO_RELEASE_ID can distinguish board-specific builds that use the same
+    underlying chip, e.g. Seeed XIAO ESP32C3 vs generic ESP32-C3. Falls back to
+    CHIP_MODEL for existing release artifact names.
+    """
+    for define in env.get("CPPDEFINES", []):
+        # CPPDEFINES entries can be strings or tuples/lists
+        if isinstance(define, (list, tuple)) and len(define) == 2:
+            key, val = define
+            if key == "OPENNEATO_RELEASE_ID":
+                return str(val).strip('\\"').lower()
+        elif isinstance(define, str) and define.startswith("OPENNEATO_RELEASE_ID="):
+            return define.split("=", 1)[1].strip('\\"').lower()
+
     for define in env.get("CPPDEFINES", []):
         # CPPDEFINES entries can be strings or tuples/lists
         if isinstance(define, (list, tuple)) and len(define) == 2:
@@ -102,8 +116,8 @@ def resolve_chip_name(env):
 def package_release(source, target, env):
     build_dir = env.subst("$BUILD_DIR")
 
-    chip = resolve_chip_name(env)
-    if not chip:
+    release_name = resolve_release_name(env)
+    if not release_name:
         sys.exit("Error: CHIP_MODEL not found in build flags — cannot package release")
 
     flash_images = env.get("FLASH_EXTRA_IMAGES", [])
@@ -124,11 +138,11 @@ def package_release(source, target, env):
     ]
 
     # OTA firmware binary
-    ota_name = f"openneato-{chip}-firmware.bin"
+    ota_name = f"openneato-{release_name}-firmware.bin"
     shutil.copy2(firmware_bin, os.path.join(build_dir, ota_name))
 
     # Full flash pack tarball
-    pack_name = f"openneato-{chip}-full.tar.gz"
+    pack_name = f"openneato-{release_name}-full.tar.gz"
     offsets = {
         "bootloader": images[0][0],
         "partitions": images[1][0],
@@ -146,7 +160,7 @@ def package_release(source, target, env):
             for name in os.listdir(tmp):
                 tar.add(os.path.join(tmp, name), arcname=name)
 
-    print(f"Release artifacts for {chip}:")
+    print(f"Release artifacts for {release_name}:")
     print(f"  {os.path.join(build_dir, ota_name)}")
     print(f"  {os.path.join(build_dir, pack_name)}")
     for offset, label, _ in images:

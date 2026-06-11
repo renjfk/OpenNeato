@@ -51,6 +51,7 @@ Everything you need to set up, configure, and troubleshoot OpenNeato.
 | Item                                 | Price | Notes                                                                                                                                                                                                                   |
 |--------------------------------------|-------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | ESP32-C3 Super Mini (unsoldered)     | ~€3   | Get the variant **without pre-soldered pins**. You only need to solder the 4 pins for the debug port connection, which keeps the board compact. Search "ESP32-C3 Super Mini" on AliExpress — any ESP32-C3 variant works |
+| Seeed Studio XIAO ESP32C3            | ~€5   | Supported via the `xiao-c3-*` firmware targets. Seeed documents D6/TX as GPIO21 and D7/RX as GPIO20, so this build uses those pins by default. |
 | JST XH 2.54mm 4-pin connectors       | ~€4   | Pre-crimped male/female pairs with 100mm wires. Search "Micro JST XH 2.54 4P connector" — comes in packs of 10 pairs, you only need one                                                                                 |
 | T10 Torx security bit (tamper-proof) | ~€2   | 150mm long, needed to open the Botvac. Search "T10 tamper proof Torx bit 150mm"                                                                                                                                         |
 | Soldering iron                       | ~€7   | Needed to solder the connector wires to the board. I picked up a cheap 80W adjustable-temp kit                                                                                                                          |
@@ -97,7 +98,8 @@ These are the **robot's** RX/TX labels, so you cross-connect to the ESP32:
 | TX        | ESP RX    | Robot sends data to ESP      |
 | GND       | GND       | Common ground                |
 
-The default TX/RX GPIOs depend on the chip (ESP32-C3: GPIO 3/4, ESP32-S3: GPIO 17/18,
+The default TX/RX GPIOs depend on the target (ESP32-C3 DevKit: GPIO 3/4,
+Seeed Studio XIAO ESP32C3: GPIO 21/20, ESP32-S3: GPIO 17/18,
 original ESP32: GPIO 17/16) but are fully configurable from the web UI in
 **Settings -> Device -> UART Pins** — so wire whichever GPIOs are convenient and update the
 setting to match.

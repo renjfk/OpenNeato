@@ -1,0 +1,42 @@
+name: List PlatformIO environments
+description: Set up PlatformIO and list project environments for a given mode
+
+inputs:
+  mode:
+    description: Environment mode suffix to list
+    required: true
+
+outputs:
+  envs-json:
+    description: Matching environments as a JSON array
+    value: ${{ steps.list.outputs.envs_json }}
+  envs-lines:
+    description: Matching environments as newline-delimited text
+    value: ${{ steps.list.outputs.envs_lines }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+        cache: pip
+        cache-dependency-path: .github/platformio-requirements.txt
+
+    - name: Install PlatformIO
+      shell: bash
+      run: pip install -r .github/platformio-requirements.txt
+
+    - name: List environments
+      id: list
+      shell: bash
+      run: |
+        ENVS_JSON=$(pio project config --json-output | jq -c --arg suffix "-${{ inputs.mode }}" '[.[] | .[0] | select(startswith("env:") and endswith($suffix)) | sub("^env:"; "")]')
+        ENVS_LINES=$(printf '%s\n' "$ENVS_JSON" | jq -r '.[]')
+        {
+          echo "envs_json=$ENVS_JSON"
+          echo "envs_lines<<EOF"
+          printf '%s\n' "$ENVS_LINES"
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"

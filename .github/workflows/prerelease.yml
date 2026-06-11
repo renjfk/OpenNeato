@@ -68,10 +68,10 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "Release: $TAG ($HEAD_REF @ $SHORT_SHA)"
 
-  prerelease:
-    name: Build and Prerelease
-    runs-on: macos-latest
+  create-tag:
+    name: Create release tag
     needs: resolve
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
@@ -87,7 +87,36 @@ jobs:
           git tag -a "${{ needs.resolve.outputs.release_tag }}" -m "Prerelease ${{ needs.resolve.outputs.release_tag }}"
           git push origin "${{ needs.resolve.outputs.release_tag }}"
 
-      # --- Frontend ---
+  resolve-firmware-envs:
+    name: Resolve firmware environments
+    needs: [resolve, create-tag]
+    runs-on: ubuntu-latest
+    outputs:
+      envs: ${{ steps.envs.outputs.envs-json }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.release_tag }}
+
+      - name: List release environments
+        id: envs
+        uses: ./.github/actions/list-pio-envs
+        with:
+          mode: release
+
+  frontend-assets:
+    name: Build frontend assets
+    needs: [resolve, create-tag]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.release_tag }}
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -104,32 +133,86 @@ jobs:
         run: npm run build
         working-directory: frontend
 
-      # --- Firmware ---
+      - name: Upload embedded frontend header
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-assets
+          path: firmware/src/web_assets.h
+
+  firmware:
+    name: Firmware (${{ matrix.env }})
+    needs: [resolve, create-tag, resolve-firmware-envs, frontend-assets]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        env: ${{ fromJson(needs.resolve-firmware-envs.outputs.envs) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.release_tag }}
+          fetch-depth: 0
+
+      - name: Download embedded frontend header
+        uses: actions/download-artifact@v4
+        with:
+          name: web-assets
+          path: firmware/src
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: .github/platformio-requirements.txt
 
       - name: Cache PlatformIO
         uses: actions/cache@v4
         with:
           path: |
+            ~/.platformio/.cache
             ~/.platformio/platforms
             ~/.platformio/packages
-          key: platformio-${{ hashFiles('platformio.ini') }}
+            .pio/libdeps
+          key: platformio-${{ matrix.env }}-${{ hashFiles('platformio.ini') }}
 
       - name: Install PlatformIO
-        run: pip install platformio
+        run: pip install -r .github/platformio-requirements.txt
 
       - name: Build firmware
         env:
           FIRMWARE_VERSION: ${{ needs.resolve.outputs.version }}
         run: |
-          while IFS= read -r env; do
-            echo "Building $env..."
-            pio run -e "$env"
-          done < <(grep -oE '^\[env:([a-zA-Z0-9_-]+-release)\]' platformio.ini | sed 's/\[env:\(.*\)\]/\1/')
+          echo "Building ${{ matrix.env }}..."
+          pio run -e "${{ matrix.env }}"
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.env }}
+          path: |
+            .pio/build/${{ matrix.env }}/*-firmware.bin
+            .pio/build/${{ matrix.env }}/*-full.tar.gz
+
+  prerelease:
+    name: Build and Prerelease
+    runs-on: macos-latest
+    needs: [resolve, create-tag, firmware]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.release_tag }}
+          fetch-depth: 0
+
+      - name: Download firmware artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '*-release'
+          path: .pio/build
 
       # --- Flash tool + GitHub Release ---
 

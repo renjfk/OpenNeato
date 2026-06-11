@@ -73,10 +73,29 @@ jobs:
           name: release-notes
           path: release_notes.md
 
-  release:
-    name: Build and Release
-    runs-on: macos-latest
+  resolve-firmware-envs:
+    name: Resolve firmware environments
     needs: prepare
+    runs-on: ubuntu-latest
+    outputs:
+      envs: ${{ steps.envs.outputs.envs-json }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.release_tag }}
+
+      - name: List release environments
+        id: envs
+        uses: ./.github/actions/list-pio-envs
+        with:
+          mode: release
+
+  frontend-assets:
+    name: Build frontend assets
+    needs: prepare
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
@@ -84,8 +103,6 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.event.inputs.release_tag }}
-
-      # --- Frontend ---
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -102,34 +119,86 @@ jobs:
         run: npm run build
         working-directory: frontend
 
-      # --- Firmware ---
+      - name: Upload embedded frontend header
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-assets
+          path: firmware/src/web_assets.h
+
+  firmware:
+    name: Firmware (${{ matrix.env }})
+    needs: [prepare, resolve-firmware-envs, frontend-assets]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        env: ${{ fromJson(needs.resolve-firmware-envs.outputs.envs) }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.release_tag }}
+
+      - name: Download embedded frontend header
+        uses: actions/download-artifact@v4
+        with:
+          name: web-assets
+          path: firmware/src
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: .github/platformio-requirements.txt
 
       - name: Cache PlatformIO
         uses: actions/cache@v4
         with:
           path: |
+            ~/.platformio/.cache
             ~/.platformio/platforms
             ~/.platformio/packages
-          key: platformio-${{ hashFiles('platformio.ini') }}
+            .pio/libdeps
+          key: platformio-${{ matrix.env }}-${{ hashFiles('platformio.ini') }}
 
       - name: Install PlatformIO
-        run: pip install platformio
+        run: pip install -r .github/platformio-requirements.txt
 
       - name: Build firmware and package release artifacts
         env:
           FIRMWARE_VERSION: ${{ needs.prepare.outputs.version }}
         run: |
-          # Build all *-release environments; post-build hook packages
-          # firmware artifacts into each env's build dir for GoReleaser
-          while IFS= read -r env; do
-            echo "Building $env..."
-            pio run -e "$env"
-          done < <(grep -oE '^\[env:([a-zA-Z0-9_-]+-release)\]' platformio.ini | sed 's/\[env:\(.*\)\]/\1/')
+          echo "Building ${{ matrix.env }}..."
+          pio run -e "${{ matrix.env }}"
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.env }}
+          path: |
+            .pio/build/${{ matrix.env }}/*-firmware.bin
+            .pio/build/${{ matrix.env }}/*-full.tar.gz
+
+  release:
+    name: Build and Release
+    runs-on: macos-latest
+    needs: [prepare, firmware]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.release_tag }}
+
+      - name: Download firmware artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '*-release'
+          path: .pio/build
 
       # --- Flash tool + GitHub Release ---
 

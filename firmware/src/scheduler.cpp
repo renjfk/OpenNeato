@@ -1,9 +1,76 @@
 #include "scheduler.h"
 #include "data_logger.h"
 
-Scheduler::Scheduler(SettingsManager& settings, SystemManager& system, NeatoSerial& serial, DataLogger& logger) :
-    LoopTask(SCHEDULE_CHECK_INTERVAL_MS), settings(settings), system(system), serial(serial), dataLogger(logger) {
+Scheduler::Scheduler(SettingsManager& settings, SystemManager& system, NeatoSerial& serial, DataLogger& logger,
+                     Preferences& prefs) :
+    LoopTask(SCHEDULE_CHECK_INTERVAL_MS), settings(settings), system(system), serial(serial), dataLogger(logger),
+    prefs(prefs) {
     TaskRegistry::add(this);
+}
+
+void Scheduler::loadSkipNextClean() {
+    if (skipNextCleanLoaded)
+        return;
+    skipNextClean = prefs.getBool(NVS_KEY_SKIP_NEXT_CLEAN, false);
+    skipNextCleanLoaded = true;
+}
+
+void Scheduler::requestSkipNextClean() {
+    loadSkipNextClean();
+    if (skipNextClean)
+        return;
+    skipNextClean = true;
+    prefs.putBool(NVS_KEY_SKIP_NEXT_CLEAN, true);
+    LOG("SCHED", "Next scheduled clean will be skipped");
+    dataLogger.logGenericEvent("scheduler_skip_requested", {});
+}
+
+void Scheduler::cancelSkipNextClean() {
+    loadSkipNextClean();
+    if (!skipNextClean)
+        return;
+    skipNextClean = false;
+    prefs.putBool(NVS_KEY_SKIP_NEXT_CLEAN, false);
+    LOG("SCHED", "Next scheduled clean will run");
+    dataLogger.logGenericEvent("scheduler_skip_cancelled", {});
+}
+
+bool Scheduler::isSkipNextCleanRequested() {
+    loadSkipNextClean();
+    return skipNextClean;
+}
+
+String Scheduler::getNextScheduleJson() {
+    const Settings& s = settings.get();
+    String prefix = String(R"({"enabled":)") + (s.scheduleEnabled ? "true" : "false") + R"(,"skipNextClean":)" +
+                    (isSkipNextCleanRequested() ? "true" : "false") + R"(,"next":)";
+    time_t now = system.now();
+    if (!s.scheduleEnabled || now <= 1700000000)
+        return prefix + "null}";
+
+    const char *dayNames[] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
+    struct tm local;
+    localtime_r(&now, &local);
+    int currentDay = toSchedDay(local.tm_wday);
+    int currentMins = local.tm_hour * 60 + local.tm_min;
+
+    for (int dayOffset = 0; dayOffset <= SCHEDULE_DAYS; dayOffset++) {
+        int day = (currentDay + dayOffset) % SCHEDULE_DAYS;
+        int nextMins = -1;
+        for (const SchedSlot& slot: s.sched[day].slots) {
+            int slotMins = slot.hour * 60 + slot.minute;
+            if (!slot.on || (dayOffset == 0 && slotMins < currentMins))
+                continue;
+            if (nextMins < 0 || slotMins < nextMins)
+                nextMins = slotMins;
+        }
+        if (nextMins >= 0) {
+            return prefix + R"({"day":")" + dayNames[day] + R"(","dayOffset":)" + String(dayOffset) + R"(,"hour":)" +
+                   String(nextMins / 60) + R"(,"minute":)" + String(nextMins % 60) + "}}";
+        }
+    }
+
+    return prefix + "null}";
 }
 
 // C library: Sun=0, Mon=1 .. Sat=6
@@ -51,6 +118,17 @@ bool Scheduler::handleScheduledCleaning(const Settings& s, int day, int nowMins)
             continue;
 
         String slotStr = String(schedMins / 60) + ":" + (schedMins % 60 < 10 ? "0" : "") + String(schedMins % 60);
+
+        if (isSkipNextCleanRequested()) {
+            skipNextClean = false;
+            prefs.putBool(NVS_KEY_SKIP_NEXT_CLEAN, false);
+            LOG("SCHED", "Skipping slot %s at user request", slotStr.c_str());
+            dataLogger.logGenericEvent("scheduler_skipped", {{"day", String(day), FIELD_INT},
+                                                             {"slot", slotStr, FIELD_STRING},
+                                                             {"reason", "user_request", FIELD_STRING}});
+            firedSlots[si] = schedMins;
+            return true;
+        }
 
         bool restartFirst = s.restartBeforeClean;
         serial.getState([this, si, day, schedMins, slotStr, restartFirst](bool ok, const RobotState& state) {

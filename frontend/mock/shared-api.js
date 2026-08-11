@@ -204,6 +204,33 @@ const settingsPayload = (state, includeNavMode = true) => {
     return settings;
 };
 
+const nextSchedule = (state) => {
+    if (!state.scheduleEnabled) return null;
+
+    const { localTime } = buildLocalTime(state.tz);
+    const [dayName, time] = localTime.split(" ");
+    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const currentDay = days.indexOf(dayName);
+    const [hour, minute] = time.split(":").map((part) => Number.parseInt(part, 10));
+    const currentMinutes = hour * 60 + minute;
+
+    for (let dayOffset = 0; dayOffset <= 7; dayOffset++) {
+        const day = (currentDay + dayOffset) % 7;
+        const slots = [
+            { hour: state[`sched${day}Hour`], minute: state[`sched${day}Min`], on: state[`sched${day}On`] },
+            {
+                hour: state[`sched${day}Slot1Hour`],
+                minute: state[`sched${day}Slot1Min`],
+                on: state[`sched${day}Slot1On`],
+            },
+        ].sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute));
+        const slot = slots.find((item) => item.on && (dayOffset > 0 || item.hour * 60 + item.minute >= currentMinutes));
+        if (slot) return { day: days[day], dayOffset, hour: slot.hour, minute: slot.minute };
+    }
+
+    return null;
+};
+
 const injectCorruptedPoses = (lines) => {
     const corruptions = [
         '{"x":-0.798,"y":3.459,"t":100:5,"ts":8203.4}',
@@ -605,6 +632,26 @@ function createMockApi(context) {
         }
 
         if (method === "GET" && path === "/api/settings") return jsonResponse(settingsPayload(state));
+
+        if (method === "GET" && path === "/api/schedule/next") {
+            return jsonResponse({
+                enabled: state.scheduleEnabled,
+                skipNextClean: state.skipNextClean,
+                next: nextSchedule(state),
+            });
+        }
+
+        if (method === "POST" && path === "/api/schedule/next") {
+            if (faults.settings) return errorResponse("NVS write failed: flash error", 500);
+            state.skipNextClean = true;
+            return okResponse();
+        }
+
+        if (method === "DELETE" && path === "/api/schedule/next") {
+            if (faults.settings) return errorResponse("NVS write failed: flash error", 500);
+            state.skipNextClean = false;
+            return okResponse();
+        }
 
         if (method === "PUT" && path === "/api/settings") {
             if (faults.settings) {

@@ -376,6 +376,32 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /api/schedule/next:
+    get:
+      tags:
+        - Actions
+      summary: Get the next scheduled cleaning slot and skip state
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleNextData"
+    post:
+      tags:
+        - Actions
+      summary: Skip the next enabled scheduled cleaning slot
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+    delete:
+      tags:
+        - Actions
+      summary: Cancel the pending skip for the next scheduled cleaning slot
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
   /api/manual/status:
     get:
       tags:
@@ -864,6 +890,52 @@ components:
           type: boolean
       required:
         - ok
+    ScheduleNextData:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          description: Whether the weekly cleaning schedule is enabled
+        skipNextClean:
+          type: boolean
+          description: Whether the next enabled scheduled cleaning slot will be skipped
+        next:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/ScheduleTime"
+      required:
+        - enabled
+        - skipNextClean
+        - next
+    ScheduleTime:
+      type: object
+      properties:
+        day:
+          type: string
+          enum:
+            - Mon
+            - Tue
+            - Wed
+            - Thu
+            - Fri
+            - Sat
+            - Sun
+        dayOffset:
+          type: integer
+          description: Days from the current local day (0 = today)
+        hour:
+          type: integer
+          minimum: 0
+          maximum: 23
+        minute:
+          type: integer
+          minimum: 0
+          maximum: 59
+      required:
+        - day
+        - dayOffset
+        - hour
+        - minute
     Error:
       type: object
       properties:

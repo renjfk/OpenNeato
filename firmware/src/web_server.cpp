@@ -9,15 +9,16 @@
 #include "notification_manager.h"
 #include "cleaning_history.h"
 #include "wifi_manager.h"
+#include "scheduler.h"
 #include <SPIFFS.h>
 
 unsigned long WebServer::lastApiActivity = 0;
 
 WebServer::WebServer(AsyncWebServer& server, NeatoSerial& neato, DataLogger& logger, SystemManager& sys,
                      FirmwareManager& fw, SettingsManager& settings, ManualCleanManager& manual,
-                     NotificationManager& notif, CleaningHistory& history, WiFiManager& wifi) :
+                     NotificationManager& notif, CleaningHistory& history, WiFiManager& wifi, Scheduler& scheduler) :
     server(server), neato(neato), logger(logger), sysMgr(sys), fwMgr(fw), settingsMgr(settings), manualMgr(manual),
-    notifMgr(notif), historyMgr(history), wifiMgr(wifi) {}
+    notifMgr(notif), historyMgr(history), wifiMgr(wifi), scheduler(scheduler) {}
 
 void WebServer::loggedRoute(const char *path, WebRequestMethodComposite httpMethod, SyncHandler handler) {
     server.on(path, httpMethod, [this, handler](AsyncWebServerRequest *request) {
@@ -104,6 +105,9 @@ void WebServer::registerApiRoutes() {
     registerPostRoute("/api/user-settings", neato, &NeatoSerial::setUserSetting, {"key", "value"});
     registerPostRoute("/api/clear-errors", neato, &NeatoSerial::clearErrors, {});
     registerPostRoute("/api/battery/new", neato, &NeatoSerial::newBattery, {});
+    registerGetRoute("/api/schedule/next", scheduler, &Scheduler::getNextScheduleJson);
+    registerPostRoute("/api/schedule/next", scheduler, &Scheduler::requestSkipNextClean);
+    registerDeleteRoute("/api/schedule/next", scheduler, &Scheduler::cancelSkipNextClean);
 
     // Serial endpoint — send arbitrary serial command, returns raw response.
     // Always available (no debug gate — useful for diagnostics without enabling verbose logging).
@@ -147,10 +151,7 @@ void WebServer::registerManualRoutes() {
     // Register longer paths first — ESPAsyncWebServer matches routes by prefix,
     // so /api/manual would swallow /api/manual/move and /api/manual/motors.
 
-    loggedRoute("/api/manual/status", HTTP_GET, [this](AsyncWebServerRequest *request) {
-        request->send(200, "application/json", manualMgr.getStatusJson());
-        return 200;
-    });
+    registerGetRoute("/api/manual/status", manualMgr, &ManualCleanManager::getStatusJson);
     registerPostRoute("/api/manual/move", manualMgr, &ManualCleanManager::move, {"left", "right", "speed"});
     registerPostRoute("/api/manual/motors", manualMgr, &ManualCleanManager::setMotors,
                       {"brush", "vacuum", "sideBrush"});
@@ -249,26 +250,10 @@ void WebServer::registerSystemRoutes() {
         return 200;
     });
 
-    // POST /api/system/restart — deferred restart
-    loggedRoute("/api/system/restart", HTTP_POST, [this](AsyncWebServerRequest *request) -> int {
-        sendOk(request);
-        sysMgr.restart();
-        return 200;
-    });
-
-    // POST /api/system/reset — factory reset (clears NVS + WiFi, then restarts)
-    loggedRoute("/api/system/reset", HTTP_POST, [this](AsyncWebServerRequest *request) -> int {
-        sendOk(request);
-        sysMgr.factoryReset();
-        return 200;
-    });
-
-    // POST /api/system/format-fs — format filesystem (erases logs + map data, then restarts)
-    loggedRoute("/api/system/format-fs", HTTP_POST, [this](AsyncWebServerRequest *request) -> int {
-        sendOk(request);
-        sysMgr.formatFs();
-        return 200;
-    });
+    // Actions defer their reboot for 500ms, allowing the response to flush.
+    registerPostRoute("/api/system/restart", sysMgr, &SystemManager::restart);
+    registerPostRoute("/api/system/reset", sysMgr, &SystemManager::factoryReset);
+    registerPostRoute("/api/system/format-fs", sysMgr, &SystemManager::formatFs);
 
     LOG("WEB", "System routes registered");
 }
@@ -278,10 +263,7 @@ void WebServer::registerSystemRoutes() {
 void WebServer::registerSettingsRoutes() {
 
     // GET /api/settings — all user-configurable settings
-    loggedRoute("/api/settings", HTTP_GET, [this](AsyncWebServerRequest *request) -> int {
-        request->send(200, "application/json", settingsMgr.get().toJson());
-        return 200;
-    });
+    registerGetRoute("/api/settings", settingsMgr, &SettingsManager::get);
 
     // PUT /api/settings — partial update (only fields present are written)
     loggedBodyRoute("/api/settings", HTTP_PUT,

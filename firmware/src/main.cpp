@@ -25,12 +25,12 @@ SettingsManager settingsManager(prefs);
 DataLogger dataLogger(neatoSerial, systemManager);
 WiFiManager wifiManager(prefs, dataLogger);
 FirmwareManager firmwareManager(dataLogger);
-Scheduler scheduler(settingsManager, systemManager, neatoSerial, dataLogger);
+Scheduler scheduler(settingsManager, systemManager, neatoSerial, dataLogger, prefs);
 ManualCleanManager manualClean(neatoSerial);
 NotificationManager notifMgr(neatoSerial, settingsManager, dataLogger);
 CleaningHistory cleaningHistory(neatoSerial, dataLogger, systemManager);
 WebServer webServer(server, neatoSerial, dataLogger, systemManager, firmwareManager, settingsManager, manualClean,
-                    notifMgr, cleaningHistory, wifiManager);
+                    notifMgr, cleaningHistory, wifiManager, scheduler);
 
 // Tracks whether web server has been started (may be deferred if WiFi was slow at boot)
 bool webServerStarted = false;

@@ -18,12 +18,13 @@ class ManualCleanManager;
 class NotificationManager;
 class CleaningHistory;
 class WiFiManager;
+class Scheduler;
 
 class WebServer {
 public:
     WebServer(AsyncWebServer& server, NeatoSerial& neato, DataLogger& logger, SystemManager& sys, FirmwareManager& fw,
               SettingsManager& settings, ManualCleanManager& manual, NotificationManager& notif,
-              CleaningHistory& history, WiFiManager& wifi);
+              CleaningHistory& history, WiFiManager& wifi, Scheduler& scheduler);
     void begin();
 
     // Last time any API request was received (millis()). Any module can check
@@ -41,6 +42,7 @@ private:
     NotificationManager& notifMgr;
     CleaningHistory& historyMgr;
     WiFiManager& wifiMgr;
+    Scheduler& scheduler;
 
     void registerApiRoutes();
     void registerManualRoutes();
@@ -69,11 +71,29 @@ private:
     template<typename Mgr, typename Method>
     void registerGetRoute(const char *path, Mgr& mgr, Method method, std::initializer_list<const char *> paramNames);
 
+    // Register a synchronous no-argument getter that returns a JSON string.
+    template<typename Mgr>
+    void registerGetRoute(const char *path, Mgr& mgr, String (Mgr::*method)());
+
+    template<typename Mgr>
+    void registerGetRoute(const char *path, Mgr& mgr, String (Mgr::*method)() const);
+
+    // Register a synchronous no-argument getter whose result serializes itself.
+    template<typename Mgr, typename T>
+    void registerGetRoute(const char *path, Mgr& mgr, const T& (Mgr::*method)());
+
     // Register a POST action endpoint. Returns {"ok":true} / 504 / 503.
     // Pass one param name per user arg; {} for no-arg methods.
     // Expected: bool (Mgr::*)(UserArgs..., std::function<void(bool)>)
     template<typename Mgr, typename Method>
     void registerPostRoute(const char *path, Mgr& mgr, Method method, std::initializer_list<const char *> paramNames);
+
+    // Register a synchronous no-argument action.
+    template<typename Mgr>
+    void registerPostRoute(const char *path, Mgr& mgr, void (Mgr::*method)());
+
+    template<typename Mgr>
+    void registerDeleteRoute(const char *path, Mgr& mgr, void (Mgr::*method)());
 };
 
 // -- Template helpers --------------------------------------------------------
@@ -267,7 +287,57 @@ void WebServer::registerGetRoute(const char *path, Mgr& mgr, Method method,
     });
 }
 
+// synchronous registerGetRoute
+
+template<typename Mgr>
+void WebServer::registerGetRoute(const char *path, Mgr& mgr, String (Mgr::*method)()) {
+    loggedRoute(path, HTTP_GET, [&mgr, method](AsyncWebServerRequest *request) {
+        request->send(200, "application/json", (mgr.*method)());
+        return 200;
+    });
+}
+
+template<typename Mgr>
+void WebServer::registerGetRoute(const char *path, Mgr& mgr, String (Mgr::*method)() const) {
+    loggedRoute(path, HTTP_GET, [&mgr, method](AsyncWebServerRequest *request) {
+        request->send(200, "application/json", (mgr.*method)());
+        return 200;
+    });
+}
+
+// synchronous serializable registerGetRoute
+
+template<typename Mgr, typename T>
+void WebServer::registerGetRoute(const char *path, Mgr& mgr, const T& (Mgr::*method)()) {
+    loggedRoute(path, HTTP_GET, [&mgr, method](AsyncWebServerRequest *request) {
+        request->send(200, "application/json", (mgr.*method)().toJson());
+        return 200;
+    });
+}
+
 // registerPostRoute
+
+template<typename Mgr>
+void WebServer::registerPostRoute(const char *path, Mgr& mgr, void (Mgr::*method)()) {
+    loggedRoute(path, HTTP_POST, [&mgr, method](AsyncWebServerRequest *request) {
+        (mgr.*method)();
+        sendOk(request);
+        return 200;
+    });
+}
+
+// asynchronous registerPostRoute
+
+template<typename Mgr>
+void WebServer::registerDeleteRoute(const char *path, Mgr& mgr, void (Mgr::*method)()) {
+    loggedRoute(path, HTTP_DELETE, [&mgr, method](AsyncWebServerRequest *request) {
+        (mgr.*method)();
+        sendOk(request);
+        return 200;
+    });
+}
+
+// asynchronous registerPostRoute
 
 template<typename Mgr, typename Method>
 void WebServer::registerPostRoute(const char *path, Mgr& mgr, Method method,

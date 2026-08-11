@@ -171,6 +171,7 @@ enum CommandStatus {
 
 // NVS keys — Schedule (ESP32-managed, not robot serial)
 #define NVS_KEY_SCHED_ENABLED "sched_on"
+#define NVS_KEY_SKIP_NEXT_CLEAN "skip_next_clean"
 #define NVS_KEY_AUTO_RESTART_ENABLED "auto_rst_on"
 #define NVS_KEY_AUTO_RESTART_HOUR "auto_rst_h"
 #define NVS_KEY_AUTO_RESTART_MIN "auto_rst_m"

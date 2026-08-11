@@ -2,6 +2,7 @@
 #define SCHEDULER_H
 
 #include <Arduino.h>
+#include <Preferences.h>
 #include <vector>
 #include "config.h"
 #include "json_fields.h"
@@ -19,7 +20,14 @@ class DataLogger;
 // Runs entirely on the ESP32 — does not use robot serial schedule commands.
 class Scheduler : public LoopTask {
 public:
-    Scheduler(SettingsManager& settings, SystemManager& system, NeatoSerial& serial, DataLogger& logger);
+    Scheduler(SettingsManager& settings, SystemManager& system, NeatoSerial& serial, DataLogger& logger,
+              Preferences& prefs);
+
+    // JSON snapshot for the dashboard's next-clean banner and skip action.
+    String getNextScheduleJson();
+    void requestSkipNextClean();
+    void cancelSkipNextClean();
+    bool isSkipNextCleanRequested();
 
 private:
     void tick() override; // Called every SCHEDULE_CHECK_INTERVAL_MS
@@ -27,6 +35,7 @@ private:
     SystemManager& system;
     NeatoSerial& serial;
     DataLogger& dataLogger;
+    Preferences& prefs;
 
     // Duplicate trigger guard for cleaning slots per day.
     int firedDay = -1;
@@ -38,6 +47,8 @@ private:
     int pendingCleanDay = -1;
     int pendingCleanSlot = -1;
     unsigned long restartIssuedAt = 0;
+    bool skipNextClean = false;
+    bool skipNextCleanLoaded = false;
 
     // Convert C library tm_wday (Sun=0..Sat=6) to our index (Mon=0..Sun=6)
     static int toSchedDay(int tmWday);
@@ -48,6 +59,7 @@ private:
     void handlePendingCleanAfterRestart();
     void clearPendingCleanAfterRestart();
     void triggerClean(int day, int slotIndex);
+    void loadSkipNextClean();
 
     // Returns true if the given time is within the check window and not already fired.
     // Writes the computed minutes-since-midnight into outSchedMins.

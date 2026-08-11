@@ -5,6 +5,7 @@ import rotateRightSvg from "../../assets/icons/rotate-right.svg?raw";
 import { Icon } from "../../components/icon";
 import { useMapGestures } from "../../hooks/use-map-gestures";
 import { T, useI18n } from "../../i18n";
+import { formatArea, formatDistance, type DistanceUnit } from "../../distance-units";
 import type { HistoryFileInfo, MapData } from "../../types";
 import { renderMap } from "./helpers";
 import { Wave } from "./loading-wave";
@@ -15,6 +16,7 @@ interface HistoryItemViewProps {
     map: MapData | null;
     mapEmpty: boolean;
     recording: boolean;
+    distanceUnit: DistanceUnit;
 }
 
 // Persisted map rotation, in degrees. Always normalized to one of 0/90/180/270.
@@ -24,7 +26,7 @@ function loadRotation(): number {
     return (((Math.round(raw / 90) * 90) % 360) + 360) % 360;
 }
 
-export function HistoryItemView({ file, map, mapEmpty, recording }: HistoryItemViewProps) {
+export function HistoryItemView({ file, map, mapEmpty, recording, distanceUnit }: HistoryItemViewProps) {
     const { t, formatDuration, formatNumber } = useI18n();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [rotation, setRotation] = useState<number>(loadRotation);
@@ -138,10 +140,7 @@ export function HistoryItemView({ file, map, mapEmpty, recording }: HistoryItemV
                             <T>Distance</T>
                         </span>
                         <span class="history-stat-value">
-                            {`${formatNumber(summary.distanceTraveled, {
-                                minimumFractionDigits: 1,
-                                maximumFractionDigits: 1,
-                            })} m`}
+                            {formatDistance(summary.distanceTraveled, distanceUnit, formatNumber)}
                         </span>
                     </div>
                     <div class="history-stat">
@@ -149,10 +148,7 @@ export function HistoryItemView({ file, map, mapEmpty, recording }: HistoryItemV
                             <T>Area</T>
                         </span>
                         <span class="history-stat-value">
-                            {`${formatNumber(summary.areaCovered, {
-                                minimumFractionDigits: 1,
-                                maximumFractionDigits: 1,
-                            })} m\u00b2`}
+                            {formatArea(summary.areaCovered, distanceUnit, formatNumber)}
                         </span>
                     </div>
                     <div class="history-stat">

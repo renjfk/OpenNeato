@@ -118,10 +118,7 @@ export function WiFiSection({ apFallbackOnDisconnect, onApFallbackChange, saving
     return (
         <>
             <div class="settings-section">
-                <div class="settings-section-title">
-                    <T>Status</T>
-                </div>
-                <div class="fw-info-row">
+                <div class="fw-info-row" role="group" aria-label={t("Status")}>
                     <div class="fw-info-item">
                         <Icon svg={status?.staConnected ? wifiSvg : wifiOffSvg} />
                         <span>
@@ -188,13 +185,11 @@ export function WiFiSection({ apFallbackOnDisconnect, onApFallbackChange, saving
             </div>
 
             <div class="settings-section">
-                <div class="settings-section-title">
-                    <T>Connect to a network</T>
-                </div>
                 <div class="settings-wifi-pick-row">
                     <div class="settings-tz-select-wrap settings-wifi-select">
                         <select
                             class="settings-tz-select"
+                            aria-label={t("Connect to a network")}
                             value={selectedSsid}
                             onChange={(e) => {
                                 const value = (e.target as HTMLSelectElement).value;

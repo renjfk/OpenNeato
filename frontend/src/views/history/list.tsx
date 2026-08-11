@@ -7,6 +7,7 @@ import trashSvg from "../../assets/icons/trash.svg?raw";
 import { ConfirmDialog } from "../../components/confirm-dialog";
 import { Icon } from "../../components/icon";
 import { T, useI18n } from "../../i18n";
+import { formatArea, formatDistance, type DistanceUnit } from "../../distance-units";
 import type { HistoryFileInfo, MapSession, MapSummary } from "../../types";
 import { normalizeError } from "../../utils";
 import { modeInfo } from "./helpers";
@@ -20,9 +21,19 @@ interface SessionCardProps {
     active?: boolean;
     onSelect: (i: number) => void;
     onDelete: (i: number) => void;
+    distanceUnit: DistanceUnit;
 }
 
-function SessionCard({ session, summary, filename, index, active, onSelect, onDelete }: SessionCardProps) {
+function SessionCard({
+    session,
+    summary,
+    filename,
+    index,
+    active,
+    onSelect,
+    onDelete,
+    distanceUnit,
+}: SessionCardProps) {
     const { t, formatDateTime, formatDuration, formatNumber } = useI18n();
     const info = modeInfo(session?.mode ?? "");
     return (
@@ -49,18 +60,8 @@ function SessionCard({ session, summary, filename, index, active, onSelect, onDe
                                 <Icon svg={clockSvg} />
                                 {formatDuration(summary.duration)}
                             </span>
-                            <span>
-                                {`${formatNumber(summary.distanceTraveled, {
-                                    minimumFractionDigits: 1,
-                                    maximumFractionDigits: 1,
-                                })} m`}
-                            </span>
-                            <span>
-                                {`${formatNumber(summary.areaCovered, {
-                                    minimumFractionDigits: 1,
-                                    maximumFractionDigits: 1,
-                                })} m\u00b2`}
-                            </span>
+                            <span>{formatDistance(summary.distanceTraveled, distanceUnit, formatNumber)}</span>
+                            <span>{formatArea(summary.areaCovered, distanceUnit, formatNumber)}</span>
                             <span class="history-session-battery">
                                 <Icon svg={boltSvg} />
                                 {session?.battery ?? "?"}% &rarr; {summary.batteryEnd ?? "?"}%
@@ -103,6 +104,7 @@ interface HistoryListViewProps {
     onDeleteAll: () => void;
     onImported: () => void;
     onError: (msg: string) => void;
+    distanceUnit: DistanceUnit;
 }
 
 type ImportStatus = "idle" | "uploading" | "done" | "error";
@@ -116,6 +118,7 @@ export function HistoryListView({
     onDeleteAll,
     onImported,
     onError,
+    distanceUnit,
 }: HistoryListViewProps) {
     const { t } = useI18n();
     const [confirmTarget, setConfirmTarget] = useState<string | null>(null);
@@ -251,6 +254,7 @@ export function HistoryListView({
                     active={f.recording}
                     onSelect={onSelect}
                     onDelete={() => setConfirmTarget(`session-${i}`)}
+                    distanceUnit={distanceUnit}
                 />
             ))}
 

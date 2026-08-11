@@ -7,6 +7,7 @@ import { Icon } from "../components/icon";
 import { useNavigate, usePath } from "../components/router";
 import { usePoll } from "../hooks/use-poll";
 import { T, useI18n } from "../i18n";
+import type { DistanceUnit } from "../distance-units";
 import type { HistoryFileInfo, MapData } from "../types";
 import { normalizeError } from "../utils";
 import { HistoryItemView } from "./history/item";
@@ -15,7 +16,11 @@ import { HistoryListView } from "./history/list";
 const RECOVERY_GUIDE_URL =
     "https://github.com/renjfk/OpenNeato/blob/main/docs/user-guide.md#recovering-corrupted-cleaning-history";
 
-export function HistoryView() {
+interface HistoryViewProps {
+    distanceUnit: DistanceUnit;
+}
+
+export function HistoryView({ distanceUnit }: HistoryViewProps) {
     const { t } = useI18n();
     const navigate = useNavigate();
     const path = usePath();
@@ -225,6 +230,7 @@ export function HistoryView() {
                         onDeleteAll={handleDeleteAll}
                         onImported={handleImported}
                         onError={errorStack.push}
+                        distanceUnit={distanceUnit}
                     />
                 )}
 
@@ -238,6 +244,7 @@ export function HistoryView() {
                         onDeleteAll={handleDeleteAll}
                         onImported={handleImported}
                         onError={errorStack.push}
+                        distanceUnit={distanceUnit}
                     />
                 )}
 
@@ -247,6 +254,7 @@ export function HistoryView() {
                         map={selectedMap}
                         mapEmpty={mapEmpty}
                         recording={selectedRecording}
+                        distanceUnit={distanceUnit}
                     />
                 )}
 

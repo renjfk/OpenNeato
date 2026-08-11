@@ -3,6 +3,7 @@ import { api } from "./api";
 import { Route, Router } from "./components/router";
 import { usePolling } from "./hooks/use-polling";
 import { I18nProvider, type LanguagePreference, loadLanguagePreference, resolveLocale } from "./i18n";
+import { type DistanceUnit, loadDistanceUnit } from "./distance-units";
 import type { FirmwareVersion, ManualStatus, StateData } from "./types";
 import { checkForUpdate, getAvailableUpdate, type UpdateInfo } from "./update";
 import { BatteryView } from "./views/battery";
@@ -46,6 +47,7 @@ function loadTheme(): Theme {
 export function App() {
     const [theme, setTheme] = useState<Theme>(loadTheme);
     const [language, setLanguage] = useState<LanguagePreference>(loadLanguagePreference);
+    const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>(loadDistanceUnit);
     const locale = resolveLocale(language);
 
     const themeInitialized = useRef(false);
@@ -69,6 +71,10 @@ export function App() {
         localStorage.setItem("language", language);
         document.documentElement.lang = locale;
     }, [language, locale]);
+
+    useEffect(() => {
+        localStorage.setItem("distanceUnit", distanceUnit);
+    }, [distanceUnit]);
 
     const state = usePolling<StateData>(api.getState, 2000);
     const firmware = usePolling<FirmwareVersion>(api.getFirmwareVersion, 60000);
@@ -167,6 +173,8 @@ export function App() {
                         onThemeChange={setTheme}
                         language={language}
                         onLanguageChange={setLanguage}
+                        distanceUnit={distanceUnit}
+                        onDistanceUnitChange={setDistanceUnit}
                         firmware={firmware.data}
                     />
                 </Route>
@@ -195,7 +203,7 @@ export function App() {
                     <LogsView />
                 </Route>
                 <Route path="/history" prefix>
-                    <HistoryView />
+                    <HistoryView distanceUnit={distanceUnit} />
                 </Route>
             </Router>
         </I18nProvider>

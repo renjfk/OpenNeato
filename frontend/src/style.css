@@ -705,15 +705,6 @@ input:disabled {
     margin-bottom: 28px;
 }
 
-.settings-section-title {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    margin-bottom: 12px;
-}
-
 /* Collapsible category */
 
 .settings-category {
@@ -790,10 +781,6 @@ input:disabled {
 .settings-category-inner > .settings-section {
     padding: 0 16px 16px;
     margin-bottom: 0;
-}
-
-.settings-category-inner > .settings-section .settings-section-title {
-    display: none;
 }
 
 .settings-category-inner > .settings-section:first-child {

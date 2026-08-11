@@ -15,13 +15,9 @@ Everything you need to set up, configure, and troubleshoot OpenNeato.
     - [Command Reference](#command-reference)
     - [Manual Flashing with esptool](#manual-flashing-with-esptool)
     - [Troubleshooting Flash Issues](#troubleshooting-flash-issues)
-- [First-Time WiFi Setup](#first-time-wifi-setup)
-    - [Option A: Fallback Access Point (no serial cable)](#option-a-fallback-access-point-no-serial-cable)
-    - [Option B: Serial Monitor](#option-b-serial-monitor)
-    - [WiFi Configuration Menu](#wifi-configuration-menu)
-    - [Verifying the Connection](#verifying-the-connection)
-    - [Quick Commands](#quick-commands)
-    - [Reconfiguring WiFi Later](#reconfiguring-wifi-later)
+- [First-Time Setup](#first-time-setup)
+    - [WiFi Setup](#wifi-setup)
+    - [UART Pin Configuration](#uart-pin-configuration)
 - [Troubleshooting](#troubleshooting)
     - [Enabling Logging](#enabling-logging)
     - [Collecting Logs](#collecting-logs)
@@ -97,11 +93,9 @@ These are the **robot's** RX/TX labels, so you cross-connect to the ESP32:
 | TX        | ESP RX    | Robot sends data to ESP      |
 | GND       | GND       | Common ground                |
 
-The default TX/RX GPIOs depend on the target (ESP32-C3 DevKit: GPIO 3/4,
-Seeed Studio XIAO ESP32C3: GPIO 21/20, ESP32-S3: GPIO 17/18,
-original ESP32: GPIO 17/16) but are fully configurable from the web UI in
-**Settings -> Device -> UART Pins** — so wire whichever GPIOs are convenient and update the
-setting to match.
+The default TX/RX GPIOs depend on the board and firmware target, but are fully configurable from
+the web UI in **Settings -> Device -> UART Pins**. Wire whichever GPIOs are convenient and update
+the setting to match.
 
 ### Wiring
 
@@ -337,13 +331,15 @@ Windows, close any other serial monitor that might have the port open.
 
 ---
 
-## First-Time WiFi Setup
+## First-Time Setup
+
+### WiFi Setup
 
 After flashing, the device has no saved WiFi credentials and won't be on your network yet.
 You have two ways to provision it: a browser via the fallback access point (no serial cable
 needed), or the serial menu that the flash tool opens for you.
 
-### Option A: Fallback Access Point (no serial cable)
+#### Option A: Fallback Access Point (no serial cable)
 
 When the device has no saved credentials, it broadcasts an open WiFi network so you can
 configure it from any phone or laptop browser. This works even after you've unplugged the
@@ -363,7 +359,7 @@ USB cable and tucked the ESP32 inside the robot.
 > who hasn't set one up yet. It only runs while the device has no saved credentials or
 > cannot reach your home network. Once connected, it shuts down automatically.
 
-### Option B: Serial Monitor
+#### Option B: Serial Monitor
 
 The serial monitor connects at 115,200 baud and shows the ESP32's boot output. You'll see
 the boot banner. With no credentials saved, the fallback AP comes up automatically and the
@@ -382,7 +378,7 @@ You can finish provisioning either by joining `neato-ap` from a browser (Option 
 by pressing `m` to open the WiFi configuration menu over serial , both end up in the same
 place.
 
-### WiFi Configuration Menu
+#### WiFi Configuration Menu
 
 ```
 WiFi Configuration:
@@ -417,7 +413,7 @@ restart, the banner shows:
 ========================================
 ```
 
-### Verifying the Connection
+#### Verifying the Connection
 
 Open a browser and navigate to:
 
@@ -432,7 +428,7 @@ to the debug port.
 > resolve it differently. If `neato.local` doesn't work, use the IP address directly. You can
 > find it in the serial monitor output or in your router's DHCP client list.
 
-### Quick Commands
+#### Quick Commands
 
 Once connected, you can type single-key commands in the serial monitor at any time:
 
@@ -441,7 +437,7 @@ Once connected, you can type single-key commands in the serial monitor at any ti
 | `m` | Open WiFi configuration menu            |
 | `s` | Print WiFi status (SSID, IP, MAC, RSSI) |
 
-### Reconfiguring WiFi Later
+#### Reconfiguring WiFi Later
 
 Once the device is on your home network you can change networks from the web UI directly:
 **Settings -> WiFi -> Scan**, pick a new network, enter the password.
@@ -455,6 +451,16 @@ config requires the serial menu.
 To wipe credentials entirely and force the device back into first-time setup mode (always-on
 AP, no auto-reconnect), use **Settings -> WiFi -> Forget current network**. The device will
 broadcast `<hostname>-ap` until you provision a new network.
+
+### UART Pin Configuration
+
+After connecting to the web UI, check that the UART pins match the GPIOs used for the robot
+debug-port wiring. Refer to your board's pinout, then open **Settings -> Device -> UART Pins** and
+set the ESP TX and RX GPIOs. Save the settings and restart the device. Keep the connection
+crossed: robot RX connects to ESP TX, and robot TX connects to ESP RX.
+
+If the dashboard stays at **Connecting -> Timeout**, verify the UART pins and the TX/RX
+crossover before troubleshooting the robot.
 
 ---
 

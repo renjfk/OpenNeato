@@ -88,10 +88,6 @@ void Scheduler::resetFiredGuards(int day) {
         fs = -1;
 }
 
-bool Scheduler::isRobotIdle(const RobotState& state) const {
-    return state.uiState == "UIMGR_STATE_IDLE" || state.uiState == "UIMGR_STATE_STANDBY";
-}
-
 bool Scheduler::isActionDue(int hour, int minute, int nowMins, int lastFiredMins, int& outSchedMins) {
     outSchedMins = hour * 60 + minute;
     int elapsed = nowMins - outSchedMins;
@@ -139,12 +135,14 @@ bool Scheduler::handleScheduledCleaning(const Settings& s, int day, int nowMins)
                 return;
             }
 
-            if (!isRobotIdle(state)) {
-                LOG("SCHED", "Robot busy (%s), skipping slot %s", state.uiState.c_str(), slotStr.c_str());
+            if (!state.isIdle()) {
+                LOG("SCHED", "Robot busy (%s / %s), skipping slot %s", state.uiState.c_str(), state.robotState.c_str(),
+                    slotStr.c_str());
                 dataLogger.logGenericEvent("scheduler_skipped", {{"day", String(day), FIELD_INT},
                                                                  {"slot", slotStr, FIELD_STRING},
                                                                  {"reason", "busy", FIELD_STRING},
-                                                                 {"state", state.uiState, FIELD_STRING}});
+                                                                 {"state", state.uiState, FIELD_STRING},
+                                                                 {"robotState", state.robotState, FIELD_STRING}});
                 firedSlots[si] = schedMins;
                 return;
             }
@@ -193,7 +191,7 @@ void Scheduler::handlePendingCleanAfterRestart() {
         if (!ok)
             return;
 
-        if (!isRobotIdle(state))
+        if (!state.isIdle())
             return;
 
         LOG("SCHED", "Robot ready after restart, triggering clean (day=%d slot=%d)", pendingCleanDay, pendingCleanSlot);
@@ -255,12 +253,14 @@ void Scheduler::handleAutoRestart(const Settings& s, int day, int nowMins) {
             return;
         }
 
-        if (!isRobotIdle(state)) {
-            LOG("SCHED", "Robot busy (%s), skipping auto restart %s", state.uiState.c_str(), slotStr.c_str());
+        if (!state.isIdle()) {
+            LOG("SCHED", "Robot busy (%s / %s), skipping auto restart %s", state.uiState.c_str(),
+                state.robotState.c_str(), slotStr.c_str());
             dataLogger.logGenericEvent("auto_restart_skipped", {{"day", String(day), FIELD_INT},
                                                                 {"slot", slotStr, FIELD_STRING},
                                                                 {"reason", "busy", FIELD_STRING},
-                                                                {"state", state.uiState, FIELD_STRING}});
+                                                                {"state", state.uiState, FIELD_STRING},
+                                                                {"robotState", state.robotState, FIELD_STRING}});
             firedAutoRestart = schedMins;
             return;
         }

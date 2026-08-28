@@ -171,6 +171,11 @@ struct RobotState : public JsonSerializable {
     String uiState; // e.g. "UIMGR_STATE_STANDBY"
     String robotState; // e.g. "ST_C_Standby"
 
+    // Prefers robotState (4.5.3+): uiState can stay at UIMGR_STATE_STARTHOUSECLEANING
+    // after a clean while the robot is back in standby. Falls back to uiState on
+    // older firmware that reports no robot state.
+    bool isIdle() const;
+
     std::vector<Field> toFields() const override;
 };
 

@@ -351,6 +351,7 @@
   "Applying...": "Uygulanıyor...",
   "New Battery": "Yeni Pil",
   "Use only after physically installing a replacement battery.": "Yalnızca fiziksel olarak yedek pil taktıktan sonra kullanın.",
+  "This resets the battery fuel gauge and calibration data. Only use this after physically replacing the battery. The charge percentage may be inaccurate for a few cycles until the system relearns the battery capacity.": "Bu işlem pil seviye göstergesini ve kalibrasyon verilerini sıfırlar. Yalnızca pili fiziksel olarak değiştirdikten sonra kullanın. Sistem pil kapasitesini yeniden öğrenene kadar şarj yüzdesi birkaç döngü boyunca hatalı olabilir.",
   "Loading battery diagnostics...": "Pil tanılama yükleniyor...",
   "Failed to set new battery": "Yeni pil ayarlanamadı",
   "Choose a network": "Bir ağ seçin",

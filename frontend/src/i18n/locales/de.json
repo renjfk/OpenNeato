@@ -351,6 +351,7 @@
   "Applying...": "Wird angewendet...",
   "New Battery": "Neue Batterie",
   "Use only after physically installing a replacement battery.": "Nur verwenden, nachdem tatsächlich eine Ersatzbatterie eingebaut wurde.",
+  "This resets the battery fuel gauge and calibration data. Only use this after physically replacing the battery. The charge percentage may be inaccurate for a few cycles until the system relearns the battery capacity.": "Dies setzt die Ladezustandsanzeige und die Kalibrierungsdaten des Akkus zurück. Nur nach einem physischen Austausch des Akkus verwenden. Die Ladeanzeige kann einige Zyklen lang ungenau sein, bis das System die Akkukapazität neu erlernt hat.",
   "Loading battery diagnostics...": "Batteriediagnose wird geladen...",
   "Failed to set new battery": "Neue Batterie konnte nicht eingerichtet werden",
   "Choose a network": "Netzwerk auswählen",

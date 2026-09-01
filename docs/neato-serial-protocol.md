@@ -588,6 +588,12 @@ Complete list from firmware 3.2.0 (unchanged in 4.5.3):
 - `UIMGR_STATE_OTA_LOGUPLOAD`
 - `UIMGR_STATE_INVALID`
 
+Note: the UI state is not a reliable idle indicator. A D6 Connected on 4.5.3 has
+been observed stuck in `UIMGR_STATE_STARTHOUSECLEANING` while docked and idle
+(`ST_C_Standby`) after a clean that raised `UI_ALERT_PM_LOAD_FAIL`. Prefer the
+robot state (below) for idle detection whenever it is present
+(`RobotState::isIdle()`).
+
 ## Robot States (ST_*)
 
 Reported in `GetState` second line (`Current Robot State is:`). Available in

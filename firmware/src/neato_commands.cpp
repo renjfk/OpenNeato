@@ -558,6 +558,13 @@ bool parseMotorData(const String& raw, MotorData& out) {
     return found;
 }
 
+bool RobotState::isIdle() const {
+    if (robotState.length() > 0) {
+        return robotState == "ST_C_Standby" || robotState == "ST_C_Idle" || robotState == "ST_M2_Charging_StdBy";
+    }
+    return uiState == "UIMGR_STATE_IDLE" || uiState == "UIMGR_STATE_STANDBY";
+}
+
 bool parseRobotState(const String& raw, RobotState& out) {
     // Format: "Current UI State is: UIMGR_STATE_STANDBY\r\n"
     //         "Current Robot State is: ST_C_Standby\r\n"

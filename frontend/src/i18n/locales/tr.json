@@ -94,6 +94,8 @@
   "Weak": "Zayıf",
   "Robot Notice": "Robot bildirimi",
   "Robot Attention Needed": "Robot Dikkat Gerektiriyor",
+  "Robot is picked up or tilted": "Robot kaldırıldı veya eğildi",
+  "Robot reported error {code}.": "Robot {code} hatasını bildirdi.",
   "Not in manual mode": "Manuel modda değil",
   "LIDAR unavailable": "LIDAR kullanılamıyor",
   "Joystick": "Kontrol kolu",

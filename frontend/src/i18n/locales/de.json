@@ -94,6 +94,8 @@
   "Weak": "Schwach",
   "Robot Notice": "Roboterhinweis",
   "Robot Attention Needed": "Roboter benötigt Aufmerksamkeit",
+  "Robot is picked up or tilted": "Roboter wurde angehoben oder gekippt",
+  "Robot reported error {code}.": "Roboter meldete Fehler {code}.",
   "Not in manual mode": "Nicht im manuellen Modus",
   "LIDAR unavailable": "LIDAR nicht verfügbar",
   "Joystick": "Steuerknüppel",

@@ -3314,3 +3314,28 @@ input:disabled {
         width: calc(100% - 72px);
     }
 }
+.map-zone-shape.movable {
+    cursor: grab;
+    pointer-events: all;
+}
+
+.map-zone-shape.movable:active {
+    cursor: grabbing;
+}
+
+.map-editor-chip-name,
+.map-editor-chip-delete {
+    border: 0;
+    padding: 0;
+    color: inherit;
+    background: transparent;
+}
+
+.map-editor-chip-name {
+    cursor: text;
+}
+
+.map-editor-chip-delete {
+    margin-left: 6px;
+    cursor: pointer;
+}

@@ -428,5 +428,9 @@
   "Tap the start and end of the no-go line.": "Start und Ende der No-Go-Linie antippen.",
   "Choose a drawing tool.": "Zeichenwerkzeug auswählen.",
   "Map editor": "Karteneditor",
-  "No-go line {number}": "No-Go-Linie {number}"
+  "No-go line {number}": "No-Go-Linie {number}",
+  "Move rooms": "Räume verschieben",
+  "Drag a room to move it.": "Einen Raum ziehen, um ihn zu verschieben.",
+  "A room with this name already exists.": "Ein Raum mit diesem Namen ist bereits vorhanden.",
+  "Delete room {name}": "Raum {name} löschen"
 }

@@ -428,5 +428,9 @@
   "Tap the start and end of the no-go line.": "Girilmez çizginin başlangıcına ve sonuna dokunun.",
   "Choose a drawing tool.": "Bir çizim aracı seçin.",
   "Map editor": "Harita düzenleyici",
-  "No-go line {number}": "Girilmez çizgi {number}"
+  "No-go line {number}": "Girilmez çizgi {number}",
+  "Move rooms": "Odaları taşı",
+  "Drag a room to move it.": "Taşımak için bir odayı sürükleyin.",
+  "A room with this name already exists.": "Bu ada sahip bir oda zaten var.",
+  "Delete room {name}": "{name} odasını sil"
 }

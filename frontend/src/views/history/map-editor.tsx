@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "preact/hooks";
+import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { api } from "../../api";
 import { T, useI18n } from "../../i18n";
 import type { HistoryFileInfo, MapConfig, MapData, MapPoint, MapTransform } from "../../types";
@@ -13,7 +13,12 @@ interface MapEditorProps {
     rotation: number;
 }
 
-type DrawMode = "idle" | "zone" | "no-go";
+type DrawMode = "idle" | "zone" | "no-go" | "move";
+
+interface DragState {
+    zoneId: string;
+    last: MapPoint;
+}
 
 interface CanvasSize {
     width: number;
@@ -33,9 +38,12 @@ export function MapEditor({ canvas, file, map, transform, rotation }: MapEditorP
     const [editing, setEditing] = useState(false);
     const [mode, setMode] = useState<DrawMode>("idle");
     const [draft, setDraft] = useState<MapPoint[]>([]);
+    const [drag, setDrag] = useState<DragState | null>(null);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
     const [size, setSize] = useState<CanvasSize>({ width: 0, height: 0 });
+    const configRef = useRef(config);
+    configRef.current = config;
 
     useEffect(() => {
         api.getMapConfig(file.name)
@@ -137,7 +145,7 @@ export function MapEditor({ canvas, file, map, transform, rotation }: MapEditorP
 
     const handleMapClick = useCallback(
         (event: MouseEvent) => {
-            if (mode === "idle" || !canvas) return;
+            if ((mode !== "zone" && mode !== "no-go") || !canvas) return;
             const rect = canvas.getBoundingClientRect();
             const point = toWorld({ x: event.clientX - rect.left, y: event.clientY - rect.top });
             if (!point) return;
@@ -175,6 +183,70 @@ export function MapEditor({ canvas, file, map, transform, rotation }: MapEditorP
         (id: string) => void save({ ...config, noGoLines: config.noGoLines.filter((line) => line.id !== id) }),
         [config, save],
     );
+
+    const renameZone = useCallback(
+        (id: string) => {
+            const zone = config.zones.find((item) => item.id === id);
+            if (!zone) return;
+            const name = window.prompt(t("Room name"), zone.name);
+            const trimmed = name?.trim();
+            if (!trimmed || trimmed === zone.name) return;
+            if (config.zones.some((item) => item.id !== id && item.name.toLowerCase() === trimmed.toLowerCase())) {
+                setError(t("A room with this name already exists."));
+                return;
+            }
+            void save({
+                ...config,
+                zones: config.zones.map((item) => (item.id === id ? { ...item, name: trimmed } : item)),
+            });
+        },
+        [config, save, t],
+    );
+
+    const startZoneDrag = useCallback(
+        (event: PointerEvent, zoneId: string) => {
+            if (mode !== "move" || !canvas) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const rect = canvas.getBoundingClientRect();
+            const point = toWorld({ x: event.clientX - rect.left, y: event.clientY - rect.top });
+            if (!point) return;
+            (event.currentTarget as SVGElement).setPointerCapture(event.pointerId);
+            setDrag({ zoneId, last: point });
+        },
+        [canvas, mode, toWorld],
+    );
+
+    const moveZone = useCallback(
+        (event: PointerEvent) => {
+            if (!drag || !canvas) return;
+            const rect = canvas.getBoundingClientRect();
+            const point = toWorld({ x: event.clientX - rect.left, y: event.clientY - rect.top });
+            if (!point) return;
+            const dx = point.x - drag.last.x;
+            const dy = point.y - drag.last.y;
+            setConfig((current) => {
+                const next = {
+                    ...current,
+                    zones: current.zones.map((zone) =>
+                        zone.id === drag.zoneId
+                            ? { ...zone, points: zone.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) }
+                            : zone,
+                    ),
+                };
+                configRef.current = next;
+                return next;
+            });
+            setDrag({ ...drag, last: point });
+        },
+        [canvas, drag, toWorld],
+    );
+
+    const finishZoneDrag = useCallback(() => {
+        if (!drag) return;
+        setDrag(null);
+        void save(configRef.current);
+    }, [drag, save]);
 
     const polygon = (points: MapPoint[]) =>
         points
@@ -218,6 +290,16 @@ export function MapEditor({ canvas, file, map, transform, rotation }: MapEditorP
                         >
                             <T>Draw no-go line</T>
                         </button>
+                        <button
+                            type="button"
+                            class={mode === "move" ? "btn primary" : "btn secondary"}
+                            onClick={() => {
+                                setMode("move");
+                                setDraft([]);
+                            }}
+                        >
+                            <T>Move rooms</T>
+                        </button>
                         {mode === "zone" && draft.length >= 3 && (
                             <button type="button" class="btn primary" onClick={finishZone}>
                                 <T>Finish room</T>
@@ -234,7 +316,9 @@ export function MapEditor({ canvas, file, map, transform, rotation }: MapEditorP
                             ? t("Tap at least three corners, then finish the room.")
                             : mode === "no-go"
                               ? t("Tap the start and end of the no-go line.")
-                              : t("Choose a drawing tool.")}
+                              : mode === "move"
+                                ? t("Drag a room to move it.")
+                                : t("Choose a drawing tool.")}
                     </p>
                 </>
             )}
@@ -244,10 +328,18 @@ export function MapEditor({ canvas, file, map, transform, rotation }: MapEditorP
                     class={`map-editor-overlay${editing ? "" : " readonly"}`}
                     viewBox={`0 0 ${size.width} ${size.height}`}
                     onClick={handleMapClick}
+                    onPointerMove={moveZone}
+                    onPointerUp={finishZoneDrag}
+                    onPointerCancel={finishZoneDrag}
                     aria-label={t("Map editor")}
                 >
                     {config.zones.map((zone) => (
-                        <polygon key={zone.id} points={polygon(zone.points)} class="map-zone-shape" />
+                        <polygon
+                            key={zone.id}
+                            points={polygon(zone.points)}
+                            class={`map-zone-shape${mode === "move" ? " movable" : ""}`}
+                            onPointerDown={(event) => startZoneDrag(event, zone.id)}
+                        />
                     ))}
                     {config.noGoLines.map((line) => {
                         const start = toScreen(line.start);
@@ -277,9 +369,19 @@ export function MapEditor({ canvas, file, map, transform, rotation }: MapEditorP
             {editing && (
                 <div class="map-editor-items">
                     {config.zones.map((zone) => (
-                        <button type="button" class="map-editor-chip zone" onClick={() => removeZone(zone.id)}>
-                            {zone.name} ×
-                        </button>
+                        <span class="map-editor-chip zone">
+                            <button type="button" class="map-editor-chip-name" onClick={() => renameZone(zone.id)}>
+                                {zone.name}
+                            </button>
+                            <button
+                                type="button"
+                                class="map-editor-chip-delete"
+                                onClick={() => removeZone(zone.id)}
+                                aria-label={t("Delete room {name}", { name: zone.name })}
+                            >
+                                ×
+                            </button>
+                        </span>
                     ))}
                     {config.noGoLines.map((line, index) => (
                         <button type="button" class="map-editor-chip no-go" onClick={() => removeLine(line.id)}>

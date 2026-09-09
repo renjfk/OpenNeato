@@ -428,5 +428,9 @@
   "Tap the start and end of the no-go line.": "Touchez le début et la fin de la ligne interdite.",
   "Choose a drawing tool.": "Choisissez un outil de dessin.",
   "Map editor": "Éditeur de carte",
-  "No-go line {number}": "Ligne interdite {number}"
+  "No-go line {number}": "Ligne interdite {number}",
+  "Move rooms": "Déplacer les pièces",
+  "Drag a room to move it.": "Faites glisser une pièce pour la déplacer.",
+  "A room with this name already exists.": "Une pièce portant ce nom existe déjà.",
+  "Delete room {name}": "Supprimer la pièce {name}"
 }

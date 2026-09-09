@@ -846,7 +846,7 @@ void CleaningHistory::enforceLimits() {
         histDirBytes += entry.size();
         if (name.endsWith(".jsonl") || name.endsWith(".jsonl.hs")) {
             fileCount++;
-            if (oldest.isEmpty() || name < oldest) {
+            if (!isPinned(name) && (oldest.isEmpty() || name < oldest)) {
                 oldest = name;
             }
         }
@@ -989,6 +989,8 @@ std::vector<HistorySessionInfo> CleaningHistory::listSessions() {
             info.name = name;
             info.size = entry.size();
             info.compressed = name.endsWith(".hs");
+            info.pinned = isPinned(name);
+            info.hasMapConfig = hasMapConfig(name);
 
             // Use cached metadata if available (avoids decompressing .hs files)
             auto cached = metaCache.find(name);
@@ -1064,7 +1066,11 @@ bool CleaningHistory::deleteSession(const String& filename) {
     if (!SPIFFS.exists(path))
         return false;
     metaCache.erase(filename);
-    return SPIFFS.remove(path);
+    bool removed = SPIFFS.remove(path);
+    SPIFFS.remove(sidecarPath(filename, ".pin"));
+    SPIFFS.remove(sidecarPath(filename, ".map.json"));
+    SPIFFS.remove(sidecarPath(filename, ".map.json.tmp"));
+    return removed;
 }
 
 void CleaningHistory::deleteAllSessions() {

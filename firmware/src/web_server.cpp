@@ -384,11 +384,70 @@ void WebServer::registerFirmwareRoutes() {
 
 void WebServer::registerMapRoutes() {
 
+    // PUT /api/history/{filename}/map-config or /pin. The router matches
+    // prefix paths, so the filename and resource are decoded from the URL.
+    loggedBodyRoute("/api/history", HTTP_PUT,
+                    [this](AsyncWebServerRequest *request, uint8_t *data, size_t len) -> int {
+                        String suffix = request->url().substring(String("/api/history/").length());
+                        const String configTail = "/map-config";
+                        const String pinTail = "/pin";
+
+                        if (suffix.endsWith(configTail)) {
+                            String filename = suffix.substring(0, suffix.length() - configTail.length());
+                            String body(reinterpret_cast<const char *>(data), len);
+                            String error;
+                            if (!historyMgr.writeMapConfig(filename, body, error)) {
+                                int status = error == "session not found" ? 404 : 400;
+                                sendError(request, status, error);
+                                return status;
+                            }
+                            request->send(200, "application/json", body);
+                            return 200;
+                        }
+
+                        if (suffix.endsWith(pinTail)) {
+                            String filename = suffix.substring(0, suffix.length() - pinTail.length());
+                            auto fields = fieldsFromJson(String(reinterpret_cast<const char *>(data), len));
+                            const Field *pinned = findField(fields, "pinned");
+                            if (!pinned || pinned->type != FIELD_BOOL) {
+                                sendError(request, 400, "pinned boolean is required");
+                                return 400;
+                            }
+                            if (!historyMgr.setPinned(filename, pinned->value == "true")) {
+                                sendError(request, 404, "session not found");
+                                return 404;
+                            }
+                            sendOk(request);
+                            return 200;
+                        }
+
+                        sendError(request, 404, "history resource not found");
+                        return 404;
+                    });
+
     // GET /api/history[/filename] — list sessions, collection status, or download a specific file
     server.on("/api/history", HTTP_GET, [this](AsyncWebServerRequest *request) {
         lastApiActivity = millis();
         unsigned long startMs = lastApiActivity;
         String suffix = request->url().substring(String("/api/history/").length());
+
+        const String configTail = "/map-config";
+        if (suffix.endsWith(configTail)) {
+            String filename = suffix.substring(0, suffix.length() - configTail.length());
+            String json;
+            if (!historyMgr.readMapConfig(filename, json)) {
+                if (!historyMgr.hasMapConfig(filename)) {
+                    json = "{\"version\":1,\"name\":\"\",\"zones\":[],\"noGoLines\":[]}";
+                } else {
+                    logger.logRequest(HTTP_GET, request->url().c_str(), 500, millis() - startMs);
+                    sendError(request, 500, "map configuration could not be read");
+                    return;
+                }
+            }
+            logger.logRequest(HTTP_GET, request->url().c_str(), 200, millis() - startMs);
+            request->send(200, "application/json", json);
+            return;
+        }
 
         if (suffix.isEmpty()) {
             // List all session files with embedded session/summary metadata
@@ -401,6 +460,8 @@ void WebServer::registerMapRoutes() {
                 json += R"({"name":")" + s.name + R"(","size":)" + String(static_cast<unsigned long>(s.size)) +
                         R"(,"compressed":)" + String(s.compressed ? "true" : "false") + R"(,"recording":)" +
                         String(s.recording ? "true" : "false");
+                json += R"(,"pinned":)" + String(s.pinned ? "true" : "false") + R"(,"hasMapConfig":)" +
+                        String(s.hasMapConfig ? "true" : "false");
                 if (s.session.length() > 0) {
                     json += ",\"session\":" + s.session;
                 } else {

@@ -414,5 +414,19 @@
   "China / Singapore (UTC+8)": "China / Singapur (UTC+8)",
   "Japan / Korea (UTC+9)": "Japan / Korea (UTC+9)",
   "Australia Eastern (UTC+10/+11)": "Ostaustralien (UTC+10/+11)",
-  "New Zealand (UTC+12/+13)": "Neuseeland (UTC+12/+13)"
+  "New Zealand (UTC+12/+13)": "Neuseeland (UTC+12/+13)",
+  "Unpin map": "Karte lösen",
+  "Pin as map": "Als Karte anheften",
+  "Close editor": "Editor schließen",
+  "Edit rooms and no-go lines": "Räume und No-Go-Linien bearbeiten",
+  "Draw room": "Raum zeichnen",
+  "Draw no-go line": "No-Go-Linie zeichnen",
+  "Finish room": "Raum abschließen",
+  "Cancel drawing": "Zeichnen abbrechen",
+  "Room name": "Raumname",
+  "Tap at least three corners, then finish the room.": "Mindestens drei Ecken antippen und den Raum anschließend abschließen.",
+  "Tap the start and end of the no-go line.": "Start und Ende der No-Go-Linie antippen.",
+  "Choose a drawing tool.": "Zeichenwerkzeug auswählen.",
+  "Map editor": "Karteneditor",
+  "No-go line {number}": "No-Go-Linie {number}"
 }

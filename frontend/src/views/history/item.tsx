@@ -10,6 +10,7 @@ import type { HistoryFileInfo, MapData } from "../../types";
 import { renderMap } from "./helpers";
 import { Wave } from "./loading-wave";
 import { MotionPlayer } from "./motion-player";
+import { MapEditor } from "./map-editor";
 
 interface HistoryItemViewProps {
     file: HistoryFileInfo;
@@ -199,6 +200,15 @@ export function HistoryItemView({ file, map, mapEmpty, recording, distanceUnit }
                         >
                             <Icon svg={rotateRightSvg} />
                         </button>
+                        {!recording && canvasEl && (
+                            <MapEditor
+                                canvas={canvasEl}
+                                file={file}
+                                map={map}
+                                transform={transform}
+                                rotation={rotation}
+                            />
+                        )}
                     </>
                 )}
             </div>

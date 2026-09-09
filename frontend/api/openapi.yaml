@@ -855,6 +855,78 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /api/history/{filename}/pin:
+    put:
+      tags:
+        - History
+      summary: Pin or unpin a cleaning session for reuse as a map
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pinned:
+                  type: boolean
+              required:
+                - pinned
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "404":
+          description: session not found
+  /api/history/{filename}/map-config:
+    get:
+      tags:
+        - History
+      summary: Read room and no-go line definitions for a reusable map
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Current configuration, or an empty default
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MapConfig"
+    put:
+      tags:
+        - History
+      summary: Atomically save room and no-go line definitions and pin the session
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MapConfig"
+      responses:
+        "200":
+          description: Saved configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MapConfig"
+        "400":
+          description: invalid map configuration
+        "404":
+          description: session not found
   /api/history/import:
     post:
       tags:
@@ -1666,6 +1738,67 @@ components:
         - identifying
         - repositoryUrl
         - license
+    MapPoint:
+      type: object
+      properties:
+        x:
+          type: number
+        y:
+          type: number
+      required:
+        - x
+        - y
+    MapZone:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        points:
+          type: array
+          minItems: 3
+          items:
+            $ref: "#/components/schemas/MapPoint"
+      required:
+        - id
+        - name
+        - points
+    NoGoLine:
+      type: object
+      properties:
+        id:
+          type: string
+        start:
+          $ref: "#/components/schemas/MapPoint"
+        end:
+          $ref: "#/components/schemas/MapPoint"
+      required:
+        - id
+        - start
+        - end
+    MapConfig:
+      type: object
+      properties:
+        version:
+          type: integer
+          enum:
+            - 1
+        name:
+          type: string
+        zones:
+          type: array
+          items:
+            $ref: "#/components/schemas/MapZone"
+        noGoLines:
+          type: array
+          items:
+            $ref: "#/components/schemas/NoGoLine"
+      required:
+        - version
+        - name
+        - zones
+        - noGoLines
     HistoryFileInfo:
       type: object
       properties:
@@ -1691,6 +1824,12 @@ components:
           nullable: true
           allOf:
             - $ref: "#/components/schemas/MapSummary"
+        pinned:
+          type: boolean
+          description: Session is protected from automatic cleanup and can be reused as a map
+        hasMapConfig:
+          type: boolean
+          description: A room or no-go line sidecar exists for this session
       required:
         - name
         - size
@@ -1698,6 +1837,8 @@ components:
         - recording
         - session
         - summary
+        - pinned
+        - hasMapConfig
     MapSession:
       type: object
       properties:

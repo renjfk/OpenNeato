@@ -414,5 +414,19 @@
   "China / Singapore (UTC+8)": "Çin / Singapur (UTC+8)",
   "Japan / Korea (UTC+9)": "Japonya / Kore (UTC+9)",
   "Australia Eastern (UTC+10/+11)": "Avustralya Doğu (UTC+10/+11)",
-  "New Zealand (UTC+12/+13)": "Yeni Zelanda (UTC+12/+13)"
+  "New Zealand (UTC+12/+13)": "Yeni Zelanda (UTC+12/+13)",
+  "Unpin map": "Harita sabitlemesini kaldır",
+  "Pin as map": "Harita olarak sabitle",
+  "Close editor": "Düzenleyiciyi kapat",
+  "Edit rooms and no-go lines": "Odaları ve girilmez çizgileri düzenle",
+  "Draw room": "Oda çiz",
+  "Draw no-go line": "Girilmez çizgi çiz",
+  "Finish room": "Odayı tamamla",
+  "Cancel drawing": "Çizimi iptal et",
+  "Room name": "Oda adı",
+  "Tap at least three corners, then finish the room.": "En az üç köşeye dokunun, ardından odayı tamamlayın.",
+  "Tap the start and end of the no-go line.": "Girilmez çizginin başlangıcına ve sonuna dokunun.",
+  "Choose a drawing tool.": "Bir çizim aracı seçin.",
+  "Map editor": "Harita düzenleyici",
+  "No-go line {number}": "Girilmez çizgi {number}"
 }

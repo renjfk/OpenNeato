@@ -3192,3 +3192,125 @@ input:disabled {
         font-size: 28px;
     }
 }
+/* Reusable map editor ------------------------------------------------------- */
+
+.map-editor {
+    display: contents;
+}
+
+.map-editor-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+    cursor: crosshair;
+    touch-action: none;
+}
+.map-editor-overlay.readonly {
+    pointer-events: none;
+}
+
+.map-editor-actions,
+.map-editor-toolbar,
+.map-editor-items {
+    position: absolute;
+    z-index: 4;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.map-editor-actions {
+    left: 12px;
+    bottom: 12px;
+}
+
+.map-editor-toolbar {
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    justify-content: center;
+    width: min(80%, 620px);
+}
+
+.map-editor-items {
+    right: 12px;
+    bottom: 12px;
+    justify-content: flex-end;
+    max-width: 50%;
+}
+
+.map-zone-shape {
+    fill: rgba(52, 199, 89, 0.18);
+    stroke: rgba(52, 199, 89, 0.95);
+    stroke-width: 2;
+}
+
+.map-no-go-shape,
+.map-draft-shape {
+    fill: none;
+    stroke: rgba(255, 69, 58, 0.95);
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.map-draft-shape {
+    stroke: rgba(10, 132, 255, 0.95);
+    stroke-dasharray: 6 4;
+}
+
+.map-draft-point {
+    fill: #0a84ff;
+    stroke: white;
+    stroke-width: 1.5;
+}
+
+.map-editor-chip {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 5px 9px;
+    color: var(--text);
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    backdrop-filter: blur(8px);
+}
+
+.map-editor-chip.zone {
+    border-color: rgba(52, 199, 89, 0.7);
+}
+
+.map-editor-chip.no-go {
+    border-color: rgba(255, 69, 58, 0.7);
+}
+
+.map-editor-error {
+    position: absolute;
+    z-index: 5;
+    left: 50%;
+    bottom: 58px;
+    transform: translateX(-50%);
+    max-width: 80%;
+    padding: 8px 12px;
+    border-radius: 8px;
+    color: #fff;
+    background: rgba(180, 35, 35, 0.95);
+}
+
+@media (max-width: 600px) {
+    .map-editor-actions {
+        left: 8px;
+        bottom: 8px;
+    }
+
+    .map-editor-items {
+        right: 8px;
+        bottom: 52px;
+        max-width: calc(100% - 16px);
+    }
+
+    .map-editor-toolbar {
+        top: 8px;
+        width: calc(100% - 72px);
+    }
+}

@@ -22,6 +22,8 @@ struct HistorySessionInfo {
     bool recording = false; // True if this is the active recording session
     String session; // Raw JSON of first line ({"type":"session",...})
     String summary; // Raw JSON of last line ({"type":"summary",...}), empty if still recording
+    bool pinned = false;
+    bool hasMapConfig = false;
 };
 
 // Records robot pose data during autonomous cleaning runs and stores each
@@ -43,6 +45,14 @@ public:
     std::shared_ptr<LogReader> readSession(const String& filename);
     bool deleteSession(const String& filename);
     void deleteAllSessions();
+
+    // Reusable map metadata. Pin markers and map configuration live in
+    // sidecar files so history JSONL remains import/export compatible.
+    bool setPinned(const String& filename, bool pinned);
+    bool isPinned(const String& filename) const;
+    bool hasMapConfig(const String& filename) const;
+    bool readMapConfig(const String& filename, String& json) const;
+    bool writeMapConfig(const String& filename, const String& json, String& error);
 
     // Called by WebServer when a clean command is sent via API.
     // Switches to active polling so collection starts immediately
@@ -148,6 +158,9 @@ private:
 
     // Read first and last lines from a session file (decompresses .hs files)
     static void readFirstLastLines(const String& path, bool compressed, String& firstLine, String& lastLine);
+    static bool isSessionFilename(const String& filename);
+    static String sidecarPath(const String& filename, const char *suffix);
+    static bool validateMapConfig(const String& json, String& error);
 
     // -- Metadata cache (avoids repeated decompression for listSessions) ------
     // Keyed by filename (e.g. "1771683615.jsonl.hs"). Populated on first list

@@ -147,6 +147,7 @@ enum CommandStatus {
 #define NVS_KEY_WIFI_TX_POWER "wifi_tx_pwr"
 #define NVS_KEY_UART_TX_PIN "uart_tx_pin"
 #define NVS_KEY_UART_RX_PIN "uart_rx_pin"
+#define NVS_KEY_HISTORY_CORS_ORIGIN "hist_origin"
 // NVS keys — Cleaning
 #define NVS_KEY_NAV_MODE "nav_mode" // Navigation mode: "Normal", "Gentle", "Deep", "Quick"
 // NVS keys — Manual clean

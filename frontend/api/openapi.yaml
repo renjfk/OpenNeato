@@ -796,6 +796,7 @@ paths:
       tags:
         - History
       summary: List all cleaning session files with embedded session and summary metadata
+      description: Cross-origin browser access is allowed only when the request Origin exactly matches historyCorsOrigin.
       responses:
         "200":
           description: OK
@@ -817,6 +818,7 @@ paths:
       tags:
         - History
       summary: Download a single session file (transparently decompressed)
+      description: Cross-origin browser access is allowed only when the request Origin exactly matches historyCorsOrigin.
       parameters:
         - name: filename
           in: path
@@ -1404,6 +1406,10 @@ components:
         apFallbackOnDisconnect:
           type: boolean
           description: Bring up the fallback AP automatically when STA drops
+        historyCorsOrigin:
+          type: string
+          description: Exact trusted browser origin allowed to read cleaning history (empty disables CORS)
+          example: "https://homeassistant.example.com"
         syslogEnabled:
           type: boolean
           description: When on, logs go to UDP syslog instead of flash

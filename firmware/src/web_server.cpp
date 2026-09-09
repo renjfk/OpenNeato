@@ -180,6 +180,17 @@ static String logListJson(const std::vector<LogFileInfo>& files) {
     return json;
 }
 
+static void addHistoryCors(AsyncWebServerRequest *request, AsyncWebServerResponse *response,
+                           const String& allowedOrigin) {
+    if (allowedOrigin.isEmpty() || !request->hasHeader("Origin"))
+        return;
+    String requestOrigin = request->getHeader("Origin")->value();
+    if (requestOrigin != allowedOrigin)
+        return;
+    response->addHeader("Access-Control-Allow-Origin", allowedOrigin);
+    response->addHeader("Vary", "Origin");
+}
+
 void WebServer::registerLogRoutes() {
 
     // GET /api/logs[/filename] — list logs or download a specific file
@@ -415,7 +426,9 @@ void WebServer::registerMapRoutes() {
             }
             json += "]";
             logger.logRequest(HTTP_GET, "/api/history", 200, millis() - startMs);
-            request->send(200, "application/json", json);
+            AsyncWebServerResponse *response = request->beginResponse(200, "application/json", json);
+            addHistoryCors(request, response, settingsMgr.get().historyCorsOrigin);
+            request->send(response);
             return;
         }
 
@@ -434,6 +447,7 @@ void WebServer::registerMapRoutes() {
                 [reader](uint8_t *buffer, size_t maxLen, size_t) -> size_t { return reader->read(buffer, maxLen); });
 
         response->addHeader("Content-Disposition", "attachment; filename=\"" + downloadName(suffix) + "\"");
+        addHistoryCors(request, response, settingsMgr.get().historyCorsOrigin);
 
         request->send(response);
     });

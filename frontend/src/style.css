@@ -2416,7 +2416,7 @@ input:disabled {
         opacity 0.15s,
         transform 0.1s;
     -webkit-tap-highlight-color: transparent;
-    z-index: 1;
+    z-index: 3;
 }
 
 .history-rotate-btn.left {

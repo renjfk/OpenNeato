@@ -11,6 +11,7 @@
 #include "wifi_manager.h"
 #include "scheduler.h"
 #include <SPIFFS.h>
+#include <new>
 
 unsigned long WebServer::lastApiActivity = 0;
 
@@ -61,14 +62,20 @@ void WebServer::loggedBodyRoute(const char *path, WebRequestMethodComposite http
             nullptr,
             [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
                 if (index == 0) {
-                    auto *body = new BufferedRequestBody();
+                    delete static_cast<BufferedRequestBody *>(request->_tempObject);
+                    auto *body = new (std::nothrow) BufferedRequestBody();
+                    if (!body) {
+                        request->_tempObject = nullptr;
+                        return;
+                    }
                     body->expectedLength = total;
                     body->valid = total <= MAX_BUFFERED_BODY_BYTES && body->value.reserve(total);
                     request->_tempObject = body;
                 }
 
                 auto *body = static_cast<BufferedRequestBody *>(request->_tempObject);
-                if (!body || !body->valid || index != body->value.length() || len > body->expectedLength - index) {
+                if (!body || !body->valid || index > body->expectedLength || index != body->value.length() ||
+                    len > body->expectedLength - index) {
                     if (body)
                         body->valid = false;
                     return;

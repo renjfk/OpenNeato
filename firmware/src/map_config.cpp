@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <string.h>
 #include "config.h"
+#include "map_config_parser.h"
 
 bool CleaningHistory::isSessionFilename(const String& filename) {
     return filename.length() > 6 && filename.indexOf('/') < 0 && filename.indexOf('\\') < 0 &&
@@ -49,32 +50,40 @@ bool CleaningHistory::readMapConfig(const String& filename, String& json) const 
     if (!hasMapConfig(filename))
         return false;
 
-    String path = sidecarPath(filename, ".map.json");
-    if (!SPIFFS.exists(path))
-        path += ".bak";
-    File file = SPIFFS.open(path, FILE_READ);
-    if (!file)
-        return false;
-    if (file.size() > MAP_CONFIG_MAX_BYTES) {
+    String primaryPath = sidecarPath(filename, ".map.json");
+    String backupPath = primaryPath + ".bak";
+    auto readValidFile = [&json](const String& path) {
+        if (!SPIFFS.exists(path))
+            return false;
+        File file = SPIFFS.open(path, FILE_READ);
+        if (!file)
+            return false;
+        size_t expectedSize = file.size();
+        if (expectedSize == 0 || expectedSize > MAP_CONFIG_MAX_BYTES) {
+            file.close();
+            return false;
+        }
+        String candidate = file.readString();
         file.close();
-        return false;
-    }
-    json = file.readString();
-    file.close();
-    return !json.isEmpty();
-}
+        if (candidate.length() != expectedSize)
+            return false;
+        String validationError;
+        if (!CleaningHistory::validateMapConfig(candidate, validationError))
+            return false;
+        json = candidate;
+        return true;
+    };
 
-static int mapConfigValueIndex(const String& json, const char *key) {
-    int keyIndex = json.indexOf(String("\"") + key + "\"");
-    if (keyIndex < 0)
-        return -1;
-    int colon = json.indexOf(':', keyIndex + strlen(key) + 2);
-    if (colon < 0)
-        return -1;
-    int value = colon + 1;
-    while (value < static_cast<int>(json.length()) && isspace(static_cast<unsigned char>(json.charAt(value))))
-        value++;
-    return value;
+    if (readValidFile(primaryPath))
+        return true;
+    if (!readValidFile(backupPath))
+        return false;
+
+    // Missing primary means power was lost between the two atomic renames. A corrupt primary
+    // is retained for diagnosis, while the valid backup remains available for future reads.
+    if (!SPIFFS.exists(primaryPath))
+        SPIFFS.rename(backupPath, primaryPath);
+    return true;
 }
 
 bool CleaningHistory::validateMapConfig(const String& json, String& error) {
@@ -82,71 +91,7 @@ bool CleaningHistory::validateMapConfig(const String& json, String& error) {
         error = "map configuration is empty or too large";
         return false;
     }
-
-    int start = 0;
-    while (start < static_cast<int>(json.length()) && (json.charAt(start) == ' ' || json.charAt(start) == '\n' ||
-                                                       json.charAt(start) == '\r' || json.charAt(start) == '\t'))
-        start++;
-    int versionValue = mapConfigValueIndex(json, "version");
-    int zonesValue = mapConfigValueIndex(json, "zones");
-    int noGoLinesValue = mapConfigValueIndex(json, "noGoLines");
-    if (start >= static_cast<int>(json.length()) || json.charAt(start) != '{' || versionValue < 0 || zonesValue < 0 ||
-        noGoLinesValue < 0 || json.charAt(versionValue) != '1' || json.charAt(zonesValue) != '[' ||
-        json.charAt(noGoLinesValue) != '[') {
-        error = "map configuration requires version 1, zones array, and noGoLines array";
-        return false;
-    }
-
-    bool inString = false;
-    bool escaped = false;
-    int braces = 0;
-    int brackets = 0;
-    bool rootClosed = false;
-    for (int i = start; i < static_cast<int>(json.length()); i++) {
-        char c = json.charAt(i);
-        if (rootClosed) {
-            if (!isspace(static_cast<unsigned char>(c))) {
-                error = "unexpected data after map configuration";
-                return false;
-            }
-            continue;
-        }
-        if (inString) {
-            if (escaped) {
-                escaped = false;
-            } else if (c == '\\') {
-                escaped = true;
-            } else if (c == '"') {
-                inString = false;
-            }
-            continue;
-        }
-        if (c == '"') {
-            inString = true;
-        } else if (c == '{') {
-            braces++;
-        } else if (c == '}') {
-            if (--braces < 0) {
-                error = "unbalanced map configuration";
-                return false;
-            }
-            if (braces == 0)
-                rootClosed = true;
-        } else if (c == '[') {
-            brackets++;
-        } else if (c == ']') {
-            if (--brackets < 0) {
-                error = "unbalanced map configuration";
-                return false;
-            }
-        }
-    }
-
-    if (inString || !rootClosed || braces != 0 || brackets != 0) {
-        error = "unbalanced map configuration";
-        return false;
-    }
-    return true;
+    return parseMapConfig(json, error);
 }
 
 bool CleaningHistory::writeMapConfig(const String& filename, const String& json, String& error) {

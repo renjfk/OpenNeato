@@ -868,8 +868,7 @@ void CleaningHistory::enforceLimits() {
         String fullPath = String(HISTORY_DIR) + "/" + oldest;
         LOG("HIST", "Limit: deleting %s (files=%d, histBytes=%u/%u)", fullPath.c_str(), fileCount, histDirBytes,
             histBudget);
-        SPIFFS.remove(fullPath);
-        metaCache.erase(oldest);
+        deleteSession(oldest);
     }
 }
 
@@ -1070,6 +1069,7 @@ bool CleaningHistory::deleteSession(const String& filename) {
     SPIFFS.remove(sidecarPath(filename, ".pin"));
     SPIFFS.remove(sidecarPath(filename, ".map.json"));
     SPIFFS.remove(sidecarPath(filename, ".map.json.tmp"));
+    SPIFFS.remove(sidecarPath(filename, ".map.json.bak"));
     return removed;
 }
 

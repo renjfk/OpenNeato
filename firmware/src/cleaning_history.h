@@ -49,6 +49,7 @@ public:
     // Reusable map metadata. Pin markers and map configuration live in
     // sidecar files so history JSONL remains import/export compatible.
     bool setPinned(const String& filename, bool pinned);
+    bool hasSession(const String& filename) const;
     bool isPinned(const String& filename) const;
     bool hasMapConfig(const String& filename) const;
     bool readMapConfig(const String& filename, String& json) const;

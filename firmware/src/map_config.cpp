@@ -1,6 +1,8 @@
 #include "cleaning_history.h"
 
 #include <SPIFFS.h>
+#include <ctype.h>
+#include <string.h>
 #include "config.h"
 
 bool CleaningHistory::isSessionFilename(const String& filename) {
@@ -12,16 +14,21 @@ String CleaningHistory::sidecarPath(const String& filename, const char *suffix) 
     return String(HISTORY_DIR) + "/" + filename + suffix;
 }
 
+bool CleaningHistory::hasSession(const String& filename) const {
+    return isSessionFilename(filename) && SPIFFS.exists(String(HISTORY_DIR) + "/" + filename);
+}
+
 bool CleaningHistory::isPinned(const String& filename) const {
     return isSessionFilename(filename) && SPIFFS.exists(sidecarPath(filename, ".pin"));
 }
 
 bool CleaningHistory::hasMapConfig(const String& filename) const {
-    return isSessionFilename(filename) && SPIFFS.exists(sidecarPath(filename, ".map.json"));
+    return isSessionFilename(filename) &&
+           (SPIFFS.exists(sidecarPath(filename, ".map.json")) || SPIFFS.exists(sidecarPath(filename, ".map.json.bak")));
 }
 
 bool CleaningHistory::setPinned(const String& filename, bool pinned) {
-    if (!isSessionFilename(filename) || !SPIFFS.exists(String(HISTORY_DIR) + "/" + filename))
+    if (!hasSession(filename))
         return false;
 
     String path = sidecarPath(filename, ".pin");
@@ -42,7 +49,10 @@ bool CleaningHistory::readMapConfig(const String& filename, String& json) const 
     if (!hasMapConfig(filename))
         return false;
 
-    File file = SPIFFS.open(sidecarPath(filename, ".map.json"), FILE_READ);
+    String path = sidecarPath(filename, ".map.json");
+    if (!SPIFFS.exists(path))
+        path += ".bak";
+    File file = SPIFFS.open(path, FILE_READ);
     if (!file)
         return false;
     if (file.size() > MAP_CONFIG_MAX_BYTES) {
@@ -52,6 +62,19 @@ bool CleaningHistory::readMapConfig(const String& filename, String& json) const 
     json = file.readString();
     file.close();
     return !json.isEmpty();
+}
+
+static int mapConfigValueIndex(const String& json, const char *key) {
+    int keyIndex = json.indexOf(String("\"") + key + "\"");
+    if (keyIndex < 0)
+        return -1;
+    int colon = json.indexOf(':', keyIndex + strlen(key) + 2);
+    if (colon < 0)
+        return -1;
+    int value = colon + 1;
+    while (value < static_cast<int>(json.length()) && isspace(static_cast<unsigned char>(json.charAt(value))))
+        value++;
+    return value;
 }
 
 bool CleaningHistory::validateMapConfig(const String& json, String& error) {
@@ -64,9 +87,13 @@ bool CleaningHistory::validateMapConfig(const String& json, String& error) {
     while (start < static_cast<int>(json.length()) && (json.charAt(start) == ' ' || json.charAt(start) == '\n' ||
                                                        json.charAt(start) == '\r' || json.charAt(start) == '\t'))
         start++;
-    if (start >= static_cast<int>(json.length()) || json.charAt(start) != '{' || json.indexOf("\"version\"") < 0 ||
-        json.indexOf("\"zones\"") < 0 || json.indexOf("\"noGoLines\"") < 0) {
-        error = "map configuration must contain version, zones, and noGoLines";
+    int versionValue = mapConfigValueIndex(json, "version");
+    int zonesValue = mapConfigValueIndex(json, "zones");
+    int noGoLinesValue = mapConfigValueIndex(json, "noGoLines");
+    if (start >= static_cast<int>(json.length()) || json.charAt(start) != '{' || versionValue < 0 || zonesValue < 0 ||
+        noGoLinesValue < 0 || json.charAt(versionValue) != '1' || json.charAt(zonesValue) != '[' ||
+        json.charAt(noGoLinesValue) != '[') {
+        error = "map configuration requires version 1, zones array, and noGoLines array";
         return false;
     }
 
@@ -74,8 +101,16 @@ bool CleaningHistory::validateMapConfig(const String& json, String& error) {
     bool escaped = false;
     int braces = 0;
     int brackets = 0;
+    bool rootClosed = false;
     for (int i = start; i < static_cast<int>(json.length()); i++) {
         char c = json.charAt(i);
+        if (rootClosed) {
+            if (!isspace(static_cast<unsigned char>(c))) {
+                error = "unexpected data after map configuration";
+                return false;
+            }
+            continue;
+        }
         if (inString) {
             if (escaped) {
                 escaped = false;
@@ -95,6 +130,8 @@ bool CleaningHistory::validateMapConfig(const String& json, String& error) {
                 error = "unbalanced map configuration";
                 return false;
             }
+            if (braces == 0)
+                rootClosed = true;
         } else if (c == '[') {
             brackets++;
         } else if (c == ']') {
@@ -105,7 +142,7 @@ bool CleaningHistory::validateMapConfig(const String& json, String& error) {
         }
     }
 
-    if (inString || braces != 0 || brackets != 0) {
+    if (inString || !rootClosed || braces != 0 || brackets != 0) {
         error = "unbalanced map configuration";
         return false;
     }
@@ -113,7 +150,7 @@ bool CleaningHistory::validateMapConfig(const String& json, String& error) {
 }
 
 bool CleaningHistory::writeMapConfig(const String& filename, const String& json, String& error) {
-    if (!isSessionFilename(filename) || !SPIFFS.exists(String(HISTORY_DIR) + "/" + filename)) {
+    if (!hasSession(filename)) {
         error = "session not found";
         return false;
     }
@@ -122,7 +159,14 @@ bool CleaningHistory::writeMapConfig(const String& filename, const String& json,
 
     String path = sidecarPath(filename, ".map.json");
     String tempPath = path + ".tmp";
+    String backupPath = path + ".bak";
     SPIFFS.remove(tempPath);
+    if (!SPIFFS.exists(path) && SPIFFS.exists(backupPath) && !SPIFFS.rename(backupPath, path)) {
+        error = "could not recover existing map configuration";
+        return false;
+    }
+    if (SPIFFS.exists(path))
+        SPIFFS.remove(backupPath);
 
     File file = SPIFFS.open(tempPath, FILE_WRITE);
     if (!file) {
@@ -138,16 +182,26 @@ bool CleaningHistory::writeMapConfig(const String& filename, const String& json,
         return false;
     }
 
-    SPIFFS.remove(path);
+    bool hadConfig = SPIFFS.exists(path);
+    if (hadConfig && !SPIFFS.rename(path, backupPath)) {
+        SPIFFS.remove(tempPath);
+        error = "could not preserve existing map configuration";
+        return false;
+    }
     if (!SPIFFS.rename(tempPath, path)) {
         SPIFFS.remove(tempPath);
+        if (hadConfig)
+            SPIFFS.rename(backupPath, path);
         error = "could not activate map configuration";
         return false;
     }
     if (!setPinned(filename, true)) {
         SPIFFS.remove(path);
+        if (hadConfig)
+            SPIFFS.rename(backupPath, path);
         error = "could not pin session";
         return false;
     }
+    SPIFFS.remove(backupPath);
     return true;
 }

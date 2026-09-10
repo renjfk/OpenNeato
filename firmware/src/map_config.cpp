@@ -61,13 +61,11 @@ bool CleaningHistory::validateMapConfig(const String& json, String& error) {
     }
 
     int start = 0;
-    while (start < static_cast<int>(json.length()) &&
-           (json.charAt(start) == ' ' || json.charAt(start) == '\n' || json.charAt(start) == '\r' ||
-            json.charAt(start) == '\t'))
+    while (start < static_cast<int>(json.length()) && (json.charAt(start) == ' ' || json.charAt(start) == '\n' ||
+                                                       json.charAt(start) == '\r' || json.charAt(start) == '\t'))
         start++;
-    if (start >= static_cast<int>(json.length()) || json.charAt(start) != '{' ||
-        json.indexOf("\"version\"") < 0 || json.indexOf("\"zones\"") < 0 ||
-        json.indexOf("\"noGoLines\"") < 0) {
+    if (start >= static_cast<int>(json.length()) || json.charAt(start) != '{' || json.indexOf("\"version\"") < 0 ||
+        json.indexOf("\"zones\"") < 0 || json.indexOf("\"noGoLines\"") < 0) {
         error = "map configuration must contain version, zones, and noGoLines";
         return false;
     }

@@ -249,7 +249,7 @@ const injectCorruptedPoses = (lines) => {
     return result;
 };
 
-const listHistory = (historySessions, faults) => {
+const listHistory = (historySessions, faults, mapConfigs = new Map(), pinnedMaps = new Set()) => {
     const list = [...historySessions.entries()].map(([name, lines]) => {
         let session = null;
         let summary = null;
@@ -273,6 +273,8 @@ const listHistory = (historySessions, faults) => {
             recording: summary === null,
             session,
             summary,
+            pinned: pinnedMaps.has(name),
+            hasMapConfig: mapConfigs.has(name),
         };
     });
 
@@ -813,10 +815,13 @@ function createMockApi(context) {
             return textResponse(`${cmd}\r\nMock response for: ${cmd}\r\n\x1a`, 200, { "Content-Type": "text/plain" });
         }
 
-        if (method === "GET" && path === "/api/history") return listHistory(context.historySessions, faults);
+        if (method === "GET" && path === "/api/history")
+            return listHistory(context.historySessions, faults, context.mapConfigs, context.pinnedMaps);
 
         if (method === "DELETE" && path === "/api/history") {
             context.historySessions.clear();
+            context.mapConfigs?.clear();
+            context.pinnedMaps?.clear();
             return okResponse();
         }
 
@@ -832,6 +837,44 @@ function createMockApi(context) {
             return okResponse();
         }
 
+        const mapConfigMatch = path.match(/^\/api\/history\/(.+)\/map-config$/);
+        if (mapConfigMatch) {
+            const filename = decodeURIComponent(mapConfigMatch[1]);
+            if (!context.historySessions.has(filename)) return errorResponse("session not found", 404);
+            context.mapConfigs ??= new Map();
+            if (method === "GET") {
+                return jsonResponse(
+                    context.mapConfigs.get(filename) ?? { version: 1, name: "", zones: [], noGoLines: [] },
+                );
+            }
+            if (method === "PUT") {
+                const config = await request.json();
+                if (config?.version !== 1 || !Array.isArray(config.zones) || !Array.isArray(config.noGoLines)) {
+                    return errorResponse("invalid map configuration", 400);
+                }
+                context.mapConfigs.set(filename, config);
+                context.pinnedMaps ??= new Set();
+                context.pinnedMaps.add(filename);
+                return jsonResponse(config);
+            }
+            return errorResponse("method not allowed", 405);
+        }
+
+        const pinMatch = path.match(/^\/api\/history\/(.+)\/pin$/);
+        if (pinMatch && method === "PUT") {
+            const filename = decodeURIComponent(pinMatch[1]);
+            if (!context.historySessions.has(filename)) return errorResponse("session not found", 404);
+            context.mapConfigs ??= new Map();
+            context.pinnedMaps ??= new Set();
+            const body = await request.json();
+            if (body.pinned) {
+                context.pinnedMaps.add(filename);
+            } else {
+                context.pinnedMaps.delete(filename);
+            }
+            return okResponse();
+        }
+
         const historyMatch = path.match(/^\/api\/history\/(.+)$/);
         if (historyMatch) {
             const filename = decodeURIComponent(historyMatch[1]);
@@ -843,6 +886,8 @@ function createMockApi(context) {
             }
             if (method === "DELETE") {
                 context.historySessions.delete(filename);
+                context.mapConfigs?.delete(filename);
+                context.pinnedMaps?.delete(filename);
                 return okResponse();
             }
             return errorResponse("method not allowed", 405);

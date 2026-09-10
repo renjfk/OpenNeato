@@ -11,8 +11,19 @@
 #include "wifi_manager.h"
 #include "scheduler.h"
 #include <SPIFFS.h>
+#include <new>
 
 unsigned long WebServer::lastApiActivity = 0;
+
+namespace {
+    constexpr size_t MAX_BUFFERED_BODY_BYTES = MAP_CONFIG_MAX_BYTES;
+
+    struct BufferedRequestBody {
+        String value;
+        size_t expectedLength = 0;
+        bool valid = true;
+    };
+} // namespace
 
 WebServer::WebServer(AsyncWebServer& server, NeatoSerial& neato, DataLogger& logger, SystemManager& sys,
                      FirmwareManager& fw, SettingsManager& settings, ManualCleanManager& manual,
@@ -31,12 +42,46 @@ void WebServer::loggedRoute(const char *path, WebRequestMethodComposite httpMeth
 
 void WebServer::loggedBodyRoute(const char *path, WebRequestMethodComposite httpMethod, BodyHandler handler) {
     server.on(
-            path, httpMethod, [](AsyncWebServerRequest *request) { /* handled in body callback */ }, nullptr,
-            [this, handler](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t, size_t) {
+            path, httpMethod,
+            [this, handler](AsyncWebServerRequest *request) {
                 lastApiActivity = millis();
                 unsigned long startMs = lastApiActivity;
-                int status = handler(request, data, len);
+                auto *body = static_cast<BufferedRequestBody *>(request->_tempObject);
+                request->_tempObject = nullptr;
+                int status;
+                if (!body || !body->valid || body->value.length() != body->expectedLength) {
+                    status = body && body->expectedLength > MAX_BUFFERED_BODY_BYTES ? 413 : 400;
+                    sendError(request, status, status == 413 ? "request body too large" : "incomplete request body");
+                } else {
+                    uint8_t *data = reinterpret_cast<uint8_t *>(const_cast<char *>(body->value.c_str()));
+                    status = handler(request, data, body->value.length());
+                }
+                delete body;
                 logger.logRequest(request->method(), request->url().c_str(), status, millis() - startMs);
+            },
+            nullptr,
+            [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+                if (index == 0) {
+                    delete static_cast<BufferedRequestBody *>(request->_tempObject);
+                    auto *body = new (std::nothrow) BufferedRequestBody();
+                    if (!body) {
+                        request->_tempObject = nullptr;
+                        return;
+                    }
+                    body->expectedLength = total;
+                    body->valid = total <= MAX_BUFFERED_BODY_BYTES && body->value.reserve(total);
+                    request->_tempObject = body;
+                }
+
+                auto *body = static_cast<BufferedRequestBody *>(request->_tempObject);
+                if (!body || !body->valid || index > body->expectedLength || index != body->value.length() ||
+                    len > body->expectedLength - index) {
+                    if (body)
+                        body->valid = false;
+                    return;
+                }
+                if (len > 0 && !body->value.concat(reinterpret_cast<const char *>(data), len))
+                    body->valid = false;
             });
 }
 
@@ -384,11 +429,74 @@ void WebServer::registerFirmwareRoutes() {
 
 void WebServer::registerMapRoutes() {
 
+    // PUT /api/history/{filename}/map-config or /pin. The router matches
+    // prefix paths, so the filename and resource are decoded from the URL.
+    loggedBodyRoute("/api/history", HTTP_PUT, [this](AsyncWebServerRequest *request, uint8_t *data, size_t len) -> int {
+        String suffix = request->url().substring(String("/api/history/").length());
+        const String configTail = "/map-config";
+        const String pinTail = "/pin";
+
+        if (suffix.endsWith(configTail)) {
+            String filename = suffix.substring(0, suffix.length() - configTail.length());
+            String body(reinterpret_cast<const char *>(data), len);
+            String error;
+            if (!historyMgr.writeMapConfig(filename, body, error)) {
+                int status = error == "session not found" ? 404 : 400;
+                sendError(request, status, error);
+                return status;
+            }
+            request->send(200, "application/json", body);
+            return 200;
+        }
+
+        if (suffix.endsWith(pinTail)) {
+            String filename = suffix.substring(0, suffix.length() - pinTail.length());
+            auto fields = fieldsFromJson(String(reinterpret_cast<const char *>(data), len));
+            const Field *pinned = findField(fields, "pinned");
+            if (!pinned || pinned->type != FIELD_BOOL) {
+                sendError(request, 400, "pinned boolean is required");
+                return 400;
+            }
+            if (!historyMgr.setPinned(filename, pinned->value == "true")) {
+                sendError(request, 404, "session not found");
+                return 404;
+            }
+            sendOk(request);
+            return 200;
+        }
+
+        sendError(request, 404, "history resource not found");
+        return 404;
+    });
+
     // GET /api/history[/filename] — list sessions, collection status, or download a specific file
     server.on("/api/history", HTTP_GET, [this](AsyncWebServerRequest *request) {
         lastApiActivity = millis();
         unsigned long startMs = lastApiActivity;
         String suffix = request->url().substring(String("/api/history/").length());
+
+        const String configTail = "/map-config";
+        if (suffix.endsWith(configTail)) {
+            String filename = suffix.substring(0, suffix.length() - configTail.length());
+            if (!historyMgr.hasSession(filename)) {
+                logger.logRequest(HTTP_GET, request->url().c_str(), 404, millis() - startMs);
+                sendError(request, 404, "session not found");
+                return;
+            }
+            String json;
+            if (!historyMgr.readMapConfig(filename, json)) {
+                if (!historyMgr.hasMapConfig(filename)) {
+                    json = "{\"version\":1,\"name\":\"\",\"zones\":[],\"noGoLines\":[]}";
+                } else {
+                    logger.logRequest(HTTP_GET, request->url().c_str(), 500, millis() - startMs);
+                    sendError(request, 500, "map configuration could not be read");
+                    return;
+                }
+            }
+            logger.logRequest(HTTP_GET, request->url().c_str(), 200, millis() - startMs);
+            request->send(200, "application/json", json);
+            return;
+        }
 
         if (suffix.isEmpty()) {
             // List all session files with embedded session/summary metadata
@@ -401,6 +509,8 @@ void WebServer::registerMapRoutes() {
                 json += R"({"name":")" + s.name + R"(","size":)" + String(static_cast<unsigned long>(s.size)) +
                         R"(,"compressed":)" + String(s.compressed ? "true" : "false") + R"(,"recording":)" +
                         String(s.recording ? "true" : "false");
+                json += R"(,"pinned":)" + String(s.pinned ? "true" : "false") + R"(,"hasMapConfig":)" +
+                        String(s.hasMapConfig ? "true" : "false");
                 if (s.session.length() > 0) {
                     json += ",\"session\":" + s.session;
                 } else {

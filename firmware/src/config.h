@@ -198,6 +198,7 @@ enum CommandStatus {
 #define HISTORY_MIN_FS_PERCENT 10 // History always gets at least this % of filesystem
 #define HISTORY_MAX_FILES 20 // Maximum number of archived session files to keep
 #define HISTORY_AREA_CELL_M 0.5f // Coarse grid cell size in meters for visited-area estimation
+#define MAP_CONFIG_MAX_BYTES 12288 // Maximum JSON sidecar size for rooms and no-go lines
 #define HISTORY_MIN_SNAPSHOTS 3 // Discard sessions with fewer snapshots (too short to render a useful map)
 #define HISTORY_IMPORT_MAX_BYTES 262144 // 256 KB max import file size (2h clean at 2s intervals ~ 180KB)
 

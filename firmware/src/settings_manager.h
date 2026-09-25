@@ -27,6 +27,7 @@ struct Settings : public JsonSerializable {
     int wifiTxPower = WIFI_DEFAULT_TX_POWER; // 0.25 dBm units (34 = 8.5 dBm)
     int uartTxPin = NEATO_DEFAULT_TX_PIN; // ESP GPIO -> Robot RX
     int uartRxPin = NEATO_DEFAULT_RX_PIN; // ESP GPIO <- Robot TX
+    String historyCorsOrigin; // Exact trusted browser origin; empty disables cross-origin map reads
     // House cleaning — sent to robot before each house clean starts
     String navMode = "Normal"; // Navigation mode: "Normal", "Gentle", "Deep", "Quick"
     // Manual clean motor settings

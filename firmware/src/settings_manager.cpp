@@ -59,6 +59,7 @@ void SettingsManager::load() {
     current.wifiTxPower = prefs.getInt(NVS_KEY_WIFI_TX_POWER, WIFI_DEFAULT_TX_POWER);
     current.uartTxPin = prefs.getInt(NVS_KEY_UART_TX_PIN, NEATO_DEFAULT_TX_PIN);
     current.uartRxPin = prefs.getInt(NVS_KEY_UART_RX_PIN, NEATO_DEFAULT_RX_PIN);
+    current.historyCorsOrigin = prefs.getString(NVS_KEY_HISTORY_CORS_ORIGIN, "");
     current.navMode = prefs.getString(NVS_KEY_NAV_MODE, "Normal");
     current.stallThreshold = prefs.getInt(NVS_KEY_MC_STALL_THR, MANUAL_STALL_LOAD_PCT);
     current.brushRpm = prefs.getInt(NVS_KEY_MC_BRUSH_RPM, MANUAL_BRUSH_RPM);
@@ -94,6 +95,7 @@ void SettingsManager::save() {
     prefs.putInt(NVS_KEY_WIFI_TX_POWER, current.wifiTxPower);
     prefs.putInt(NVS_KEY_UART_TX_PIN, current.uartTxPin);
     prefs.putInt(NVS_KEY_UART_RX_PIN, current.uartRxPin);
+    prefs.putString(NVS_KEY_HISTORY_CORS_ORIGIN, current.historyCorsOrigin);
     prefs.putString(NVS_KEY_NAV_MODE, current.navMode);
     prefs.putInt(NVS_KEY_MC_STALL_THR, current.stallThreshold);
     prefs.putInt(NVS_KEY_MC_BRUSH_RPM, current.brushRpm);
@@ -225,6 +227,25 @@ ApplyResult SettingsManager::apply(const String& json) {
         changed = true;
         needReboot = true;
         LOG("SETTINGS", "UART RX pin -> GPIO%d (reboot required)", current.uartRxPin);
+    }
+
+    if (incoming.historyCorsOrigin != current.historyCorsOrigin) {
+        String origin = incoming.historyCorsOrigin;
+        origin.trim();
+        bool valid = origin.isEmpty() || origin.length() <= 128;
+        if (!origin.isEmpty()) {
+            int hostStart = origin.indexOf("://");
+            bool hasScheme = origin.startsWith("http://") || origin.startsWith("https://");
+            bool hasPath = hostStart < 0 || origin.indexOf("/", hostStart + 3) >= 0;
+            bool unsafeChars = origin.indexOf("*") >= 0 || origin.indexOf("\r") >= 0 || origin.indexOf("\n") >= 0;
+            valid = valid && hasScheme && !hasPath && !unsafeChars;
+        }
+        if (!valid)
+            return APPLY_INVALID;
+        current.historyCorsOrigin = origin;
+        changed = true;
+        LOG("SETTINGS", "History CORS origin -> %s",
+            current.historyCorsOrigin.isEmpty() ? "(disabled)" : current.historyCorsOrigin.c_str());
     }
 
     // Cleaning — navigation mode (sent to robot before each house clean)
@@ -378,6 +399,7 @@ std::vector<Field> Settings::toFields() const {
             {"wifiTxPower", String(wifiTxPower), FIELD_INT},
             {"uartTxPin", String(uartTxPin), FIELD_INT},
             {"uartRxPin", String(uartRxPin), FIELD_INT},
+            {"historyCorsOrigin", historyCorsOrigin, FIELD_STRING},
             {"maxGpioPin", String(MAX_GPIO_PIN), FIELD_INT},
             {"navMode", navMode, FIELD_STRING},
             {"stallThreshold", String(stallThreshold), FIELD_INT},
@@ -440,6 +462,10 @@ bool Settings::fromFields(const std::vector<Field>& fields) {
     }
     if ((f = findField(fields, "uartRxPin")) && f->type == FIELD_INT) {
         uartRxPin = f->value.toInt();
+        applied = true;
+    }
+    if ((f = findField(fields, "historyCorsOrigin")) && f->type == FIELD_STRING) {
+        historyCorsOrigin = f->value;
         applied = true;
     }
     if ((f = findField(fields, "navMode")) && f->type == FIELD_STRING) {

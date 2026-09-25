@@ -195,7 +195,9 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
         ? {
               kind: (error.data.kind === "warning" ? "warning" : "error") as "error" | "warning",
               title: error.data.kind === "warning" ? "Robot Notice" : "Robot Attention Needed",
-              message: error.data.displayMessage || `Robot reported error ${error.data.errorCode}.`,
+              message: error.data.displayMessage
+                  ? t(error.data.displayMessage)
+                  : t("Robot reported error {code}.", { code: error.data.errorCode }),
           }
         : null;
     const hasRobotError = robotError?.kind === "error";

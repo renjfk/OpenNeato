@@ -33,23 +33,28 @@
 
 class ManualCleanManager : public LoopTask {
 public:
+    enum class ControlOwner { NONE, MANUAL_UI, NAVIGATION };
     ManualCleanManager(NeatoSerial& serial);
 
     // Enter or exit manual mode (enable=true → TestMode On + LDS start, false → shutdown).
     // Returns false if already in requested state or a transition is in progress (caller gets 503).
     // Callback fires when the transition completes.
     bool enable(bool enable, std::function<void(bool)> callback);
+    bool enableNavigation(bool enable, std::function<void(bool)> callback);
 
     // Send a wheel move command. Validates against current obstacle state.
     // Returns false immediately if not active or a move is already queued (caller gets 503).
     // left/right: distance in mm (positive = forward, negative = backward); speed: mm/s.
     bool move(int leftMM, int rightMM, int speedMMs, std::function<void(bool)> callback);
+    bool moveNavigation(int leftMM, int rightMM, int speedMMs, std::function<void(bool)> callback);
 
     // Control cleaning motors (brush, vacuum, side brush).
     // Returns false immediately if not active (caller gets 503).
     bool setMotors(bool brush, bool vacuum, bool sideBrush, std::function<void(bool)> callback);
 
     bool isActive() const { return active; }
+    bool isWatchdogStopped() const { return watchdogStopped; }
+    bool isNavigationOwner() const { return owner == ControlOwner::NAVIGATION; }
 
     // Update motor/safety settings from SettingsManager. Called at boot and on change.
     void setStallThreshold(int pct) { stallLoadPct = pct; }
@@ -66,6 +71,8 @@ private:
     bool enabling = false; // Transition in progress (enable sequence)
     unsigned long enablingStartMs = 0; // millis() when enable() started (for timeout recovery)
     bool disabling = false; // Transition in progress (disable sequence)
+    ControlOwner owner = ControlOwner::NONE;
+    uint32_t generation = 0;
 
     // Current motor state (to avoid redundant commands on toggle)
     bool brushOn = false;
@@ -104,6 +111,7 @@ private:
 
     // Poll digital sensors for bumper/wheel-lift state
     void pollBumpers();
+    void updateSafetyState(const DigitalSensorData& data);
 
     // Poll motor odometry while wheels are moving to detect stalls
     void pollStall();
@@ -111,6 +119,9 @@ private:
     // Check if a move command is safe given current obstacle state.
     // Returns true if the move is allowed, false if blocked.
     bool isMoveAllowed(int leftMM, int rightMM);
+    bool enableFor(ControlOwner requestedOwner, bool enable, std::function<void(bool)> callback);
+    bool moveFor(ControlOwner requestedOwner, int leftMM, int rightMM, int speedMMs, std::function<void(bool)> callback,
+                 bool requireFreshSafety);
 
     // Stop all wheel movement immediately
     void stopWheels();

@@ -18,9 +18,10 @@ const RECOVERY_GUIDE_URL =
 
 interface HistoryViewProps {
     distanceUnit: DistanceUnit;
+    mapsOnly?: boolean;
 }
 
-export function HistoryView({ distanceUnit }: HistoryViewProps) {
+export function HistoryView({ distanceUnit, mapsOnly = false }: HistoryViewProps) {
     const { t } = useI18n();
     const navigate = useNavigate();
     const path = usePath();
@@ -35,15 +36,17 @@ export function HistoryView({ distanceUnit }: HistoryViewProps) {
     // the recovery panel instead of the normal list view.
     const [listCorrupted, setListCorrupted] = useState(false);
     const [confirmReset, setConfirmReset] = useState(false);
+    const basePath = mapsOnly ? "/maps" : "/history";
 
-    // Derive selected filename from URL: /history = list, /history/<name> = detail
-    const selectedName = path.startsWith("/history/") ? decodeURIComponent(path.slice(9)) : null;
+    // Both history and the dedicated reference-map area use the same durable sessions.
+    const selectedName = path.startsWith(`${basePath}/`) ? decodeURIComponent(path.slice(basePath.length + 1)) : null;
     const selectedFile = useMemo(
         () => (selectedName ? (files.find((f) => f.name === selectedName) ?? null) : null),
         [selectedName, files],
     );
     const selectedRecording = selectedFile?.recording === true;
-    const hasRecording = files.some((f) => f.recording);
+    const visibleFiles = mapsOnly ? files.filter((file) => file.pinned) : files;
+    const hasRecording = visibleFiles.some((f) => f.recording);
 
     // Sort sessions by date descending (newest first)
     const sortByDateDesc = (list: HistoryFileInfo[]) =>
@@ -108,39 +111,39 @@ export function HistoryView({ distanceUnit }: HistoryViewProps) {
 
     const handleSelect = useCallback(
         (idx: number) => {
-            const file = files[idx];
+            const file = visibleFiles[idx];
             if (!file) return;
-            navigate(`/history/${file.name}`);
+            navigate(`${basePath}/${file.name}`);
         },
-        [files, navigate],
+        [basePath, visibleFiles, navigate],
     );
 
     const handleBack = useCallback(() => {
         if (selectedName) {
-            navigate("/history");
+            navigate(basePath);
             errorStack.clear();
         } else {
             navigate("/");
         }
-    }, [selectedName, navigate, errorStack]);
+    }, [basePath, selectedName, navigate, errorStack]);
 
     const handleDeleteSession = useCallback(
         (idx: number) => {
-            const file = files[idx];
+            const file = visibleFiles[idx];
             if (!file) return;
             setDeleting(true);
             api.deleteHistorySession(file.name)
                 .then(() => api.getHistoryList())
                 .then((fileList) => {
                     setFiles(sortByDateDesc(fileList));
-                    if (selectedName === file.name) navigate("/history");
+                    if (selectedName === file.name) navigate(basePath);
                 })
                 .catch((e: unknown) => {
                     errorStack.push(normalizeError(e, "Failed to delete"));
                 })
                 .finally(() => setDeleting(false));
         },
-        [files, selectedName, navigate, errorStack],
+        [basePath, visibleFiles, selectedName, navigate, errorStack],
     );
 
     const handleDeleteAll = useCallback(() => {
@@ -149,13 +152,13 @@ export function HistoryView({ distanceUnit }: HistoryViewProps) {
             .then(() => {
                 setFiles([]);
                 setListCorrupted(false);
-                if (selectedName) navigate("/history");
+                if (selectedName) navigate(basePath);
             })
             .catch((e: unknown) => {
                 errorStack.push(normalizeError(e, "Failed to delete"));
             })
             .finally(() => setDeleting(false));
-    }, [selectedName, navigate, errorStack]);
+    }, [basePath, selectedName, navigate, errorStack]);
 
     const handleImported = useCallback(() => {
         api.getHistoryList()
@@ -173,7 +176,17 @@ export function HistoryView({ distanceUnit }: HistoryViewProps) {
                 <button type="button" class="header-back-btn" onClick={handleBack} aria-label={t("Back")}>
                     <Icon svg={backSvg} />
                 </button>
-                <h1>{t(showDetail ? "Clean Map" : "Cleaning History")}</h1>
+                <h1>
+                    {t(
+                        showDetail
+                            ? mapsOnly
+                                ? "Reference Map"
+                                : "Clean Map"
+                            : mapsOnly
+                              ? "Reference Maps"
+                              : "Cleaning History",
+                    )}
+                </h1>
                 <div class="header-right-spacer" />
             </div>
 
@@ -220,9 +233,9 @@ export function HistoryView({ distanceUnit }: HistoryViewProps) {
                     </div>
                 )}
 
-                {!loading && !listCorrupted && files.length === 0 && !showDetail && (
+                {!loading && !listCorrupted && visibleFiles.length === 0 && !showDetail && (
                     <HistoryListView
-                        files={files}
+                        files={visibleFiles}
                         hasRecording={false}
                         deleting={false}
                         onSelect={handleSelect}
@@ -231,12 +244,13 @@ export function HistoryView({ distanceUnit }: HistoryViewProps) {
                         onImported={handleImported}
                         onError={errorStack.push}
                         distanceUnit={distanceUnit}
+                        mapsOnly={mapsOnly}
                     />
                 )}
 
-                {!loading && !listCorrupted && files.length > 0 && !showDetail && (
+                {!loading && !listCorrupted && visibleFiles.length > 0 && !showDetail && (
                     <HistoryListView
-                        files={files}
+                        files={visibleFiles}
                         hasRecording={hasRecording}
                         deleting={deleting}
                         onSelect={handleSelect}
@@ -245,6 +259,7 @@ export function HistoryView({ distanceUnit }: HistoryViewProps) {
                         onImported={handleImported}
                         onError={errorStack.push}
                         distanceUnit={distanceUnit}
+                        mapsOnly={mapsOnly}
                     />
                 )}
 
@@ -255,6 +270,12 @@ export function HistoryView({ distanceUnit }: HistoryViewProps) {
                         mapEmpty={mapEmpty}
                         recording={selectedRecording}
                         distanceUnit={distanceUnit}
+                        referenceMap={mapsOnly}
+                        onPinnedChange={(pinned) =>
+                            setFiles((current) =>
+                                current.map((file) => (file.name === selectedFile.name ? { ...file, pinned } : file)),
+                            )
+                        }
                     />
                 )}
 

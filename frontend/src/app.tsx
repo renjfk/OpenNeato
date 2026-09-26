@@ -205,6 +205,9 @@ export function App() {
                 <Route path="/history" prefix>
                     <HistoryView distanceUnit={distanceUnit} />
                 </Route>
+                <Route path="/maps" prefix>
+                    <HistoryView distanceUnit={distanceUnit} mapsOnly />
+                </Route>
             </Router>
         </I18nProvider>
     );

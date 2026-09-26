@@ -9,6 +9,7 @@ import type {
     LidarScan,
     LogFileInfo,
     ManualStatus,
+    MapConfig,
     MapData,
     ScheduleNextData,
     SettingsData,
@@ -161,6 +162,10 @@ export const api = {
     deleteAllLogs: () => del("/api/logs"),
     getHistoryList: () => get<HistoryFileInfo[]>("/api/history"),
     getHistorySession: (filename: string) => fetchSessionData(filename),
+    getMapConfig: (filename: string) => get<MapConfig>(`/api/history/${filename}/map-config`),
+    saveMapConfig: (filename: string, config: MapConfig) =>
+        put<MapConfig>(`/api/history/${filename}/map-config`, config),
+    setHistoryPinned: (filename: string, pinned: boolean) => put(`/api/history/${filename}/pin`, { pinned }),
     deleteHistorySession: (name: string) => del(`/api/history/${name}`),
     deleteAllHistory: () => del("/api/history"),
     importSession: (file: File, onProgress: (pct: number) => void) => importSession(file, onProgress),

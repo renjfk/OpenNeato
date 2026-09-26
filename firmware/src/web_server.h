@@ -15,6 +15,7 @@ class SystemManager;
 class FirmwareManager;
 class SettingsManager;
 class ManualCleanManager;
+class NavigationManager;
 class NotificationManager;
 class CleaningHistory;
 class WiFiManager;
@@ -24,7 +25,7 @@ class WebServer {
 public:
     WebServer(AsyncWebServer& server, NeatoSerial& neato, DataLogger& logger, SystemManager& sys, FirmwareManager& fw,
               SettingsManager& settings, ManualCleanManager& manual, NotificationManager& notif,
-              CleaningHistory& history, WiFiManager& wifi, Scheduler& scheduler);
+              NavigationManager& navigation, CleaningHistory& history, WiFiManager& wifi, Scheduler& scheduler);
     void begin();
 
     // Last time any API request was received (millis()). Any module can check
@@ -39,6 +40,7 @@ private:
     FirmwareManager& fwMgr;
     SettingsManager& settingsMgr;
     ManualCleanManager& manualMgr;
+    NavigationManager& navigationMgr;
     NotificationManager& notifMgr;
     CleaningHistory& historyMgr;
     WiFiManager& wifiMgr;
@@ -46,6 +48,7 @@ private:
 
     void registerApiRoutes();
     void registerManualRoutes();
+    void registerNavigationRoutes();
     void registerLogRoutes();
     void registerSystemRoutes();
     void registerSettingsRoutes();
@@ -62,7 +65,7 @@ private:
     void loggedRoute(const char *path, WebRequestMethodComposite httpMethod, SyncHandler handler);
 
     // Overload for routes with a body callback (e.g. PUT with JSON body)
-    using BodyHandler = std::function<int(AsyncWebServerRequest *, uint8_t *data, size_t len)>;
+    using BodyHandler = std::function<int(AsyncWebServerRequest *, const String& body)>;
     void loggedBodyRoute(const char *path, WebRequestMethodComposite httpMethod, BodyHandler handler);
 
     // Register a GET endpoint. The method pointer type fully determines the arg

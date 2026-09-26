@@ -28,6 +28,7 @@ Everything you need to set up, configure, and troubleshoot OpenNeato.
     - [Reporting an Issue](#reporting-an-issue)
 - [Multiple Robots](#multiple-robots)
 - [Remote Access](#remote-access)
+- [Experimental Waypoint Navigation](#experimental-waypoint-navigation)
 - [Serial API](#serial-api)
     - [Sending Commands](#sending-commands)
     - [Common Commands](#common-commands)
@@ -646,6 +647,47 @@ set up on most routers or a Raspberry Pi.
 > [!TIP]
 > A home VPN solves remote access not just for OpenNeato but for all your local devices and
 > services — NAS, printers, cameras, etc.
+
+---
+
+## Experimental Waypoint Navigation
+
+The firmware includes a hardware-validation API for guided waypoint movement. This is an
+experimental proof of concept: it does **not** yet turn saved rooms or no-go lines into a
+cleaning route, it does not run the cleaning motors, and it does not return to the dock. Physical
+navigation is disabled in normal firmware builds. Build and flash the explicit opt-in target with
+`pio run -e c3-navigation-test -t upload` before a supervised hardware test.
+
+> [!CAUTION]
+> Test only on a clear floor while staying close enough to remove power immediately. Keep
+> polling the status endpoint every two seconds (always more often than every five seconds). If the client stops sending
+> requests, the safety watchdog stops the wheels and ends navigation. Bumpers, wheel-lift,
+> and wheel-stall detection remain active.
+
+Coordinates use the same robot pose frame as `GetRobotPos Smooth`: `x` and `y` are metres and
+`t` is degrees. Start with a short route of recorded poses:
+
+```powershell
+$robot = "http://neato.local"
+$waypoints = @(
+  @{ x = 0.20; y = 0.00; t = 0.0 },
+  @{ x = 0.40; y = 0.00; t = 0.0 }
+) | ConvertTo-Json
+
+Invoke-RestMethod -Method Post -Uri "$robot/api/navigate" -ContentType "application/json" -Body $waypoints
+
+do {
+  Start-Sleep -Seconds 2
+  $status = Invoke-RestMethod -Method Get -Uri "$robot/api/navigate/status"
+  $status
+} while ($status.state -in @("enabling", "navigating", "stopping"))
+
+# Run this at any time from another terminal to cancel:
+Invoke-RestMethod -Method Delete -Uri "$robot/api/navigate"
+```
+
+The status response reports the state, current waypoint index, waypoint count, and last
+validated robot position. Poll until the state is `complete`, `cancelled`, or `error`.
 
 ---
 

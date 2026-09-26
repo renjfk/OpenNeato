@@ -16,6 +16,8 @@ tags:
     description: Control commands sent to the robot
   - name: Manual
     description: Manual cleaning mode (joystick, motors)
+  - name: Navigation
+    description: Experimental waypoint navigation proof of concept
   - name: Logs
     description: Diagnostic log files stored in flash
   - name: WiFi
@@ -523,6 +525,70 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /api/navigate:
+    post:
+      tags:
+        - Navigation
+      summary: Start experimental waypoint navigation
+      description: Enters TestMode and follows the supplied robot-coordinate waypoints without cleaning motors. Disabled unless the firmware is built with ENABLE_EXPERIMENTAL_NAVIGATION=1.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              maxItems: 64
+              items:
+                $ref: "#/components/schemas/NavigationWaypoint"
+      responses:
+        "202":
+          description: Navigation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationStatus"
+        "400":
+          description: Invalid waypoint payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Navigation or manual mode already active
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Experimental navigation is disabled in this firmware build
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      tags:
+        - Navigation
+      summary: Stop active waypoint navigation
+      responses:
+        "202":
+          description: Stop accepted; poll the status endpoint until navigation is cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationStatus"
+  /api/navigate/status:
+    get:
+      tags:
+        - Navigation
+      summary: Get waypoint navigation state and last robot position
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NavigationStatus"
   /api/logs:
     get:
       tags:
@@ -855,6 +921,79 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /api/history/{filename}/pin:
+    put:
+      tags:
+        - History
+      summary: Pin or unpin a cleaning session for reuse as a map
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                pinned:
+                  type: boolean
+              required:
+                - pinned
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
+        "404":
+          description: session not found
+  /api/history/{filename}/map-config:
+    get:
+      tags:
+        - History
+      summary: Read room and no-go line definitions for a reusable map
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Current configuration, or an empty default
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MapConfig"
+    put:
+      tags:
+        - History
+      summary: Atomically save room and no-go line definitions and pin the session
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MapConfig"
+      responses:
+        "200":
+          description: Saved configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MapConfig"
+        "400":
+          description: invalid map configuration
+        "404":
+          description: session not found
   /api/history/import:
     post:
       tags:
@@ -1276,6 +1415,72 @@ components:
         - filterChange
         - brushChange
         - dirtBin
+    NavigationWaypoint:
+      type: object
+      additionalProperties: false
+      properties:
+        x:
+          type: number
+          format: float
+          minimum: -50
+          maximum: 50
+          description: Target X coordinate in metres in the robot pose frame
+        y:
+          type: number
+          format: float
+          minimum: -50
+          maximum: 50
+          description: Target Y coordinate in metres in the robot pose frame
+        t:
+          type: number
+          format: float
+          minimum: -360
+          maximum: 360
+          description: Recorded target heading in degrees; reserved for final-heading support
+      required:
+        - x
+        - y
+        - t
+    NavigationPosition:
+      type: object
+      properties:
+        x:
+          type: number
+          format: float
+        y:
+          type: number
+          format: float
+        theta:
+          type: number
+          format: float
+      required:
+        - x
+        - y
+        - theta
+    NavigationStatus:
+      type: object
+      properties:
+        state:
+          type: string
+          enum: [idle, enabling, navigating, stopping, complete, cancelled, error]
+        waypointIndex:
+          type: integer
+          minimum: 0
+        waypointCount:
+          type: integer
+          minimum: 0
+          maximum: 64
+        hasPosition:
+          type: boolean
+        position:
+          $ref: "#/components/schemas/NavigationPosition"
+        error:
+          type: string
+      required:
+        - state
+        - waypointIndex
+        - waypointCount
+        - hasPosition
     ManualStatus:
       type: object
       properties:
@@ -1666,6 +1871,99 @@ components:
         - identifying
         - repositoryUrl
         - license
+    MapPoint:
+      type: object
+      additionalProperties: false
+      properties:
+        x:
+          type: number
+          format: double
+          description: Finite world-coordinate value
+        y:
+          type: number
+          format: double
+          description: Finite world-coordinate value
+      required:
+        - x
+        - y
+    MapZone:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          minLength: 1
+          x-maxUtf8Bytes: 48
+          description: Non-empty identifier, limited to 48 UTF-8 bytes and unique across all zones and no-go lines
+        name:
+          type: string
+          x-maxUtf8Bytes: 64
+          description: Display name limited to 64 UTF-8 bytes
+        color:
+          type: string
+          pattern: "^#[0-9A-Fa-f]{6}$"
+          description: Optional room color as a six-digit hexadecimal RGB value
+        points:
+          type: array
+          minItems: 3
+          maxItems: 64
+          description: Polygon with at least three points distinct by more than 1e-6 and a finite shoelace area greater than 1e-6
+          items:
+            $ref: "#/components/schemas/MapPoint"
+      required:
+        - id
+        - name
+        - points
+    NoGoLine:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          minLength: 1
+          x-maxUtf8Bytes: 48
+          description: Non-empty identifier, limited to 48 UTF-8 bytes and unique across all zones and no-go lines
+        name:
+          type: string
+          x-maxUtf8Bytes: 64
+          description: Optional user-facing name limited to 64 UTF-8 bytes
+        start:
+          $ref: "#/components/schemas/MapPoint"
+        end:
+          $ref: "#/components/schemas/MapPoint"
+      description: Start and end coordinates must differ
+      required:
+        - id
+        - start
+        - end
+    MapConfig:
+      type: object
+      additionalProperties: false
+      description: JSON payload is limited to 12288 UTF-8 bytes; element IDs must be globally unique across zones and no-go lines
+      properties:
+        version:
+          type: integer
+          enum:
+            - 1
+        name:
+          type: string
+          x-maxUtf8Bytes: 96
+          description: Map display name limited to 96 UTF-8 bytes
+        zones:
+          type: array
+          maxItems: 16
+          items:
+            $ref: "#/components/schemas/MapZone"
+        noGoLines:
+          type: array
+          maxItems: 32
+          items:
+            $ref: "#/components/schemas/NoGoLine"
+      required:
+        - version
+        - name
+        - zones
+        - noGoLines
     HistoryFileInfo:
       type: object
       properties:
@@ -1691,6 +1989,12 @@ components:
           nullable: true
           allOf:
             - $ref: "#/components/schemas/MapSummary"
+        pinned:
+          type: boolean
+          description: Session is protected from automatic cleanup and can be reused as a map
+        hasMapConfig:
+          type: boolean
+          description: A room or no-go line sidecar exists for this session
       required:
         - name
         - size
@@ -1698,6 +2002,8 @@ components:
         - recording
         - session
         - summary
+        - pinned
+        - hasMapConfig
     MapSession:
       type: object
       properties:

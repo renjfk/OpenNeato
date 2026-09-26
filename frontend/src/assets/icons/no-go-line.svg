@@ -1,0 +1,6 @@
+<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+  <path d="m5 19 14-14"/>
+  <circle cx="5" cy="19" r="2"/>
+  <circle cx="19" cy="5" r="2"/>
+  <path d="m8 5 11 11" opacity=".55"/>
+</svg>

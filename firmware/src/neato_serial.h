@@ -69,6 +69,7 @@ public:
     bool playSound(SoundId soundId, std::function<void(bool)> callback = nullptr);
     bool setLdsRotation(bool on, std::function<void(bool)> callback = nullptr);
     bool setMotorWheels(int leftMM, int rightMM, int speedMMs, std::function<void(bool)> callback = nullptr);
+    bool emergencyStopWheels(std::function<void(bool)> callback = nullptr);
     bool setMotorBrush(int rpm, std::function<void(bool)> callback = nullptr);
     bool setMotorVacuum(bool on, int speedPercent = 80, std::function<void(bool)> callback = nullptr);
     bool setMotorSideBrush(bool on, int powerMw = 5000, std::function<void(bool)> callback = nullptr);

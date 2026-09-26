@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createDefaultMapConfigs, createDefaultPinnedMaps } from "./reference-map-fixtures.js";
 import { createMockApi } from "./shared-api.js";
 import { createScenarioState, scenarioFromRequest } from "./shared-state.js";
 import { DEFAULT_MOCK_VERSION, mockVersionFromHash } from "./shared-version.js";
@@ -129,6 +130,8 @@ const initScenario = (scenario) => {
     context.state = scenarioState.state;
     context.faults = scenarioState.faults;
     context.historySessions = loadHistorySessions();
+    context.mapConfigs = createDefaultMapConfigs();
+    context.pinnedMaps = createDefaultPinnedMaps();
     bootTime = Date.now();
     initializedScenario = scenario;
 };

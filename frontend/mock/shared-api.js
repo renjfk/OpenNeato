@@ -94,6 +94,58 @@ const byteLength = (value) => textEncoder.encode(value).length;
 const vBattFromFuel = (fuel) => Number((12.0 + (fuel / 100) * 4.6).toFixed(2));
 const isSafeFilename = (name) => /^[A-Za-z0-9._-]+$/.test(name) && !name.includes("..");
 
+const hasExactKeys = (value, keys) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const expected = [...keys].sort();
+    const actual = Object.keys(value).sort();
+    return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
+};
+const isMapPoint = (point) => hasExactKeys(point, ["x", "y"]) && Number.isFinite(point.x) && Number.isFinite(point.y);
+const utf8LengthAtMost = (value, maximum) => typeof value === "string" && byteLength(value) <= maximum;
+const pointsDiffer = (left, right) => Math.abs(left.x - right.x) > 1e-6 || Math.abs(left.y - right.y) > 1e-6;
+const zoneHasArea = (points) => {
+    const unique = [];
+    for (const point of points) {
+        if (!unique.some((candidate) => !pointsDiffer(candidate, point))) unique.push(point);
+    }
+    if (unique.length < 3) return false;
+    let doubleArea = 0;
+    for (let index = 0; index < points.length; index++) {
+        const current = points[index];
+        const next = points[(index + 1) % points.length];
+        doubleArea += current.x * next.y - next.x * current.y;
+    }
+    const area = Math.abs(doubleArea) / 2;
+    return Number.isFinite(area) && area > 1e-6;
+};
+const isMapConfig = (config) => {
+    if (!hasExactKeys(config, ["version", "name", "zones", "noGoLines"])) return false;
+    if (config.version !== 1 || !utf8LengthAtMost(config.name, 96)) return false;
+    if (!Array.isArray(config.zones) || config.zones.length > 16) return false;
+    if (!Array.isArray(config.noGoLines) || config.noGoLines.length > 32) return false;
+    const ids = new Set();
+    for (const zone of config.zones) {
+        const keys = Object.hasOwn(zone, "color") ? ["id", "name", "color", "points"] : ["id", "name", "points"];
+        if (!hasExactKeys(zone, keys)) return false;
+        if (!utf8LengthAtMost(zone.id, 48) || zone.id.length === 0 || ids.has(zone.id)) return false;
+        if (!utf8LengthAtMost(zone.name, 64)) return false;
+        if (zone.color !== undefined && !/^#[0-9A-Fa-f]{6}$/.test(zone.color)) return false;
+        if (!Array.isArray(zone.points) || zone.points.length < 3 || zone.points.length > 64) return false;
+        if (!zone.points.every(isMapPoint) || !zoneHasArea(zone.points)) return false;
+        ids.add(zone.id);
+    }
+    for (const line of config.noGoLines) {
+        const keys = Object.hasOwn(line, "name") ? ["id", "name", "start", "end"] : ["id", "start", "end"];
+        if (!hasExactKeys(line, keys)) return false;
+        if (!utf8LengthAtMost(line.id, 48) || line.id.length === 0 || ids.has(line.id)) return false;
+        if (line.name !== undefined && (!utf8LengthAtMost(line.name, 64) || line.name.length === 0)) return false;
+        if (!isMapPoint(line.start) || !isMapPoint(line.end)) return false;
+        if (line.start.x === line.end.x && line.start.y === line.end.y) return false;
+        ids.add(line.id);
+    }
+    return true;
+};
+
 const mockLogs = [
     { name: "current.jsonl", size: 8192, compressed: false },
     { name: "1700000000.jsonl.hs", size: 4096, compressed: true },
@@ -249,7 +301,7 @@ const injectCorruptedPoses = (lines) => {
     return result;
 };
 
-const listHistory = (historySessions, faults) => {
+const listHistory = (historySessions, faults, mapConfigs = new Map(), pinnedMaps = new Set()) => {
     const list = [...historySessions.entries()].map(([name, lines]) => {
         let session = null;
         let summary = null;
@@ -273,6 +325,8 @@ const listHistory = (historySessions, faults) => {
             recording: summary === null,
             session,
             summary,
+            pinned: pinnedMaps.has(name),
+            hasMapConfig: mapConfigs.has(name),
         };
     });
 
@@ -337,9 +391,34 @@ const extractFirmwarePayload = (bodyBytes) => {
 function createMockApi(context) {
     const rand = context.rand ?? defaultRand;
     const sleep = context.sleep ?? defaultSleep;
+    const now = context.now ?? Date.now;
 
     const getState = () => context.state;
     const getFaults = () => context.faults;
+    let navigationState = {
+        state: "idle",
+        waypointIndex: 0,
+        waypointCount: 0,
+        hasPosition: false,
+    };
+    let navigationHeartbeatAt = null;
+
+    const expireNavigationHeartbeat = () => {
+        if (
+            navigationState.state !== "navigating" ||
+            navigationHeartbeatAt === null ||
+            now() - navigationHeartbeatAt < 5000
+        )
+            return;
+        navigationState = {
+            ...navigationState,
+            state: "error",
+            error: "navigation client heartbeat timed out",
+        };
+        const state = getState();
+        state.manualClean = false;
+        deriveStates(state);
+    };
 
     const handle = async (request) => {
         const state = getState();
@@ -347,6 +426,8 @@ function createMockApi(context) {
         const method = request.method;
         const path = request.path;
         const query = request.query;
+
+        expireNavigationHeartbeat();
 
         if (state.offline) return { offline: true };
 
@@ -499,6 +580,64 @@ function createMockApi(context) {
             }
             deriveStates(state);
             return okResponse();
+        }
+
+        if (method === "POST" && path === "/api/navigate") {
+            if (faults.actions) return errorResponse("UART timeout: robot not responding", 500);
+            if (state.manualClean || navigationState.state === "navigating")
+                return errorResponse("navigation or manual mode already active", 409);
+            try {
+                const waypoints = JSON.parse(await request.text());
+                let valid =
+                    Array.isArray(waypoints) &&
+                    waypoints.length > 0 &&
+                    waypoints.length <= 64 &&
+                    waypoints.every(
+                        (point) =>
+                            hasExactKeys(point, ["t", "x", "y"]) &&
+                            Number.isFinite(point.x) &&
+                            Number.isFinite(point.y) &&
+                            Number.isFinite(point.t) &&
+                            Math.abs(point.x) <= 50 &&
+                            Math.abs(point.y) <= 50 &&
+                            Math.abs(point.t) <= 360,
+                    );
+                let routeDistance = 0;
+                for (let index = 1; valid && index < waypoints.length; index++) {
+                    const dx = waypoints[index].x - waypoints[index - 1].x;
+                    const dy = waypoints[index].y - waypoints[index - 1].y;
+                    const segmentDistance = Math.hypot(dx, dy);
+                    routeDistance += segmentDistance;
+                    if (segmentDistance > 15 || routeDistance > 100) valid = false;
+                }
+                if (!valid) return errorResponse("invalid or unsupported waypoint route", 400);
+                navigationState = {
+                    state: "navigating",
+                    waypointIndex: 0,
+                    waypointCount: waypoints.length,
+                    hasPosition: true,
+                    position: { x: waypoints[0].x, y: waypoints[0].y, theta: waypoints[0].t },
+                };
+                state.manualClean = true;
+                navigationHeartbeatAt = now();
+                deriveStates(state);
+                return jsonResponse(navigationState, 202);
+            } catch {
+                return errorResponse("invalid JSON", 400);
+            }
+        }
+
+        if (method === "GET" && path === "/api/navigate/status") {
+            navigationHeartbeatAt = now();
+            return jsonResponse(navigationState);
+        }
+
+        if (method === "DELETE" && path === "/api/navigate") {
+            navigationHeartbeatAt = now();
+            navigationState = { ...navigationState, state: "cancelled" };
+            state.manualClean = false;
+            deriveStates(state);
+            return jsonResponse(navigationState, 202);
         }
 
         if (method === "GET" && path === "/api/manual/status") {
@@ -813,10 +952,13 @@ function createMockApi(context) {
             return textResponse(`${cmd}\r\nMock response for: ${cmd}\r\n\x1a`, 200, { "Content-Type": "text/plain" });
         }
 
-        if (method === "GET" && path === "/api/history") return listHistory(context.historySessions, faults);
+        if (method === "GET" && path === "/api/history")
+            return listHistory(context.historySessions, faults, context.mapConfigs, context.pinnedMaps);
 
         if (method === "DELETE" && path === "/api/history") {
             context.historySessions.clear();
+            context.mapConfigs?.clear();
+            context.pinnedMaps?.clear();
             return okResponse();
         }
 
@@ -832,6 +974,51 @@ function createMockApi(context) {
             return okResponse();
         }
 
+        const mapConfigMatch = path.match(/^\/api\/history\/(.+)\/map-config$/);
+        if (mapConfigMatch) {
+            const filename = decodeURIComponent(mapConfigMatch[1]);
+            if (!context.historySessions.has(filename)) return errorResponse("session not found", 404);
+            context.mapConfigs ??= new Map();
+            if (method === "GET") {
+                return jsonResponse(
+                    context.mapConfigs.get(filename) ?? { version: 1, name: "", zones: [], noGoLines: [] },
+                );
+            }
+            if (method === "PUT") {
+                const body = await request.bytes();
+                if (body.length === 0 || body.length > 12288) return errorResponse("invalid map configuration", 400);
+                let config;
+                try {
+                    config = JSON.parse(new TextDecoder().decode(body));
+                } catch {
+                    return errorResponse("invalid map configuration", 400);
+                }
+                if (!isMapConfig(config)) return errorResponse("invalid map configuration", 400);
+                context.mapConfigs.set(filename, config);
+                context.pinnedMaps ??= new Set();
+                context.pinnedMaps.add(filename);
+                return jsonResponse(config);
+            }
+            return errorResponse("method not allowed", 405);
+        }
+
+        const pinMatch = path.match(/^\/api\/history\/(.+)\/pin$/);
+        if (pinMatch && method === "PUT") {
+            const filename = decodeURIComponent(pinMatch[1]);
+            if (!context.historySessions.has(filename)) return errorResponse("session not found", 404);
+            context.mapConfigs ??= new Map();
+            context.pinnedMaps ??= new Set();
+            const body = await request.text();
+            const match = body.match(/^\s*\{\s*"pinned"\s*:\s*(true|false)\s*\}\s*$/);
+            if (!match) return errorResponse("pinned boolean is required", 400);
+            if (match[1] === "true") {
+                context.pinnedMaps.add(filename);
+            } else {
+                context.pinnedMaps.delete(filename);
+            }
+            return okResponse();
+        }
+
         const historyMatch = path.match(/^\/api\/history\/(.+)$/);
         if (historyMatch) {
             const filename = decodeURIComponent(historyMatch[1]);
@@ -843,6 +1030,8 @@ function createMockApi(context) {
             }
             if (method === "DELETE") {
                 context.historySessions.delete(filename);
+                context.mapConfigs?.delete(filename);
+                context.pinnedMaps?.delete(filename);
                 return okResponse();
             }
             return errorResponse("method not allowed", 405);

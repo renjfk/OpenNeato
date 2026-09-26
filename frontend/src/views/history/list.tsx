@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../api";
 import boltSvg from "../../assets/icons/bolt.svg?raw";
 import clockSvg from "../../assets/icons/clock.svg?raw";
@@ -10,7 +10,7 @@ import { T, useI18n } from "../../i18n";
 import { formatArea, formatDistance, type DistanceUnit } from "../../distance-units";
 import type { HistoryFileInfo, MapSession, MapSummary } from "../../types";
 import { normalizeError } from "../../utils";
-import { modeInfo } from "./helpers";
+import { displayReferenceMapName, modeInfo, translateExampleMapName } from "./helpers";
 
 // Session card component
 interface SessionCardProps {
@@ -19,6 +19,11 @@ interface SessionCardProps {
     filename: string;
     index: number;
     active?: boolean;
+    pinned?: boolean;
+    allowDelete?: boolean;
+    referenceCard?: boolean;
+    referenceName?: string;
+    referenceDetails?: { rooms: number; noGoLines: number };
     onSelect: (i: number) => void;
     onDelete: (i: number) => void;
     distanceUnit: DistanceUnit;
@@ -30,6 +35,11 @@ function SessionCard({
     filename,
     index,
     active,
+    pinned,
+    allowDelete = true,
+    referenceCard = false,
+    referenceName,
+    referenceDetails,
     onSelect,
     onDelete,
     distanceUnit,
@@ -45,7 +55,12 @@ function SessionCard({
                 <div class="history-session-body">
                     <div class="history-session-header">
                         <span class="history-session-mode">
-                            {t(info.label)}
+                            {referenceCard
+                                ? referenceName
+                                    ? translateExampleMapName(displayReferenceMapName(referenceName), t)
+                                    : t("Reference Map")
+                                : t(info.label)}
+                            {pinned && !referenceCard && <span class="history-map-badge">{t("reference map")}</span>}
                             {active && (
                                 <span class="history-running-badge">
                                     <T>Running</T>
@@ -54,7 +69,23 @@ function SessionCard({
                         </span>
                         <span class="history-session-date">{session ? formatDateTime(session.time) : ""}</span>
                     </div>
-                    {summary && (
+                    {referenceCard && (summary || referenceDetails) && (
+                        <div class="history-session-stats">
+                            {summary && <span>{formatArea(summary.areaCovered, distanceUnit, formatNumber)}</span>}
+                            {referenceDetails && (
+                                <>
+                                    <span>
+                                        {referenceDetails.rooms} {t(referenceDetails.rooms === 1 ? "room" : "rooms")}
+                                    </span>
+                                    <span>
+                                        {referenceDetails.noGoLines}{" "}
+                                        {t(referenceDetails.noGoLines === 1 ? "no-go line" : "no-go lines")}
+                                    </span>
+                                </>
+                            )}
+                        </div>
+                    )}
+                    {!referenceCard && summary && (
                         <div class="history-session-stats">
                             <span>
                                 <Icon svg={clockSvg} />
@@ -81,7 +112,7 @@ function SessionCard({
                     <Icon svg={downloadSvg} />
                 </a>
             )}
-            {!active && (
+            {!active && allowDelete && (
                 <button
                     type="button"
                     class="history-session-delete"
@@ -105,6 +136,7 @@ interface HistoryListViewProps {
     onImported: () => void;
     onError: (msg: string) => void;
     distanceUnit: DistanceUnit;
+    mapsOnly?: boolean;
 }
 
 type ImportStatus = "idle" | "uploading" | "done" | "error";
@@ -119,11 +151,41 @@ export function HistoryListView({
     onImported,
     onError,
     distanceUnit,
+    mapsOnly = false,
 }: HistoryListViewProps) {
     const { t } = useI18n();
     const [confirmTarget, setConfirmTarget] = useState<string | null>(null);
     const [importStatus, setImportStatus] = useState<ImportStatus>("idle");
+    const [mapDetails, setMapDetails] = useState<Record<string, { name: string; rooms: number; noGoLines: number }>>(
+        {},
+    );
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (!mapsOnly || files.length === 0) {
+            setMapDetails({});
+            return;
+        }
+        let cancelled = false;
+        Promise.all(
+            files.map(async (file) => {
+                try {
+                    const config = await api.getMapConfig(file.name);
+                    return [
+                        file.name,
+                        { name: config.name.trim(), rooms: config.zones.length, noGoLines: config.noGoLines.length },
+                    ] as const;
+                } catch {
+                    return [file.name, { name: "", rooms: 0, noGoLines: 0 }] as const;
+                }
+            }),
+        ).then((entries) => {
+            if (!cancelled) setMapDetails(Object.fromEntries(entries));
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [files, mapsOnly]);
 
     const handleConfirmDelete = useCallback(() => {
         if (!confirmTarget) return;
@@ -199,47 +261,66 @@ export function HistoryListView({
             {/* Summary bar */}
             <div class="history-summary">
                 <span>
-                    {files.length} {t(files.length === 1 ? "session" : "sessions")}
+                    {files.length}{" "}
+                    {t(
+                        mapsOnly
+                            ? files.length === 1
+                                ? "reference map"
+                                : "reference maps"
+                            : files.length === 1
+                              ? "session"
+                              : "sessions",
+                    )}
                     {hasRecording ? " · " : ""}
                     {hasRecording && <T>Running...</T>}
                 </span>
-                <div class="history-summary-actions">
-                    <label class="history-import-label">
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept=".jsonl"
-                            class="history-import-input"
-                            disabled={importStatus === "uploading"}
-                            onChange={(e) => {
-                                const f = (e.target as HTMLInputElement).files?.[0];
-                                if (f) handleImportFile(f);
-                            }}
-                        />
-                        <span class={`history-import-btn${importStatus === "uploading" ? " pending" : ""}`}>
-                            {t(
-                                importStatus === "uploading"
-                                    ? "Importing..."
-                                    : importStatus === "done"
-                                      ? "Imported"
-                                      : "Import",
-                            )}
-                        </span>
-                    </label>
-                    <button
-                        type="button"
-                        class={`history-delete-all-btn${deleting ? " pending" : ""}`}
-                        onClick={() => setConfirmTarget("__all__")}
-                        disabled={deleting}
-                    >
-                        <T>Delete All</T>
-                    </button>
-                </div>
+                {!mapsOnly && (
+                    <div class="history-summary-actions">
+                        <label class="history-import-label">
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept=".jsonl"
+                                class="history-import-input"
+                                disabled={importStatus === "uploading"}
+                                onChange={(e) => {
+                                    const f = (e.target as HTMLInputElement).files?.[0];
+                                    if (f) handleImportFile(f);
+                                }}
+                            />
+                            <span class={`history-import-btn${importStatus === "uploading" ? " pending" : ""}`}>
+                                {t(
+                                    importStatus === "uploading"
+                                        ? "Importing..."
+                                        : importStatus === "done"
+                                          ? "Imported"
+                                          : "Import",
+                                )}
+                            </span>
+                        </label>
+                        <button
+                            type="button"
+                            class={`history-delete-all-btn${deleting ? " pending" : ""}`}
+                            onClick={() => setConfirmTarget("__all__")}
+                            disabled={deleting}
+                        >
+                            <T>Delete All</T>
+                        </button>
+                    </div>
+                )}
             </div>
 
             {files.length === 0 && (
                 <div class="history-empty">
-                    <T>No cleaning history yet</T>
+                    {t(mapsOnly ? "No reference map yet" : "No cleaning history yet")}
+                    {mapsOnly && (
+                        <p>
+                            <T>
+                                Complete a full cleaning run, open it in Cleaning History, and save it as a reference
+                                map.
+                            </T>
+                        </p>
+                    )}
                 </div>
             )}
 
@@ -252,6 +333,11 @@ export function HistoryListView({
                     filename={f.name}
                     index={i}
                     active={f.recording}
+                    pinned={f.pinned}
+                    allowDelete={!mapsOnly}
+                    referenceCard={mapsOnly}
+                    referenceName={mapDetails[f.name]?.name}
+                    referenceDetails={mapDetails[f.name]}
                     onSelect={onSelect}
                     onDelete={() => setConfirmTarget(`session-${i}`)}
                     distanceUnit={distanceUnit}

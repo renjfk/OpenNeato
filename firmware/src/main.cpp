@@ -12,6 +12,7 @@
 #include "data_logger.h"
 #include "scheduler.h"
 #include "manual_clean_manager.h"
+#include "navigation_manager.h"
 #include "notification_manager.h"
 #include "cleaning_history.h"
 #include "loop_task.h"
@@ -27,10 +28,11 @@ WiFiManager wifiManager(prefs, dataLogger);
 FirmwareManager firmwareManager(dataLogger);
 Scheduler scheduler(settingsManager, systemManager, neatoSerial, dataLogger, prefs);
 ManualCleanManager manualClean(neatoSerial);
+NavigationManager navigationManager(neatoSerial, manualClean, dataLogger);
 NotificationManager notifMgr(neatoSerial, settingsManager, dataLogger);
 CleaningHistory cleaningHistory(neatoSerial, dataLogger, systemManager);
 WebServer webServer(server, neatoSerial, dataLogger, systemManager, firmwareManager, settingsManager, manualClean,
-                    notifMgr, cleaningHistory, wifiManager, scheduler);
+                    notifMgr, navigationManager, cleaningHistory, wifiManager, scheduler);
 
 // Tracks whether web server has been started (may be deferred if WiFi was slow at boot)
 bool webServerStarted = false;

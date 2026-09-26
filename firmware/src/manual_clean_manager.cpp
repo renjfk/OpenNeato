@@ -8,143 +8,205 @@ ManualCleanManager::ManualCleanManager(NeatoSerial& serial) : LoopTask(0), seria
 // -- Enable/disable lifecycle ------------------------------------------------
 
 bool ManualCleanManager::enable(bool doEnable, std::function<void(bool)> callback) {
+    return enableFor(ControlOwner::MANUAL_UI, doEnable, callback);
+}
+
+bool ManualCleanManager::enableNavigation(bool doEnable, std::function<void(bool)> callback) {
+    return enableFor(ControlOwner::NAVIGATION, doEnable, callback);
+}
+
+bool ManualCleanManager::enableFor(ControlOwner requestedOwner, bool doEnable, std::function<void(bool)> callback) {
     if (doEnable) {
-        if (active || enabling) {
+        if (owner != ControlOwner::NONE || active || enabling || disabling) {
             if (callback)
                 callback(false);
             return false;
         }
 
+        owner = requestedOwner;
         enabling = true;
         enablingStartMs = millis();
-        LOG("MANUAL", "Enabling manual mode...");
+        const uint32_t session = ++generation;
+        LOG("MANUAL", "Enabling manual mode for owner %d...", static_cast<int>(requestedOwner));
 
-        // Step 1: Enter TestMode
-        serial.testMode(true, [this, callback](bool ok) {
+        serial.testMode(true, [this, requestedOwner, session, callback](bool ok) {
+            if (session != generation || owner != requestedOwner)
+                return;
             if (!ok) {
                 LOG("MANUAL", "TestMode On failed");
                 enabling = false;
+                owner = ControlOwner::NONE;
                 if (callback)
                     callback(false);
                 return;
             }
 
-            // Step 2: Start LDS rotation
-            serial.setLdsRotation(true, [this, callback](bool ok) {
+            serial.setLdsRotation(true, [this, requestedOwner, session, callback](bool ok) {
+                if (session != generation || owner != requestedOwner)
+                    return;
                 if (!ok) {
                     LOG("MANUAL", "SetLDSRotation On failed, reverting TestMode");
                     serial.testMode(false, nullptr);
                     enabling = false;
+                    owner = ControlOwner::NONE;
                     if (callback)
                         callback(false);
                     return;
                 }
 
-                LOG("MANUAL", "Manual mode active");
-                enabling = false;
-                active = true;
-                serial.setManualCleanActive(true);
-                safetyTicker.reset(); // Force immediate first poll
-                stallTicker.reset();
-                watchdogStopped = false;
+                // A previous emergency stop leaves the wheel drivers disabled.
+                // The normal zero-distance command performs a disable/enable cycle.
+                serial.setMotorWheels(0, 0, 0, [this, requestedOwner, session, callback](bool ok) {
+                    if (session != generation || owner != requestedOwner)
+                        return;
+                    if (!ok) {
+                        LOG("MANUAL", "Wheel enable failed, leaving TestMode");
+                        serial.setLdsRotation(false, nullptr);
+                        serial.testMode(false, nullptr);
+                        enabling = false;
+                        owner = ControlOwner::NONE;
+                        if (callback)
+                            callback(false);
+                        return;
+                    }
 
-                // Reset safety state
-                bumperFrontLeft = false;
-                bumperFrontRight = false;
-                bumperSideLeft = false;
-                bumperSideRight = false;
-                wheelLifted = false;
+                    LOG("MANUAL", "Manual mode active for owner %d", static_cast<int>(requestedOwner));
+                    enabling = false;
+                    active = true;
+                    serial.setManualCleanActive(true);
+                    safetyTicker.reset();
+                    stallTicker.reset();
+                    watchdogStopped = false;
 
-                // Reset stall detection
-                wheelsMoving = false;
-                stallCount = 0;
-                stallFront = false;
-                stallRear = false;
+                    bumperFrontLeft = false;
+                    bumperFrontRight = false;
+                    bumperSideLeft = false;
+                    bumperSideRight = false;
+                    wheelLifted = false;
+                    wheelsMoving = false;
+                    stallCount = 0;
+                    stallFront = false;
+                    stallRear = false;
+                    brushOn = false;
+                    vacuumOn = false;
+                    sideBrushOn = false;
 
-                // Reset motor state
-                brushOn = false;
-                vacuumOn = false;
-                sideBrushOn = false;
-
-                if (callback)
-                    callback(true);
-            });
-        });
-    } else {
-        if (!active || disabling) {
-            if (callback)
-                callback(false);
-            return false;
-        }
-
-        disabling = true;
-        LOG("MANUAL", "Disabling manual mode...");
-
-        // Step 1: Stop wheels immediately
-        serial.setMotorWheels(0, 0, 0, [this, callback](bool) {
-            // Step 2: Turn off cleaning motors (best-effort, don't block on failure)
-            stopAllMotors();
-
-            // Step 3: Stop LDS rotation
-            serial.setLdsRotation(false, [this, callback](bool) {
-                // Step 4: Exit TestMode
-                serial.testMode(false, [this, callback](bool ok) {
-                    LOG("MANUAL", "Manual mode disabled (%s)", ok ? "clean" : "TestMode Off failed");
-                    active = false;
-                    serial.setManualCleanActive(false);
-                    disabling = false;
                     if (callback)
-                        callback(ok);
+                        callback(true);
                 });
             });
         });
+        return true;
     }
 
+    if (owner != requestedOwner || (!active && !enabling) || disabling) {
+        if (callback)
+            callback(false);
+        return false;
+    }
+
+    disabling = true;
+    enabling = false;
+    const uint32_t session = ++generation;
+    LOG("MANUAL", "Disabling manual mode for owner %d...", static_cast<int>(requestedOwner));
+
+    serial.emergencyStopWheels([this, requestedOwner, session, callback](bool stopOk) {
+        if (session != generation || owner != requestedOwner)
+            return;
+        stopAllMotors();
+        serial.setLdsRotation(false, [this, requestedOwner, session, callback, stopOk](bool ldsOk) {
+            if (session != generation || owner != requestedOwner)
+                return;
+            serial.testMode(false, [this, requestedOwner, session, callback, stopOk, ldsOk](bool testModeOk) {
+                if (session != generation || owner != requestedOwner)
+                    return;
+                bool ok = stopOk && ldsOk && testModeOk;
+                LOG("MANUAL", "Manual mode disabled for owner %d (%s)", static_cast<int>(requestedOwner),
+                    ok ? "clean" : "teardown failed");
+                active = false;
+                serial.setManualCleanActive(false);
+                disabling = false;
+                owner = ControlOwner::NONE;
+                if (callback)
+                    callback(ok);
+            });
+        });
+    });
     return true;
 }
 
 // -- Movement with safety check ----------------------------------------------
 
 bool ManualCleanManager::move(int leftMM, int rightMM, int speedMMs, std::function<void(bool)> callback) {
-    if (!active)
+    return moveFor(ControlOwner::MANUAL_UI, leftMM, rightMM, speedMMs, callback, false);
+}
+
+bool ManualCleanManager::moveNavigation(int leftMM, int rightMM, int speedMMs, std::function<void(bool)> callback) {
+    return moveFor(ControlOwner::NAVIGATION, leftMM, rightMM, speedMMs, callback, true);
+}
+
+bool ManualCleanManager::moveFor(ControlOwner requestedOwner, int leftMM, int rightMM, int speedMMs,
+                                 std::function<void(bool)> callback, bool requireFreshSafety) {
+    if (!active || disabling || owner != requestedOwner)
         return false;
 
-    // Zero move = explicit stop, always allowed (priority so it jumps the queue)
+    unsigned long lastActivity = WebServer::lastApiActivity;
+    bool clientTimedOut = lastActivity > 0 && millis() - lastActivity >= MANUAL_CLIENT_TIMEOUT_MS;
+    if ((watchdogStopped || clientTimedOut) && (leftMM != 0 || rightMM != 0)) {
+        watchdogStopped = true;
+        return false;
+    }
+
     if (leftMM == 0 && rightMM == 0) {
         wheelsMoving = false;
-        serial.setMotorWheels(0, 0, 0, callback);
+        return serial.setMotorWheels(0, 0, 0, callback);
+    }
+
+    auto issueMove = [this, requestedOwner, leftMM, rightMM, speedMMs, callback]() {
+        if (!active || disabling || owner != requestedOwner || !isMoveAllowed(leftMM, rightMM)) {
+            LOG("MANUAL", "Move blocked for owner %d: L=%d R=%d", static_cast<int>(requestedOwner), leftMM, rightMM);
+            stopWheels();
+            if (callback)
+                callback(false);
+            return;
+        }
+
+        lastCmdLeftMM = leftMM;
+        lastCmdRightMM = rightMM;
+        if (!wheelsMoving) {
+            wheelsMoving = true;
+            stallCount = 0;
+        }
+        if (!serial.setMotorWheels(leftMM, rightMM, speedMMs, callback))
+            wheelsMoving = false;
+    };
+
+    if (!requireFreshSafety) {
+        issueMove();
         return true;
     }
 
-    if (!isMoveAllowed(leftMM, rightMM)) {
-        LOG("MANUAL", "Move blocked: L=%d R=%d (fL=%d fR=%d sL=%d sR=%d lift=%d)", leftMM, rightMM, bumperFrontLeft,
-            bumperFrontRight, bumperSideLeft, bumperSideRight, wheelLifted);
-        // Stop wheels to make sure robot isn't coasting from a previous command
-        wheelsMoving = false;
-        serial.setMotorWheels(0, 0, 0, nullptr);
-        if (callback)
-            callback(false);
-        return true; // Request was accepted and handled (blocked), not a queue error
-    }
-
-    // Track movement for stall detection
-    lastCmdLeftMM = leftMM;
-    lastCmdRightMM = rightMM;
-    if (!wheelsMoving) {
-        // New movement — reset stall tracking
-        wheelsMoving = true;
-        stallCount = 0;
-    }
-
-    // setMotorWheels internally enqueues at CRITICAL priority
-    serial.setMotorWheels(leftMM, rightMM, speedMMs, callback);
+    // Autonomous movement is fail-closed: bypass the sensor cache and require
+    // a successful sample immediately before every wheel command.
+    serial.getDigitalSensors(
+            [this, requestedOwner, issueMove, callback](bool ok, const DigitalSensorData& data) {
+                if (!ok || !active || disabling || owner != requestedOwner) {
+                    stopWheels();
+                    if (callback)
+                        callback(false);
+                    return;
+                }
+                updateSafetyState(data);
+                issueMove();
+            },
+            PRIORITY_CRITICAL);
     return true;
 }
 
 // -- Motor control -----------------------------------------------------------
 
 bool ManualCleanManager::setMotors(bool brush, bool vacuum, bool sideBrush, std::function<void(bool)> callback) {
-    if (!active)
+    if (!active || disabling || owner != ControlOwner::MANUAL_UI)
         return false;
 
     // Track how many motor commands need to complete.
@@ -203,9 +265,13 @@ void ManualCleanManager::tick() {
     // (e.g. serial queue was full when TestMode/LDS commands were enqueued),
     // reset after 10s so the user can retry instead of being locked out forever.
     if (enabling && enablingStartMs > 0 && millis() - enablingStartMs >= 10000) {
-        LOG("MANUAL", "Enable timeout — resetting enabling flag after 10s");
+        LOG("MANUAL", "Enable timeout — aborting manual mode enable after 10s");
+        ++generation;
         enabling = false;
         enablingStartMs = 0;
+        owner = ControlOwner::NONE;
+        serial.setLdsRotation(false, nullptr);
+        serial.testMode(false, nullptr);
     }
 
     if (!active)
@@ -249,11 +315,7 @@ void ManualCleanManager::pollBumpers() {
                 bool prevSideL = bumperSideLeft;
                 bool prevSideR = bumperSideRight;
 
-                bumperFrontLeft = d.lFrontBit || d.lLdsBit;
-                bumperFrontRight = d.rFrontBit || d.rLdsBit;
-                bumperSideLeft = d.lSideBit;
-                bumperSideRight = d.rSideBit;
-                wheelLifted = d.leftWheelExtended || d.rightWheelExtended;
+                updateSafetyState(d);
 
                 // Log state changes and stop wheels on any new contact
                 if (wheelLifted && !prevLift) {
@@ -279,6 +341,14 @@ void ManualCleanManager::pollBumpers() {
                 }
             },
             PRIORITY_HIGH);
+}
+
+void ManualCleanManager::updateSafetyState(const DigitalSensorData& data) {
+    bumperFrontLeft = data.lFrontBit || data.lLdsBit;
+    bumperFrontRight = data.rFrontBit || data.rLdsBit;
+    bumperSideLeft = data.lSideBit;
+    bumperSideRight = data.rSideBit;
+    wheelLifted = data.leftWheelExtended || data.rightWheelExtended;
 }
 
 // -- Stall detection ---------------------------------------------------------
@@ -386,7 +456,7 @@ String ManualCleanManager::getStatusJson() const {
 
 void ManualCleanManager::stopWheels() {
     wheelsMoving = false;
-    serial.setMotorWheels(0, 0, 0, nullptr);
+    serial.emergencyStopWheels(nullptr);
 }
 
 void ManualCleanManager::stopAllMotors() {

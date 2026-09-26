@@ -10,6 +10,40 @@ const DEFAULT_TRANSFORM: MapTransform = { panX: 0, panY: 0, zoom: 1 };
 const MAP_PAD = 20;
 const GRID_STEP = 0.5;
 
+const CONCATENATED_REFERENCE_SUFFIX = /(\S)(Reference map|Referenzkarte|Carte de référence|Referans haritam)$/i;
+
+export function displayReferenceMapName(name: string): string {
+    const trimmed = name.trim();
+    return trimmed.replace(CONCATENATED_REFERENCE_SUFFIX, "$1").trim() || trimmed;
+}
+
+type Translate = (text: string, values?: Record<string, string | number>) => string;
+
+export function translateExampleMapName(name: string, t: Translate): string {
+    switch (name) {
+        case "__example_ground_floor__":
+            return t("Ground floor");
+        case "__example_living_room__":
+            return t("Living room");
+        case "__example_kitchen__":
+            return t("Kitchen");
+        case "__example_bedroom__":
+            return t("Bedroom");
+        case "__example_office__":
+            return t("Office");
+        case "__example_hallway__":
+            return t("Hallway");
+        case "__example_fireplace__":
+            return t("Fireplace");
+        case "__example_kitchen_island__":
+            return t("Kitchen island");
+        case "__example_desk_cables__":
+            return t("Desk cables");
+        default:
+            return name;
+    }
+}
+
 export interface MapProjection {
     minX: number;
     maxX: number;
@@ -131,6 +165,8 @@ export function renderMap(
     tf?: MapTransform,
     currentTime?: number,
     rotation = 0,
+    showRoute = true,
+    showDock = false,
 ) {
     const ctx = canvas.getContext("2d");
     if (!ctx || !map.bounds) return;
@@ -201,7 +237,7 @@ export function renderMap(
         drawnPath.push(liveHead);
     }
 
-    if (drawnPath.length > 1) {
+    if (showRoute && drawnPath.length > 1) {
         ctx.beginPath();
         ctx.moveTo(toX(drawnPath[0].x), toY(drawnPath[0].y));
         for (let i = 1; i < drawnPath.length; i++) {
@@ -215,7 +251,7 @@ export function renderMap(
     }
 
     // Start point
-    if (map.path.length > 0) {
+    if (showRoute && map.path.length > 0) {
         const start = map.path[0];
         ctx.beginPath();
         ctx.arc(toX(start.x), toY(start.y), 5, 0, Math.PI * 2);
@@ -223,10 +259,15 @@ export function renderMap(
         ctx.fill();
     }
 
+    if (showDock && map.path.length > 0) {
+        const dock = map.path[0];
+        drawDockMarker(ctx, toX(dock.x), toY(dock.y), dock.t);
+    }
+
     // End point / animated robot sprite
-    if (playing && liveHead) {
+    if (showRoute && playing && liveHead) {
         drawRobotSprite(ctx, toX(liveHead.x), toY(liveHead.y), liveHead.t);
-    } else if (map.path.length > 1) {
+    } else if (showRoute && map.path.length > 1) {
         const end = map.path[map.path.length - 1];
         const ex = toX(end.x);
         const ey = toY(end.y);
@@ -249,33 +290,67 @@ export function renderMap(
     }
 
     // Recharge points (bolt icon with glow) — hidden until reached during playback
-    for (const rp of map.recharges) {
-        if (rp.ts > tNow) continue;
-        const rx = toX(rp.x);
-        const ry = toY(rp.y);
-        const s = 10;
-        const drawBolt = () => {
-            ctx.beginPath();
-            ctx.moveTo(rx + s * 0.15, ry - s);
-            ctx.lineTo(rx - s * 0.55, ry + s * 0.05);
-            ctx.lineTo(rx - s * 0.05, ry + s * 0.05);
-            ctx.lineTo(rx - s * 0.15, ry + s);
-            ctx.lineTo(rx + s * 0.55, ry - s * 0.05);
-            ctx.lineTo(rx + s * 0.05, ry - s * 0.05);
-            ctx.closePath();
-        };
-        ctx.save();
-        ctx.shadowColor = "rgba(255, 204, 0, 0.7)";
-        ctx.shadowBlur = 8;
-        drawBolt();
-        ctx.fillStyle = "rgba(255, 204, 0, 1)";
-        ctx.fill();
-        ctx.restore();
-        drawBolt();
-        ctx.strokeStyle = isDark ? "rgba(0, 0, 0, 0.5)" : "rgba(0, 0, 0, 0.3)";
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-    }
+    if (showRoute)
+        for (const rp of map.recharges) {
+            if (rp.ts > tNow) continue;
+            const rx = toX(rp.x);
+            const ry = toY(rp.y);
+            const s = 10;
+            const drawBolt = () => {
+                ctx.beginPath();
+                ctx.moveTo(rx + s * 0.15, ry - s);
+                ctx.lineTo(rx - s * 0.55, ry + s * 0.05);
+                ctx.lineTo(rx - s * 0.05, ry + s * 0.05);
+                ctx.lineTo(rx - s * 0.15, ry + s);
+                ctx.lineTo(rx + s * 0.55, ry - s * 0.05);
+                ctx.lineTo(rx + s * 0.05, ry - s * 0.05);
+                ctx.closePath();
+            };
+            ctx.save();
+            ctx.shadowColor = "rgba(255, 204, 0, 0.7)";
+            ctx.shadowBlur = 8;
+            drawBolt();
+            ctx.fillStyle = "rgba(255, 204, 0, 1)";
+            ctx.fill();
+            ctx.restore();
+            drawBolt();
+            ctx.strokeStyle = isDark ? "rgba(0, 0, 0, 0.5)" : "rgba(0, 0, 0, 0.3)";
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+        }
+}
+
+// Draws a fixed dock plus the robot heading at the map anchor. The dock sits
+// behind the robot, while the wedge points in the direction it leaves the base.
+function drawDockMarker(ctx: CanvasRenderingContext2D, x: number, y: number, thetaDeg: number) {
+    const screenAngle = -(thetaDeg * Math.PI) / 180;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(screenAngle);
+    ctx.shadowColor = "rgba(255, 204, 0, 0.45)";
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = "rgba(255, 204, 0, 0.95)";
+    ctx.fillRect(-12, -9, 4, 18);
+    ctx.shadowBlur = 0;
+
+    ctx.beginPath();
+    ctx.arc(0, 0, 6, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(52, 199, 89, 0.95)";
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(11, 0);
+    ctx.lineTo(5, -4);
+    ctx.lineTo(5, 4);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(0, 0, 2, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.fill();
+    ctx.restore();
 }
 
 // Draws the animated robot sprite: a filled circle with a small nose pointing

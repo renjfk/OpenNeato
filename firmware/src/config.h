@@ -75,12 +75,18 @@
 #define CACHE_TTL_VERSION 300000 // GetVersion — rarely changes (5 min)
 #define CACHE_TTL_LDS 1500 // LIDAR scan — 1.5s (scan takes ~800ms on serial)
 
+// Experimental physical navigation is opt-in until hardware validation is complete.
+#ifndef ENABLE_EXPERIMENTAL_NAVIGATION
+#define ENABLE_EXPERIMENTAL_NAVIGATION 0
+#endif
+
 // Manual clean safety
 #define MANUAL_SAFETY_POLL_MS 500 // Poll bumpers every 500ms during manual clean
 #define MANUAL_STALL_POLL_MS 500 // Poll wheel load every 500ms while wheels are moving
 #define MANUAL_STALL_LOAD_PCT 60 // Wheel load % threshold — above this is considered stalled
 #define MANUAL_STALL_COUNT 2 // Consecutive overloaded polls before stopping (2 × 500ms = 1s grace)
 #define MANUAL_CLIENT_TIMEOUT_MS 5000 // Stop wheels if no API activity (any request) within this window
+#define NAVIGATION_CLIENT_TIMEOUT_MS 5000 // Stop navigation if its own client heartbeat expires
 #define MANUAL_BRUSH_RPM 1200 // Default brush RPM in manual mode
 #define MANUAL_VACUUM_SPEED_PCT 80 // Default vacuum speed (%) in manual mode
 #define MANUAL_SIDE_BRUSH_POWER_MW 1500 // Default side brush power (mW) — universal Neato Botvac default
@@ -198,6 +204,7 @@ enum CommandStatus {
 #define HISTORY_MIN_FS_PERCENT 10 // History always gets at least this % of filesystem
 #define HISTORY_MAX_FILES 20 // Maximum number of archived session files to keep
 #define HISTORY_AREA_CELL_M 0.5f // Coarse grid cell size in meters for visited-area estimation
+#define MAP_CONFIG_MAX_BYTES 12288 // Maximum JSON sidecar size for rooms and no-go lines
 #define HISTORY_MIN_SNAPSHOTS 3 // Discard sessions with fewer snapshots (too short to render a useful map)
 #define HISTORY_IMPORT_MAX_BYTES 262144 // 256 KB max import file size (2h clean at 2s intervals ~ 180KB)
 

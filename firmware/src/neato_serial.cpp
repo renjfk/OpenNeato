@@ -635,6 +635,33 @@ bool NeatoSerial::setMotorWheels(int leftMM, int rightMM, int speedMMs, std::fun
     return enqueue(cmd, wrapAction(callback), PRIORITY_CRITICAL);
 }
 
+bool NeatoSerial::emergencyStopWheels(std::function<void(bool)> callback) {
+    std::vector<std::function<void(bool, const String&)>> cancelledCallbacks;
+    for (auto it = queue.begin(); it != queue.end();) {
+        bool isWheelCommand = it->command.startsWith(CMD_SET_MOTOR) && it->command.indexOf("Wheel") >= 0;
+        if (!isWheelCommand) {
+            ++it;
+            continue;
+        }
+        if (it->callback)
+            cancelledCallbacks.push_back(it->callback);
+        it = queue.erase(it);
+    }
+
+    if (queue.size() >= NEATO_QUEUE_MAX_SIZE) {
+        auto evicted = queue.back();
+        queue.pop_back();
+        if (evicted.callback)
+            cancelledCallbacks.push_back(evicted.callback);
+    }
+
+    queue.insert(queue.begin(), {String(CMD_SET_MOTOR) + " LWheelDisable RWheelDisable",
+                                 static_cast<uint8_t>(PRIORITY_CRITICAL), wrapAction(callback), true});
+    for (auto& cancelled: cancelledCallbacks)
+        cancelled(false, "");
+    return true;
+}
+
 bool NeatoSerial::setMotorBrush(int rpm, std::function<void(bool)> callback) {
     if (rpm <= 0) {
         return enqueue(String(CMD_SET_MOTOR) + " BrushDisable", wrapAction(callback), PRIORITY_MEDIUM);

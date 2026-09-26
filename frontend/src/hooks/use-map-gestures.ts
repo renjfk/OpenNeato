@@ -105,9 +105,17 @@ export function useMapGestures(canvasRef: { current: HTMLCanvasElement | null },
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
+        // The editor SVG is layered above the canvas. Listen on their common
+        // container so wheel, pinch, and pan gestures keep working there too.
+        const gestureTarget = canvas.parentElement ?? canvas;
+        const isDrawingTarget = (target: EventTarget | null) =>
+            target instanceof Element && target.closest("[data-map-drawing=true]") !== null;
+        const isMapSurface = (target: EventTarget | null) =>
+            target instanceof Element && (target === canvas || target.closest(".map-editor-overlay") !== null);
 
         // --- Wheel zoom ---
         const onWheel = (e: WheelEvent) => {
+            if (!isMapSurface(e.target)) return;
             e.preventDefault();
             const delta = -e.deltaY * WHEEL_ZOOM_SPEED;
             const local = toLocal(e.clientX, e.clientY);
@@ -116,12 +124,12 @@ export function useMapGestures(canvasRef: { current: HTMLCanvasElement | null },
 
         // --- Pointer (mouse only) drag ---
         const onPointerDown = (e: PointerEvent) => {
-            if (e.button !== 0) return;
+            if (e.button !== 0 || !isMapSurface(e.target) || isDrawingTarget(e.target)) return;
             if (e.pointerType === "touch") return;
             dragging.current = true;
             dragStart.current = { x: e.clientX, y: e.clientY };
             panStart.current = { x: tRef.current.panX, y: tRef.current.panY };
-            canvas.setPointerCapture(e.pointerId);
+            gestureTarget.setPointerCapture(e.pointerId);
         };
 
         const onPointerMove = (e: PointerEvent) => {
@@ -137,6 +145,7 @@ export function useMapGestures(canvasRef: { current: HTMLCanvasElement | null },
 
         // --- Double-click: zoom in when at 1x, reset otherwise ---
         const onDoubleClick = (e: MouseEvent) => {
+            if (!isMapSurface(e.target) || isDrawingTarget(e.target)) return;
             e.preventDefault();
             if (tRef.current.zoom <= MIN_ZOOM) {
                 const local = toLocal(e.clientX, e.clientY);
@@ -148,6 +157,10 @@ export function useMapGestures(canvasRef: { current: HTMLCanvasElement | null },
 
         // --- Touch gestures ---
         const onTouchStart = (e: TouchEvent) => {
+            if (!isMapSurface(e.target)) return;
+            // A single touch belongs to the active drawing tool; two-finger
+            // pinch/zoom remains available while drawing.
+            if (e.touches.length === 1 && isDrawingTarget(e.target)) return;
             // Prevent Safari's built-in double-tap-to-zoom on all
             // touches within the canvas.
             e.preventDefault();
@@ -188,6 +201,8 @@ export function useMapGestures(canvasRef: { current: HTMLCanvasElement | null },
         };
 
         const onTouchMove = (e: TouchEvent) => {
+            if (!isMapSurface(e.target)) return;
+            if (e.touches.length === 1 && isDrawingTarget(e.target)) return;
             e.preventDefault();
             if (e.touches.length === 2 && pinching.current) {
                 const [a, b] = [e.touches[0], e.touches[1]];
@@ -240,26 +255,26 @@ export function useMapGestures(canvasRef: { current: HTMLCanvasElement | null },
             }
         };
 
-        canvas.addEventListener("wheel", onWheel, { passive: false });
-        canvas.addEventListener("pointerdown", onPointerDown);
-        canvas.addEventListener("pointermove", onPointerMove);
-        canvas.addEventListener("pointerup", onPointerUp);
-        canvas.addEventListener("pointercancel", onPointerUp);
-        canvas.addEventListener("dblclick", onDoubleClick);
-        canvas.addEventListener("touchstart", onTouchStart, { passive: false });
-        canvas.addEventListener("touchmove", onTouchMove, { passive: false });
-        canvas.addEventListener("touchend", onTouchEnd);
+        gestureTarget.addEventListener("wheel", onWheel, { passive: false });
+        gestureTarget.addEventListener("pointerdown", onPointerDown);
+        gestureTarget.addEventListener("pointermove", onPointerMove);
+        gestureTarget.addEventListener("pointerup", onPointerUp);
+        gestureTarget.addEventListener("pointercancel", onPointerUp);
+        gestureTarget.addEventListener("dblclick", onDoubleClick);
+        gestureTarget.addEventListener("touchstart", onTouchStart, { passive: false });
+        gestureTarget.addEventListener("touchmove", onTouchMove, { passive: false });
+        gestureTarget.addEventListener("touchend", onTouchEnd);
 
         return () => {
-            canvas.removeEventListener("wheel", onWheel);
-            canvas.removeEventListener("pointerdown", onPointerDown);
-            canvas.removeEventListener("pointermove", onPointerMove);
-            canvas.removeEventListener("pointerup", onPointerUp);
-            canvas.removeEventListener("pointercancel", onPointerUp);
-            canvas.removeEventListener("dblclick", onDoubleClick);
-            canvas.removeEventListener("touchstart", onTouchStart);
-            canvas.removeEventListener("touchmove", onTouchMove);
-            canvas.removeEventListener("touchend", onTouchEnd);
+            gestureTarget.removeEventListener("wheel", onWheel);
+            gestureTarget.removeEventListener("pointerdown", onPointerDown);
+            gestureTarget.removeEventListener("pointermove", onPointerMove);
+            gestureTarget.removeEventListener("pointerup", onPointerUp);
+            gestureTarget.removeEventListener("pointercancel", onPointerUp);
+            gestureTarget.removeEventListener("dblclick", onDoubleClick);
+            gestureTarget.removeEventListener("touchstart", onTouchStart);
+            gestureTarget.removeEventListener("touchmove", onTouchMove);
+            gestureTarget.removeEventListener("touchend", onTouchEnd);
         };
     }, [canvasRef, clampPan, commit, reset, toLocal, zoomAt, rotateDelta]);
 

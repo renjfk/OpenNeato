@@ -63,6 +63,7 @@ interface I18nValue {
     locale: Locale;
     setPreference: (preference: LanguagePreference) => void;
     t: (text: string, values?: Record<string, string | number>) => string;
+    plural: (count: number, one: string, other: string) => string;
     formatNumber: (value: number, options?: NumberFormatOptions) => string;
     formatDateTime: (epochSeconds: number) => string;
     formatTime: (epochSeconds: number) => string;
@@ -102,6 +103,7 @@ const I18nContext = createContext<I18nValue>({
     locale: defaultLocale,
     setPreference: () => {},
     t: (text, values) => interpolate(text, values),
+    plural: (count, one, other) => (count === 1 ? one : other),
     formatNumber: formatNumberManual,
     formatDateTime: formatDateTimeManual,
     formatTime: formatTimeManual,
@@ -144,6 +146,16 @@ function formatBytesManual(bytes: number): string {
     return `${(kb / 1024).toFixed(1)} MB`;
 }
 
+// Picks the CLDR plural category for count. Locales whose plural rules need more than one/other forms (e.g. Czech
+// "few" for 2-4) provide extra "<other>|<category>" keys; those keys hold the plain plural in other locales.
+function pluralCategory(locale: Locale, count: number): string {
+    try {
+        return new Intl.PluralRules(locale).select(count);
+    } catch {
+        return count === 1 ? "one" : "other";
+    }
+}
+
 interface I18nProviderProps {
     preference: LanguagePreference;
     locale: Locale;
@@ -155,6 +167,11 @@ export function I18nProvider({ preference, locale, setPreference, children }: I1
     const t = (text: string, values?: Record<string, string | number>) => {
         const translated = dictionaries[locale]?.[text] ?? text;
         return interpolate(translated, values);
+    };
+    const plural = (count: number, one: string, other: string) => {
+        const category = pluralCategory(locale, count);
+        if (category === "one") return t(one);
+        return dictionaries[locale]?.[`${other}|${category}`] ?? t(other);
     };
     const formatNumber = formatNumberManual;
     const formatDateTime = formatDateTimeManual;
@@ -174,6 +191,7 @@ export function I18nProvider({ preference, locale, setPreference, children }: I1
                 locale,
                 setPreference,
                 t,
+                plural,
                 formatNumber,
                 formatDateTime,
                 formatTime,

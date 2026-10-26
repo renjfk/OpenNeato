@@ -10,3 +10,4 @@ frontend/src/types.generated.ts
 flash/openneato-flash
 release/
 dist/
+.idea/

@@ -97,6 +97,25 @@ The default TX/RX GPIOs depend on the board and firmware target, but are fully c
 the web UI in **Settings -> Device -> UART Pins**. Wire whichever GPIOs are convenient and update
 the setting to match.
 
+> [!NOTE]
+> ESP32-C6 support includes 4 MB Super Mini boards, including the
+> [ESP32-C6FH4 Super Mini sold by SEMAF](https://electronics.semaf.at/esp32-c6-supermini).
+> Use the existing `c6-debug`, `c6-ota`, or `c6-release` targets: they reuse the
+> `esp32-c6-devkitc-1` board definition with flash explicitly limited to 4 MB.
+> A DevKitC board ID in the build output does not mean that an 8 MB board is required.
+>
+> Defaults are BOOT/factory reset on GPIO9, robot TX on GPIO22, and robot RX on GPIO23.
+> UART pins remain configurable in **Settings -> Device -> UART Pins**; previously saved
+> values take precedence over firmware defaults. Check your board's actual pin labels.
+> GPIO12/13 are reserved for native USB.
+>
+> On an ESP32-C6FH4 Super Mini, USB flashing, startup, fallback WiFi, and WiFi client
+> access to the web UI have been verified. Robot communication and cleaning, OTA/rollback,
+> and factory reset have not yet been verified on this board.
+> The C6 uses a different partition layout from the other chips (1728 KB OTA slots and
+> 512 KB storage for logs/history). Install the full pack over USB when changing partition
+> layouts: an application-only OTA update does not replace the partition table.
+
 ### Wiring
 
 Connect the four JST XH wires between the robot's debug port and the ESP32.
@@ -201,7 +220,7 @@ tool refuses to flash.
 | Flag          | Default       | Description                                             |
 |---------------|---------------|---------------------------------------------------------|
 | `-port`       | auto-detected | Serial port path (e.g. `/dev/ttyUSB0`, `COM3`)          |
-| `-chip`       | auto-detected | Chip type (e.g. `esp32-c3`, `esp32-s3`)                 |
+| `-chip`       | auto-detected | Chip type (e.g. `esp32-c3`, `esp32-s3`, `esp32-c6`)     |
 | `-firmware`   | —             | Path to a local `.tar.gz` firmware pack; skips download |
 | `-list`       | `false`       | List available serial ports and exit                    |
 | `-no-monitor` | `false`       | Skip the serial monitor after flashing                  |
@@ -237,7 +256,7 @@ files, offsets, baud rate, compression, and reset behavior as `openneato-flash`.
    ```
 
    Look for a line like `Detecting chip type... ESP32-C3`, then use the lowercase chip name in
-   the firmware filename: `esp32-c3`, `esp32-s3`, or `esp32`.
+   the firmware filename: `esp32-c3`, `esp32-s3`, `esp32-c6`, or `esp32`.
 
 4. Download the full firmware pack and `checksums.txt` from the
    [OpenNeato Releases](https://github.com/renjfk/OpenNeato/releases) page.
@@ -589,8 +608,8 @@ that wipes every session in one go and restores the list view.
 Two ways to factory reset:
 
 1. **From the web UI**: Settings -> Device -> Factory Reset. Type `RESET` to confirm.
-2. **Hardware button**: Hold the BOOT button for 5 seconds (GPIO9 on ESP32-C3, GPIO0 on
-   ESP32-S3 and original ESP32). The ESP32 will erase all settings and restart.
+2. **Hardware button**: Hold the BOOT button for 5 seconds (GPIO9 on ESP32-C3 and ESP32-C6,
+   GPIO0 on ESP32-S3 and original ESP32). The ESP32 will erase all settings and restart.
 
 > [!CAUTION]
 > Both methods erase everything — WiFi credentials, settings, logs, and cleaning history.

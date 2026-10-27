@@ -27,6 +27,8 @@
 // ESP32-C3: BOOT is GPIO9, GPIO1/3 are free GPIOs.
 // Seeed Studio XIAO ESP32C3: D6/TX is GPIO21, D7/RX is GPIO20.
 // ESP32-S3: BOOT is GPIO0, GPIO19/20 are native USB — use free GPIOs for UART.
+// ESP32-C6: BOOT is GPIO9, GPIO12/13 are native USB, GPIO16/17 are UART0 (ROM boot
+// log), GPIO4/5/8/9/15 are strapping pins — GPIO22/23 avoid all of these.
 #if CONFIG_IDF_TARGET_ESP32
 #define RESET_BUTTON_PIN 0
 #define NEATO_DEFAULT_TX_PIN 17
@@ -47,6 +49,11 @@
 #define NEATO_DEFAULT_TX_PIN 17
 #define NEATO_DEFAULT_RX_PIN 18
 #define MAX_GPIO_PIN 48
+#elif CONFIG_IDF_TARGET_ESP32C6
+#define RESET_BUTTON_PIN 9
+#define NEATO_DEFAULT_TX_PIN 22
+#define NEATO_DEFAULT_RX_PIN 23
+#define MAX_GPIO_PIN 30
 #else
 #error "Unsupported chip — add pin definitions for this target"
 #endif

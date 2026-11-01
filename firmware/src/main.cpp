@@ -51,7 +51,8 @@ void setup() {
 
     // Initialize settings first (loads pin config from NVS before UART init)
     LOG("BOOT", "Initializing settings...");
-    settingsManager.onTzChange([&](const String& tz) { systemManager.applyTimezone(tz); });
+    settingsManager.onTimeConfigChange(
+            [&](const String& tz, const String& ntpServer) { systemManager.applyTimeConfig(tz, ntpServer); });
     settingsManager.onTxPowerChange([&](int quarterDbm) { wifiManager.setTxPower(quarterDbm); });
     settingsManager.onRebootRequired([&] { systemManager.restart(); });
     settingsManager.onApFallbackChange([&](bool enabled) { wifiManager.setApFallbackOnDisconnect(enabled); });
@@ -111,7 +112,7 @@ void setup() {
     // Initialize system manager (NTP detection, time)
     LOG("BOOT", "Initializing system manager...");
     systemManager.begin();
-    systemManager.applyTimezone(settingsManager.get().tz);
+    systemManager.applyTimeConfig(settingsManager.get().tz, settingsManager.get().ntpServer);
 
     // Wire NTP sync callback: log the event
     systemManager.onNtpSync([&] {

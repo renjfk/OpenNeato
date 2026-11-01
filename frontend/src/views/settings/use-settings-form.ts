@@ -9,6 +9,7 @@ import { DEFAULT_SERVER } from "./constants";
 export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: () => void) {
     // Local form state
     const [tz, setTz] = useState<string>("UTC0");
+    const [ntpServer, setNtpServer] = useState("");
     const [logLevel, setLogLevel] = useState(0);
     const [apFallbackOnDisconnect, setApFallbackOnDisconnect] = useState(true);
     const [syslogEnabled, setSyslogEnabled] = useState(false);
@@ -48,6 +49,7 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         if (fetched) {
             server.current = { ...fetched };
             setTz(fetched.tz);
+            setNtpServer(fetched.ntpServer ?? "");
             setLogLevel(fetched.logLevel);
             setApFallbackOnDisconnect(fetched.apFallbackOnDisconnect ?? true);
             setSyslogEnabled(fetched.syslogEnabled ?? false);
@@ -82,6 +84,7 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
     const isDirty =
         settingsLoaded &&
         (tz !== server.current.tz ||
+            ntpServer !== (server.current.ntpServer ?? "") ||
             logLevel !== server.current.logLevel ||
             apFallbackOnDisconnect !== (server.current.apFallbackOnDisconnect ?? true) ||
             syslogEnabled !== (server.current.syslogEnabled ?? false) ||
@@ -136,15 +139,24 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
               : null
         : null;
 
+    // Mirrors the firmware check: blank, or a hostname / IPv4 of up to 63 chars.
+    const ntpServerError =
+        ntpServer.length > 63
+            ? "Max 63 characters"
+            : ntpServer.length > 0 && !/^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*$/.test(ntpServer)
+              ? "Only letters, numbers, dots, and hyphens"
+              : null;
+
     const autoRestartTimeError = autoRestartEnabled ? (!parsedMaintenanceTime ? "Use HH:MM format" : null) : null;
 
-    const validationError = pinError || hostnameError || syslogIpError || autoRestartTimeError;
+    const validationError = pinError || hostnameError || ntpServerError || syslogIpError || autoRestartTimeError;
 
     // --- Unified save ---
 
     const buildPatch = useCallback((): Partial<SettingsData> => {
         const patch: Partial<SettingsData> = {};
         if (tz !== server.current.tz) patch.tz = tz;
+        if (ntpServer !== (server.current.ntpServer ?? "")) patch.ntpServer = ntpServer;
         if (logLevel !== server.current.logLevel) patch.logLevel = logLevel;
         if (apFallbackOnDisconnect !== (server.current.apFallbackOnDisconnect ?? true))
             patch.apFallbackOnDisconnect = apFallbackOnDisconnect;
@@ -182,6 +194,7 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         return patch;
     }, [
         tz,
+        ntpServer,
         logLevel,
         apFallbackOnDisconnect,
         syslogEnabled,
@@ -243,6 +256,8 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         // Form fields
         tz,
         setTz,
+        ntpServer,
+        setNtpServer,
         logLevel,
         setLogLevel,
         apFallbackOnDisconnect,
@@ -293,6 +308,7 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         needsReboot,
         pinError,
         hostnameError,
+        ntpServerError,
         syslogIpError,
         autoRestartTimeError,
         validationError,

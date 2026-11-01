@@ -1398,6 +1398,12 @@ components:
         tz:
           type: string
           description: IANA timezone identifier (e.g. "America/New_York")
+        ntpServer:
+          type: string
+          maxLength: 63
+          description: >-
+            Custom NTP server hostname or IPv4 address, tried before the built-in
+            servers (pool.ntp.org, time.nist.gov). Empty uses the built-in servers only.
         logLevel:
           type: number
           description: 0=off, 1=info, 2=debug
@@ -1559,6 +1565,7 @@ components:
           type: boolean
       required:
         - tz
+        - ntpServer
         - logLevel
         - apFallbackOnDisconnect
         - syslogEnabled

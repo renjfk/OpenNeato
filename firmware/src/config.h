@@ -131,6 +131,7 @@ enum CommandStatus {
 
 // NVS keys — Time/NTP
 #define NVS_KEY_TIMEZONE "tz"
+#define NVS_KEY_NTP_SERVER "ntp_server"
 
 // NVS keys — Settings
 #define NVS_KEY_HOSTNAME "hostname"
@@ -220,6 +221,7 @@ enum CommandStatus {
 // NTP / time sync
 #define NTP_SERVER_1 "pool.ntp.org"
 #define NTP_SERVER_2 "time.nist.gov"
+#define NTP_SERVER_MAX_LEN 63 // Custom NTP server hostname or IPv4, stored in NVS (empty = defaults above)
 #define NTP_DEFAULT_TZ "UTC0" // POSIX TZ string, stored in NVS
 
 // Logging — enabled by default, disable with -DENABLE_LOGGING=0

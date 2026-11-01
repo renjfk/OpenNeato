@@ -47,8 +47,10 @@ public:
     // External clock fallback (e.g. robot clock parsed from GetTime)
     void setFallbackClock(time_t epoch);
 
-    // Apply a timezone string (reconfigures NTP, does NOT store to NVS)
-    void applyTimezone(const String& tz);
+    // Apply timezone and NTP server (reconfigures SNTP, does NOT store to NVS).
+    // An empty ntpServer uses NTP_SERVER_1 / NTP_SERVER_2; a custom one is tried
+    // first, with NTP_SERVER_1 / NTP_SERVER_2 kept as fallbacks.
+    void applyTimeConfig(const String& tz, const String& ntpServer);
 
     // System health snapshot (heap, uptime, RSSI, storage, NTP, time)
     // Caller must supply tz string (owned by SettingsManager, not SystemManager)
@@ -81,6 +83,12 @@ private:
     bool fallbackSet = false;
     time_t fallbackEpoch = 0;
     unsigned long fallbackMillis = 0;
+
+    // SNTP keeps the server name pointer it is given (no copy) and reads it on
+    // every poll, so a custom name must outlive applyTimeConfig(). Two buffers
+    // alternate: the new name is written into the one SNTP is not using.
+    char ntpServerBuf[2][NTP_SERVER_MAX_LEN + 1] = {};
+    int ntpServerBufIdx = 0;
 
     // Deferred reboot state
     unsigned long pendingRebootAt = 0;

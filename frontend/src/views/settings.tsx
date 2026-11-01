@@ -108,6 +108,8 @@ export function SettingsView({
     const {
         tz,
         setTz,
+        ntpServer,
+        setNtpServer,
         logLevel,
         setLogLevel,
         syslogEnabled,
@@ -156,6 +158,7 @@ export function SettingsView({
         isDirty,
         pinError,
         hostnameError,
+        ntpServerError,
         syslogIpError,
         autoRestartTimeError,
         validationError,
@@ -529,6 +532,22 @@ export function SettingsView({
                                     </option>
                                 )}
                             </select>
+                        </div>
+                    </div>
+                    <div class="settings-section">
+                        <input
+                            type="text"
+                            class="settings-text-input"
+                            value={ntpServer}
+                            onInput={(e) => setNtpServer((e.target as HTMLInputElement).value.trim())}
+                            disabled={saving}
+                            aria-label={t("NTP server")}
+                            placeholder={t("NTP server (blank = pool.ntp.org)")}
+                        />
+                        {ntpServerError && <div class="settings-field-error">{t(ntpServerError)}</div>}
+                        <div class="settings-robot-time">
+                            <Icon svg={clockSvg} />
+                            <T>A custom server is tried first, the default servers stay as fallback</T>
                         </div>
                     </div>
                     <div class="settings-section">

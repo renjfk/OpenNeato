@@ -166,6 +166,7 @@ const settingsPayload = (state, includeNavMode = true) => {
     const settings = {};
     const keys = [
         "tz",
+        "ntpServer",
         "logLevel",
         "apFallbackOnDisconnect",
         "syslogEnabled",

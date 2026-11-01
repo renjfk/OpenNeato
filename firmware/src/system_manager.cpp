@@ -10,7 +10,7 @@ SystemManager::SystemManager(Preferences& prefs) : LoopTask(5000), prefs(prefs) 
 // -- Lifecycle ---------------------------------------------------------------
 
 void SystemManager::begin() {
-    // NTP is configured by SettingsManager via applyTimezone() after settings are loaded
+    // NTP is configured by SettingsManager via applyTimeConfig() after settings are loaded
     LOG("SYS", "System manager initialized (NTP pending timezone from settings)");
 }
 
@@ -90,9 +90,18 @@ void SystemManager::setFallbackClock(time_t epoch) {
 
 // -- Timezone ----------------------------------------------------------------
 
-void SystemManager::applyTimezone(const String& tz) {
-    configTzTime(tz.c_str(), NTP_SERVER_1, NTP_SERVER_2);
-    LOG("SYS", "NTP timezone applied: %s", tz.c_str());
+void SystemManager::applyTimeConfig(const String& tz, const String& ntpServer) {
+    if (ntpServer.isEmpty()) {
+        configTzTime(tz.c_str(), NTP_SERVER_1, NTP_SERVER_2);
+        LOG("SYS", "NTP applied: tz=%s servers=%s,%s", tz.c_str(), NTP_SERVER_1, NTP_SERVER_2);
+        return;
+    }
+
+    ntpServerBufIdx ^= 1;
+    char *server = ntpServerBuf[ntpServerBufIdx];
+    strlcpy(server, ntpServer.c_str(), sizeof(ntpServerBuf[0]));
+    configTzTime(tz.c_str(), server, NTP_SERVER_1, NTP_SERVER_2);
+    LOG("SYS", "NTP applied: tz=%s servers=%s,%s,%s", tz.c_str(), server, NTP_SERVER_1, NTP_SERVER_2);
 }
 
 // -- Deferred reboot ---------------------------------------------------------

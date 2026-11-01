@@ -23,6 +23,7 @@ struct SchedDay {
 struct Settings : public JsonSerializable {
     String hostname = DEFAULT_HOSTNAME;
     String tz = NTP_DEFAULT_TZ;
+    String ntpServer; // Custom NTP host or IPv4, tried before the defaults (empty = defaults only)
     int logLevel = LOG_LEVEL_OFF; // 0=off, 1=info, 2=debug (auto-expires back to off)
     int wifiTxPower = WIFI_DEFAULT_TX_POWER; // 0.25 dBm units (34 = 8.5 dBm)
     int uartTxPin = NEATO_DEFAULT_TX_PIN; // ESP GPIO -> Robot RX
@@ -80,9 +81,9 @@ public:
     // Apply a partial update — only fields present in the JSON body are written.
     ApplyResult apply(const String& json);
 
-    // Callback fired when timezone changes (so SystemManager can reconfigure NTP)
-    using TzChangeCallback = std::function<void(const String& tz)>;
-    void onTzChange(TzChangeCallback cb) { tzChangeCb = cb; }
+    // Callback fired when timezone or NTP server changes (so SystemManager can reconfigure NTP)
+    using TimeConfigChangeCallback = std::function<void(const String& tz, const String& ntpServer)>;
+    void onTimeConfigChange(TimeConfigChangeCallback cb) { timeConfigChangeCb = cb; }
 
     // Callback fired when WiFi TX power changes (so WiFiManager can apply it live)
     using TxPowerChangeCallback = std::function<void(int quarterDbm)>;
@@ -100,7 +101,7 @@ public:
 private:
     Preferences& prefs;
     Settings current;
-    TzChangeCallback tzChangeCb;
+    TimeConfigChangeCallback timeConfigChangeCb;
     TxPowerChangeCallback txPowerChangeCb;
     RebootCallback rebootCb;
     ApFallbackChangeCallback apFallbackChangeCb;

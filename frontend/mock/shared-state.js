@@ -112,6 +112,7 @@ const DEFAULT_STATE = {
     lidarSlowRotation: false,
     lidarUnavailable: false,
     tz: "UTC0",
+    ntpServer: "",
     logLevel: 0,
     apFallbackOnDisconnect: true,
     wifiDisconnected: false,

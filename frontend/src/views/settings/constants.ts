@@ -114,6 +114,7 @@ export const SIDE_BRUSH_PRESETS: SideBrushPreset[] = [
 
 export const DEFAULT_SERVER = {
     tz: "UTC0",
+    ntpServer: "",
     logLevel: 0,
     apFallbackOnDisconnect: true,
     syslogEnabled: false,

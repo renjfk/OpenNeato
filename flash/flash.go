@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 )
 
@@ -142,15 +143,25 @@ func detectChip(esptoolPath, portName string) (string, error) {
 		return "", fmt.Errorf("chip detection failed: %w\n%s", err, out)
 	}
 
-	// Parse "Detecting chip type... ESP32-C3" from esptool output
+	// Parse the last "Detecting chip type... ESP32-C3" from esptool output. The
+	// fallback path for classic ESP32/S2 prints the prefix a second time after
+	// a failed autodetect attempt, so the last match is the authoritative one.
 	const prefix = "Detecting chip type... "
+	chip := ""
 	for _, line := range strings.Split(string(out), "\n") {
-		if idx := strings.Index(line, prefix); idx >= 0 {
-			chip := strings.TrimSpace(line[idx+len(prefix):])
-			if chip != "" {
-				return strings.ToLower(chip), nil
-			}
+		idx := strings.Index(line, prefix)
+		if idx < 0 {
+			continue
 		}
+		name := strings.TrimSpace(line[idx+len(prefix):])
+		// Ignore retry lines that carry a status message instead of a chip name.
+		if name == "" || strings.HasPrefix(name, "Autodetection failed") {
+			continue
+		}
+		chip = name
+	}
+	if chip != "" {
+		return strings.ToLower(chip), nil
 	}
 
 	return "", fmt.Errorf("could not detect chip type from esptool output:\n%s", out)
@@ -255,6 +266,37 @@ func downloadToFile(url, dest string) error {
 
 // --- Firmware download ---
 
+// normalizeChip lowercases and trims a user-supplied chip or board name so it
+// matches release pack naming, which is case-sensitive in checksums.txt.
+// esptool-style names without a hyphen are mapped to the hyphenated pack names.
+func normalizeChip(chip string) string {
+	switch name := strings.ToLower(strings.TrimSpace(chip)); name {
+	case "esp32c3":
+		return "esp32-c3"
+	case "esp32s3":
+		return "esp32-s3"
+	default:
+		return name
+	}
+}
+
+// availablePacks returns the sorted board names from the <name> part of the
+// openneato-<name>-full.tar.gz entries in a release's checksums.txt.
+func availablePacks(checksums map[string]string) []string {
+	packs := make([]string, 0, len(checksums))
+	for name := range checksums {
+		id, ok := strings.CutPrefix(name, "openneato-")
+		if !ok {
+			continue
+		}
+		if id, ok = strings.CutSuffix(id, "-full.tar.gz"); ok {
+			packs = append(packs, id)
+		}
+	}
+	slices.Sort(packs)
+	return packs
+}
+
 // downloadFirmwarePack downloads the board-specific firmware tarball from
 // the latest GitHub release and extracts it into a temp directory.
 // It also downloads checksums.txt and verifies the archive integrity.
@@ -271,13 +313,30 @@ func downloadFirmwarePack(chip string) (string, error) {
 	archiveURL := baseURL + "/" + archiveName
 	checksumsURL := baseURL + "/checksums.txt"
 
-	fmt.Printf("Downloading firmware %s for %s...\n", version, chip)
-
 	// Download checksums.txt first
 	checksums, err := downloadChecksums(checksumsURL)
 	if err != nil {
 		return "", fmt.Errorf("download checksums: %w", err)
 	}
+
+	// Validate the requested pack exists before downloading so an unknown chip
+	// name surfaces an actionable error instead of a bare HTTP 404.
+	if _, ok := checksums[archiveName]; !ok {
+		release := "the latest release"
+		if version != "dev" {
+			release = fmt.Sprintf("release v%s", version)
+		}
+		packs := availablePacks(checksums)
+		if len(packs) == 0 {
+			return "", fmt.Errorf("firmware pack %s not found in %s", archiveName, release)
+		}
+		return "", fmt.Errorf(
+			"firmware pack %s not found in %s\navailable packs: %s\nuse -chip with one of the pack names above\nsee https://github.com/renjfk/OpenNeato/releases",
+			archiveName, release, strings.Join(packs, ", "),
+		)
+	}
+
+	fmt.Printf("Downloading firmware %s for %s...\n", version, chip)
 
 	// Download archive to a temp file so we can verify before extracting
 	tmpFile, err := os.CreateTemp("", "openneato-*.tar.gz")

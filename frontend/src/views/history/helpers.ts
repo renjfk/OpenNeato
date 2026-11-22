@@ -65,6 +65,129 @@ export function isDarkSurface(canvas: HTMLCanvasElement): boolean {
     return getComputedStyle(canvas).getPropertyValue("--surface").trim().startsWith("#1");
 }
 
+// -- WiFi signal layer -------------------------------------------------------
+
+export type SignalBand = "good" | "fair" | "weak" | "poor" | "off";
+
+// Band edges in dBm. Kept in one place so the legend text and the colour
+// thresholds cannot drift apart.
+const GOOD_MIN_DBM = -60;
+const FAIR_MIN_DBM = -70;
+const WEAK_MIN_DBM = -80;
+
+// Fill colours stay semi-transparent so the path and map grid remain visible
+// underneath. Thresholds are coarse on purpose: RSSI is smoothed and noisy, so
+// a gradient would imply survey-grade precision the data does not have.
+const SIGNAL_RGB_DARK: Record<SignalBand, string> = {
+    good: "52, 199, 89",
+    fair: "255, 204, 0",
+    weak: "255, 149, 0",
+    poor: "255, 69, 58",
+    off: "142, 142, 147",
+};
+
+// Light surfaces need darker, slightly stronger fills to stay legible.
+const SIGNAL_RGB_LIGHT: Record<SignalBand, string> = {
+    good: "22, 130, 50",
+    fair: "191, 144, 0",
+    weak: "214, 106, 0",
+    poor: "214, 45, 35",
+    off: "110, 110, 118",
+};
+
+const SIGNAL_ALPHA_DARK: Record<SignalBand, number> = {
+    good: 0.42,
+    fair: 0.42,
+    weak: 0.46,
+    poor: 0.46,
+    off: 0.45,
+};
+
+const SIGNAL_ALPHA_LIGHT: Record<SignalBand, number> = {
+    good: 0.45,
+    fair: 0.48,
+    weak: 0.48,
+    poor: 0.48,
+    off: 0.45,
+};
+
+// Shared by the settled map renderer and the loading-wave reveal. `scale`
+// lowers the opacity while a cell fades in.
+export function signalFill(band: SignalBand, isDark: boolean, scale = 1): string {
+    const rgb = (isDark ? SIGNAL_RGB_DARK : SIGNAL_RGB_LIGHT)[band];
+    const alpha = (isDark ? SIGNAL_ALPHA_DARK : SIGNAL_ALPHA_LIGHT)[band] * scale;
+    return `rgba(${rgb}, ${alpha.toFixed(3)})`;
+}
+
+function signalColors(isDark: boolean): Record<SignalBand, string> {
+    return {
+        good: signalFill("good", isDark),
+        fair: signalFill("fair", isDark),
+        weak: signalFill("weak", isDark),
+        poor: signalFill("poor", isDark),
+        off: signalFill("off", isDark),
+    };
+}
+
+export function signalBand(rssi: number | undefined): SignalBand {
+    if (rssi === undefined || rssi === 0) return "off";
+    if (rssi >= GOOD_MIN_DBM) return "good";
+    if (rssi >= FAIR_MIN_DBM) return "fair";
+    if (rssi >= WEAK_MIN_DBM) return "weak";
+    return "poor";
+}
+
+// Human-readable band bounds for the legend. Symbols and numbers only, so the
+// text needs no translation; the unit is dBm.
+export function signalBandRange(band: SignalBand): string {
+    if (band === "good") return `≥ ${GOOD_MIN_DBM} dBm`;
+    if (band === "fair") return `${GOOD_MIN_DBM} … ${FAIR_MIN_DBM} dBm`;
+    if (band === "weak") return `${FAIR_MIN_DBM} … ${WEAK_MIN_DBM} dBm`;
+    if (band === "poor") return `< ${WEAK_MIN_DBM} dBm`;
+    return "";
+}
+
+export interface SignalStats {
+    // Worst decibel reading; 0 when every sample was disconnected.
+    worst: number;
+    samples: number;
+    disconnected: number;
+}
+
+export function signalStats(map: MapData): SignalStats | null {
+    let worst = 0;
+    let samples = 0;
+    let disconnected = 0;
+    for (const p of map.path) {
+        if (p.r === undefined) continue;
+        samples++;
+        if (p.r === 0) {
+            disconnected++;
+            continue;
+        }
+        if (p.r < worst) worst = p.r;
+    }
+    return samples > 0 ? { worst, samples, disconnected } : null;
+}
+
+// RSSI at (or just before) a session-relative timestamp, for the live badge in
+// the player. Walks back over poses that predate signal sampling.
+const RSSI_LOOKBACK = 120; // poses; ~4 min at the 2 s sampling interval
+
+export function rssiAt(path: MapPathPoint[], ts: number): number | undefined {
+    let lo = 0;
+    let hi = path.length - 1;
+    while (lo < hi) {
+        const mid = (lo + hi + 1) >> 1;
+        if (path[mid].ts <= ts) lo = mid;
+        else hi = mid - 1;
+    }
+    for (let i = lo; i >= 0 && i > lo - RSSI_LOOKBACK; i--) {
+        if (path[i].r !== undefined) return path[i].r;
+    }
+    return undefined;
+}
+
 export function modeInfo(mode: string): { label: string; icon: string } {
     if (mode === "house") return { label: "House Clean", icon: houseSvg };
     if (mode === "spot") return { label: "Spot Clean", icon: spotSvg };
@@ -131,6 +254,7 @@ export function renderMap(
     tf?: MapTransform,
     currentTime?: number,
     rotation = 0,
+    showSignal = false,
 ) {
     const ctx = canvas.getContext("2d");
     if (!ctx || !map.bounds) return;
@@ -172,15 +296,30 @@ export function renderMap(
     // Grid lines - draw first so coverage/path render on top
     drawMapGrid(ctx, proj, isDark);
 
-    // Coverage cells — filtered by timestamp during playback
-    const cellPx = map.cellSize * scale;
-    ctx.fillStyle = isDark ? "rgba(52, 199, 89, 0.15)" : "rgba(22, 130, 50, 0.22)";
-    for (const cell of map.coverage) {
-        const [cx, cy, ts] = cell;
-        if (ts > tNow) continue;
-        const wx = cx * map.cellSize;
-        const wy = cy * map.cellSize;
-        ctx.fillRect(toX(wx) - cellPx / 2, toY(wy) - cellPx / 2, cellPx, cellPx);
+    // Coverage or signal cells — filtered by timestamp during playback. The
+    // signal layer replaces coverage instead of stacking on it: overlapping
+    // translucent fills would muddle the band colours.
+    if (showSignal && map.signals.length > 0) {
+        const cellPx = map.signalCellSize * scale;
+        const colors = signalColors(isDark);
+        for (const cell of map.signals) {
+            const [cx, cy, rssi, ts] = cell;
+            if (ts > tNow) continue;
+            ctx.fillStyle = colors[signalBand(rssi)];
+            const wx = cx * map.signalCellSize;
+            const wy = cy * map.signalCellSize;
+            ctx.fillRect(toX(wx) - cellPx / 2, toY(wy) - cellPx / 2, cellPx, cellPx);
+        }
+    } else {
+        const cellPx = map.cellSize * scale;
+        ctx.fillStyle = isDark ? "rgba(52, 199, 89, 0.15)" : "rgba(22, 130, 50, 0.22)";
+        for (const cell of map.coverage) {
+            const [cx, cy, ts] = cell;
+            if (ts > tNow) continue;
+            const wx = cx * map.cellSize;
+            const wy = cy * map.cellSize;
+            ctx.fillRect(toX(wx) - cellPx / 2, toY(wy) - cellPx / 2, cellPx, cellPx);
+        }
     }
 
     // Resolve the subset of path points to draw and the current robot pose

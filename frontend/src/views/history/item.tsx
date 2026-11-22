@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import boltSvg from "../../assets/icons/bolt.svg?raw";
 import rotateLeftSvg from "../../assets/icons/rotate-left.svg?raw";
 import rotateRightSvg from "../../assets/icons/rotate-right.svg?raw";
@@ -7,7 +7,7 @@ import { useMapGestures } from "../../hooks/use-map-gestures";
 import { T, useI18n } from "../../i18n";
 import { formatArea, formatDistance, type DistanceUnit } from "../../distance-units";
 import type { HistoryFileInfo, MapData } from "../../types";
-import { renderMap } from "./helpers";
+import { renderMap, signalBandRange, signalStats } from "./helpers";
 import { Wave } from "./loading-wave";
 import { MotionPlayer } from "./motion-player";
 
@@ -26,15 +26,30 @@ function loadRotation(): number {
     return (((Math.round(raw / 90) * 90) % 360) + 360) % 360;
 }
 
+type MapLayer = "coverage" | "signal";
+
+function loadLayer(): MapLayer {
+    return localStorage.getItem("mapLayer") === "signal" ? "signal" : "coverage";
+}
+
 export function HistoryItemView({ file, map, mapEmpty, recording, distanceUnit }: HistoryItemViewProps) {
     const { t, formatDuration, formatNumber } = useI18n();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [rotation, setRotation] = useState<number>(loadRotation);
+    const [layer, setLayer] = useState<MapLayer>(loadLayer);
     const transform = useMapGestures(canvasRef, rotation);
+
+    const signalAvailable = (map?.signals.length ?? 0) > 0;
+    const showSignal = layer === "signal" && signalAvailable;
+    const stats = useMemo(() => (map ? signalStats(map) : null), [map]);
 
     useEffect(() => {
         localStorage.setItem("mapRotation", String(rotation));
     }, [rotation]);
+
+    useEffect(() => {
+        localStorage.setItem("mapLayer", layer);
+    }, [layer]);
 
     const rotateBy = useCallback((delta: number) => {
         setRotation((r) => (((r + delta) % 360) + 360) % 360);
@@ -85,7 +100,7 @@ export function HistoryItemView({ file, map, mapEmpty, recording, distanceUnit }
         if (!map || map.path.length === 0) return;
         const wave = waveRef.current;
         if (!wave) return;
-        wave.startReveal(map, transform, rotation);
+        wave.startReveal(map, transform, rotation, showSignal);
         revealStartedRef.current = true;
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [map]);
@@ -104,20 +119,21 @@ export function HistoryItemView({ file, map, mapEmpty, recording, distanceUnit }
         if (showPlayer) return;
         if (revealing) return;
         if (map && canvasRef.current) {
-            renderMap(canvasRef.current, map, recording, transform, undefined, rotation);
+            renderMap(canvasRef.current, map, recording, transform, undefined, rotation, showSignal);
         }
-    }, [map, recording, transform, showPlayer, revealing, rotation]);
+    }, [map, recording, transform, showPlayer, revealing, rotation, showSignal]);
 
     useEffect(() => {
         if (showPlayer) return;
         if (revealing) return;
         if (!map) return;
         const handleResize = () => {
-            if (map && canvasRef.current) renderMap(canvasRef.current, map, recording, transform, undefined, rotation);
+            if (map && canvasRef.current)
+                renderMap(canvasRef.current, map, recording, transform, undefined, rotation, showSignal);
         };
         window.addEventListener("resize", handleResize);
         return () => window.removeEventListener("resize", handleResize);
-    }, [map, recording, transform, showPlayer, revealing, rotation]);
+    }, [map, recording, transform, showPlayer, revealing, rotation, showSignal]);
 
     // Prefer list metadata summary (available immediately), fall back to
     // the summary parsed from the full JSONL data (available after fetch)
@@ -170,6 +186,36 @@ export function HistoryItemView({ file, map, mapEmpty, recording, distanceUnit }
                 </div>
             )}
 
+            {/* Layer switch always occupies its row so the map does not jump
+                when session data arrives. The signal mode is disabled for
+                sessions recorded before RSSI sampling existed. */}
+            {!mapEmpty && (
+                <div
+                    class="history-layer-switch"
+                    role="group"
+                    aria-label={t("Map layer")}
+                    title={map && !signalAvailable ? t("No WiFi signal data in this session") : undefined}
+                >
+                    <button
+                        type="button"
+                        class={showSignal ? "" : "active"}
+                        aria-pressed={!showSignal}
+                        onClick={() => setLayer("coverage")}
+                    >
+                        <T>Coverage</T>
+                    </button>
+                    <button
+                        type="button"
+                        class={showSignal ? "active" : ""}
+                        aria-pressed={showSignal}
+                        disabled={!signalAvailable}
+                        onClick={() => setLayer("signal")}
+                    >
+                        <T>WiFi signal</T>
+                    </button>
+                </div>
+            )}
+
             {/* Map canvas. The wave owns this canvas while `revealing`;
                 afterwards the motion player or the static-render effect
                 takes over. The empty-data message replaces it only when
@@ -213,6 +259,7 @@ export function HistoryItemView({ file, map, mapEmpty, recording, distanceUnit }
                     transform={transform}
                     rotation={rotation}
                     canvasSuspended={revealing}
+                    showSignal={showSignal}
                 />
             )}
 
@@ -226,9 +273,33 @@ export function HistoryItemView({ file, map, mapEmpty, recording, distanceUnit }
                         <span class={`history-legend-dot ${recording ? "current" : "end"}`} />{" "}
                         {t(recording ? "Current" : "End")}
                     </span>
-                    <span class="history-legend-item">
-                        <span class="history-legend-swatch coverage" /> <T>Coverage</T>
-                    </span>
+                    {showSignal ? (
+                        <>
+                            <span class="history-legend-item">
+                                <span class="history-legend-swatch signal good" /> <T>Good</T>
+                                <span class="history-legend-range">{signalBandRange("good")}</span>
+                            </span>
+                            <span class="history-legend-item">
+                                <span class="history-legend-swatch signal fair" /> <T>Fair</T>
+                                <span class="history-legend-range">{signalBandRange("fair")}</span>
+                            </span>
+                            <span class="history-legend-item">
+                                <span class="history-legend-swatch signal weak" /> <T>Weak</T>
+                                <span class="history-legend-range">{signalBandRange("weak")}</span>
+                            </span>
+                            <span class="history-legend-item">
+                                <span class="history-legend-swatch signal poor" /> <T>Poor</T>
+                                <span class="history-legend-range">{signalBandRange("poor")}</span>
+                            </span>
+                            <span class="history-legend-item">
+                                <span class="history-legend-swatch signal off" /> <T>No signal</T>
+                            </span>
+                        </>
+                    ) : (
+                        <span class="history-legend-item">
+                            <span class="history-legend-swatch coverage" /> <T>Coverage</T>
+                        </span>
+                    )}
                     {map.recharges.length > 0 && (
                         <span class="history-legend-item">
                             <span class="history-legend-bolt">
@@ -239,9 +310,26 @@ export function HistoryItemView({ file, map, mapEmpty, recording, distanceUnit }
                     )}
                 </div>
             )}
+            {showSignal && stats && (
+                <div class="history-signal-stats">
+                    {stats.worst < 0 && <span>{t("Weakest signal: {rssi} dBm", { rssi: stats.worst })}</span>}
+                    {stats.disconnected > 0 && (
+                        <span>
+                            {t("No signal: {pct}%", {
+                                pct: Math.max(1, Math.round((stats.disconnected / stats.samples) * 100)),
+                            })}
+                        </span>
+                    )}
+                </div>
+            )}
             {map && (
                 <div class="history-map-hint">
                     <T>Pinch or scroll to zoom, drag to pan, double-tap to zoom in or reset</T>
+                </div>
+            )}
+            {showSignal && (
+                <div class="history-map-hint">
+                    <T>WiFi signal measured by OpenNeato during this clean</T>
                 </div>
             )}
             {showPlayer && (

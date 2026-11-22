@@ -32,6 +32,16 @@
     --gear-icon-color: #9a9a9e;
     --card-bg: rgba(30, 30, 32, 0.8);
     --btn-color: #c6c2bc;
+    --signal-good: rgba(52, 199, 89, 0.42);
+    --signal-fair: rgba(255, 204, 0, 0.42);
+    --signal-weak: rgba(255, 149, 0, 0.46);
+    --signal-poor: rgba(255, 69, 58, 0.46);
+    --signal-off: rgba(142, 142, 147, 0.45);
+    --signal-dot-good: var(--green);
+    --signal-dot-fair: #ffcc00;
+    --signal-dot-weak: #ff9500;
+    --signal-dot-poor: var(--red);
+    --signal-dot-off: #8e8e93;
 }
 
 /* Light theme — applied via class or system preference */
@@ -62,6 +72,16 @@
     --gear-icon-color: #6e6e73;
     --btn-color: #6e6e73;
     --card-bg: rgba(0, 0, 0, 0.06);
+    --signal-good: rgba(22, 130, 50, 0.45);
+    --signal-fair: rgba(191, 144, 0, 0.48);
+    --signal-weak: rgba(214, 106, 0, 0.48);
+    --signal-poor: rgba(214, 45, 35, 0.48);
+    --signal-off: rgba(110, 110, 118, 0.45);
+    --signal-dot-good: var(--green);
+    --signal-dot-fair: #b58900;
+    --signal-dot-weak: #d97a00;
+    --signal-dot-poor: var(--red);
+    --signal-dot-off: #6e6e73;
 }
 
 @media (prefers-color-scheme: light) {
@@ -91,6 +111,16 @@
         --gear-icon-color: #6e6e73;
         --btn-color: #6e6e73;
         --card-bg: rgba(0, 0, 0, 0.06);
+        --signal-good: rgba(22, 130, 50, 0.45);
+        --signal-fair: rgba(191, 144, 0, 0.48);
+        --signal-weak: rgba(214, 106, 0, 0.48);
+        --signal-poor: rgba(214, 45, 35, 0.48);
+        --signal-off: rgba(110, 110, 118, 0.45);
+        --signal-dot-good: var(--green);
+        --signal-dot-fair: #b58900;
+        --signal-dot-weak: #d97a00;
+        --signal-dot-poor: var(--red);
+        --signal-dot-off: #6e6e73;
     }
 }
 
@@ -2397,6 +2427,66 @@ input:disabled {
     touch-action: manipulation;
 }
 
+/* Coverage / WiFi signal layer switch. Sits above the canvas as a segmented
+   control: corner overlays read as secondary map actions, and the layer is a
+   mode. */
+.history-layer-switch {
+    --switch-active: var(--surface-raised);
+    display: flex;
+    width: fit-content;
+    gap: 3px;
+    margin: 12px auto 10px;
+    padding: 3px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+}
+
+.history-layer-switch button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 30px;
+    padding: 5px 14px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+        background 0.15s,
+        color 0.15s;
+}
+
+.history-layer-switch button.active {
+    background: var(--switch-active);
+    color: var(--text);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.history-layer-switch button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.history-layer-switch button:focus-visible {
+    outline: 2px solid var(--accent, rgba(52, 199, 89, 0.8));
+    outline-offset: 1px;
+}
+
+.light .history-layer-switch {
+    --switch-active: #ffffff;
+}
+
+@media (prefers-color-scheme: light) {
+    .system-theme .history-layer-switch {
+        --switch-active: #ffffff;
+    }
+}
+
 .history-rotate-btn {
     position: absolute;
     top: 50%;
@@ -2467,8 +2557,9 @@ input:disabled {
 
 .history-legend {
     display: flex;
+    flex-wrap: wrap;
     justify-content: center;
-    gap: 16px;
+    gap: 6px 16px;
     margin-top: 12px;
     font-size: 12px;
     color: var(--text-dim);
@@ -2480,9 +2571,11 @@ input:disabled {
     gap: 5px;
 }
 
-.history-legend-dot {
+.history-legend-dot,
+.history-signal-dot {
     width: 8px;
     height: 8px;
+    flex-shrink: 0;
     border-radius: 50%;
 }
 
@@ -2531,6 +2624,51 @@ input:disabled {
 .history-legend-bolt svg {
     width: 14px;
     height: 14px;
+}
+
+/* WiFi signal layer — band swatches mirror SIGNAL_RGB_* / SIGNAL_ALPHA_* in
+   views/history/helpers.ts, which paints the canvas cells. */
+.history-legend-swatch.signal.good {
+    background: var(--signal-good);
+}
+
+.history-legend-swatch.signal.fair {
+    background: var(--signal-fair);
+}
+
+.history-legend-swatch.signal.weak {
+    background: var(--signal-weak);
+}
+
+.history-legend-swatch.signal.poor {
+    background: var(--signal-poor);
+}
+
+.history-legend-swatch.signal.off {
+    background: var(--signal-off);
+}
+
+.history-legend-range {
+    font-size: 10px;
+    opacity: 0.65;
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 480px) {
+    .history-legend-range {
+        display: none;
+    }
+}
+
+.history-signal-stats {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px 14px;
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
 }
 
 .history-map-hint {
@@ -2597,6 +2735,65 @@ input:disabled {
     min-width: 42px;
     text-align: center;
     flex-shrink: 0;
+}
+
+/* Live RSSI badge in the player, visible only with the signal layer on */
+.history-player-signal {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* Both states share one grid cell. The hidden one reserves width, so the
+   scrubber does not resize when playback crosses a disconnect in any locale. */
+.history-player-signal-value {
+    display: grid;
+}
+
+.history-player-signal-value > span {
+    grid-area: 1 / 1;
+    justify-self: center;
+    white-space: nowrap;
+}
+
+.history-player-signal-hidden {
+    visibility: hidden;
+}
+
+.history-player-signal-unit {
+    font-size: 10px;
+    opacity: 0.7;
+}
+
+.history-signal-dot.good {
+    background: var(--signal-dot-good);
+}
+
+.history-signal-dot.fair {
+    background: var(--signal-dot-fair);
+}
+
+.history-signal-dot.weak {
+    background: var(--signal-dot-weak);
+}
+
+.history-signal-dot.poor {
+    background: var(--signal-dot-poor);
+}
+
+.history-signal-dot.off {
+    background: var(--signal-dot-off);
+}
+
+@media (max-width: 420px) {
+    .history-player-signal-unit {
+        display: none;
+    }
 }
 
 .history-player-scrubber {

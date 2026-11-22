@@ -199,7 +199,7 @@ enum CommandStatus {
 #define HISTORY_MAX_FILES 20 // Maximum number of archived session files to keep
 #define HISTORY_AREA_CELL_M 0.5f // Coarse grid cell size in meters for visited-area estimation
 #define HISTORY_MIN_SNAPSHOTS 3 // Discard sessions with fewer snapshots (too short to render a useful map)
-#define HISTORY_IMPORT_MAX_BYTES 262144 // 256 KB max import file size (2h clean at 2s intervals ~ 180KB)
+#define HISTORY_IMPORT_MAX_BYTES 262144 // 256 KB max import file size (2h clean at 2s intervals ~ 195KB)
 
 // Task Watchdog Timer (TWDT) — hardware watchdog that resets the ESP32 if
 // loop() stops running (deadlock, infinite loop, blocking I/O). The main task

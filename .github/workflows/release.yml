@@ -4,11 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Release tag (e.g., v1.0)'
-        required: true
-        type: string
-      release_notes:
-        description: 'Release notes content (markdown supported)'
+        description: 'Release tag to ship (e.g., v1.0); release-notes/<tag>.md must be committed'
         required: true
         type: string
       prerelease:
@@ -38,6 +34,34 @@ jobs:
         with:
           fetch-depth: 0
 
+      # The notes are the repository's, not an input: the tag must carry them, so
+      # what the release page shows is what the tagged commit reviewed.
+      - name: The release notes are committed for this tag
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          notes="release-notes/${RELEASE_TAG}.md"
+          # an existing tag is what the release job reads, so gate on the tag itself
+          if git rev-parse -q --verify "refs/tags/${RELEASE_TAG}" >/dev/null; then
+            where="tag ${RELEASE_TAG}"
+            if ! body=$(git show "${RELEASE_TAG}:${notes}" 2>/dev/null); then
+              echo "$notes is missing at ${where}: commit the curated notes and move the tag (RELEASE_PROCESS.md)" >&2
+              exit 1
+            fi
+          else
+            where="this commit"
+            if [ ! -f "$notes" ]; then
+              echo "$notes is missing: commit the curated notes before releasing (RELEASE_PROCESS.md)" >&2
+              exit 1
+            fi
+            body=$(cat "$notes")
+          fi
+          if ! printf '%s' "$body" | grep -q '[^[:space:]]'; then
+            echo "$notes has no content at ${where}: write the curated notes before releasing" >&2
+            exit 1
+          fi
+          echo "notes: $notes at ${where}"
+
       - name: Create and push release tag
         run: |
           RELEASE_TAG="${{ github.event.inputs.release_tag }}"
@@ -60,18 +84,6 @@ jobs:
           VERSION=${RELEASE_TAG#v}
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Setting version to: $VERSION"
-
-      - name: Save release notes
-        run: |
-          cat << 'EOF' > release_notes.md
-          ${{ github.event.inputs.release_notes }}
-          EOF
-
-      - name: Upload release notes artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: release-notes
-          path: release_notes.md
 
   resolve-firmware-envs:
     name: Resolve firmware environments
@@ -207,19 +219,13 @@ jobs:
         with:
           go-version-file: flash/go.mod
 
-      - name: Download release notes
-        uses: actions/download-artifact@v8
-        with:
-          name: release-notes
-          path: /tmp/release
-
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
           args: >-
             release --clean
-            --release-notes=/tmp/release/release_notes.md
+            --release-notes=release-notes/${{ inputs.release_tag }}.md
             ${{ github.event.inputs.draft == 'true' && '--draft' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

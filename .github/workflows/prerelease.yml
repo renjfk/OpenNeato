@@ -232,12 +232,11 @@ jobs:
       - name: Mark as pre-release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.resolve.outputs.release_tag }}
+          REF: ${{ needs.resolve.outputs.head_ref }}
+          SHA: ${{ needs.resolve.outputs.head_sha }}
+          PR: ${{ needs.resolve.outputs.pr_number }}
         run: |
-          TAG="${{ needs.resolve.outputs.release_tag }}"
-          REF="${{ needs.resolve.outputs.head_ref }}"
-          SHA="${{ needs.resolve.outputs.head_sha }}"
-          PR="${{ needs.resolve.outputs.pr_number }}"
-
           NOTES="Pre-release build from branch \`$REF\` (commit \`$SHA\`)."
           [ -n "$PR" ] && NOTES="Pre-release build from PR #$PR (branch \`$REF\`, commit \`$SHA\`)."
 

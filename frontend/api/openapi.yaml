@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: OpenNeato API
   version: 0.0.0-dev
-  description: HTTP API exposed by the OpenNeato firmware. All endpoints are served on the local network only (no authentication, no TLS). The diagnostic `/api/serial` passthrough is documented separately in the [user guide](https://github.com/renjfk/OpenNeato/blob/main/docs/user-guide.md#serial-api).
+  description: HTTP API exposed by the OpenNeato firmware. All endpoints are served on the local network only (no authentication, no TLS). State-changing requests (POST, PUT, DELETE, PATCH) are rejected with 403 unless the browser reports them as same-origin (`Sec-Fetch-Site`, or `Origin` compared with `Host` on plain HTTP), so other web pages cannot drive the API. The diagnostic `/api/serial` passthrough is documented separately in the [user guide](https://github.com/renjfk/OpenNeato/blob/main/docs/user-guide.md#serial-api).
 servers:
   - url: http://{host}
     description: OpenNeato bridge on local network

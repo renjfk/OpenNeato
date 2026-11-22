@@ -44,6 +44,7 @@ private:
     WiFiManager& wifiMgr;
     Scheduler& scheduler;
 
+    void registerCrossSiteGuard();
     void registerApiRoutes();
     void registerManualRoutes();
     void registerLogRoutes();

@@ -56,6 +56,9 @@ void WebServer::sendOk(AsyncWebServerRequest *request) {
 }
 
 void WebServer::begin() {
+    // Must be registered before any state-changing route (first match wins)
+    registerCrossSiteGuard();
+
     // Register all embedded frontend assets from the auto-generated registry
     for (size_t i = 0; i < WEB_ASSETS_COUNT; i++) {
         const WebAsset& asset = WEB_ASSETS[i];
@@ -76,6 +79,43 @@ void WebServer::begin() {
     registerWiFiRoutes();
 
     LOG("WEB", "Frontend and API routes registered");
+}
+
+// Sec-Fetch-Site is only appended to requests whose URL is a potentially
+// trustworthy one (HTTPS or localhost), and the bridge is normally reached over
+// plain HTTP on the LAN. Requests without it fall back to comparing the Origin
+// the browser reports with the Host it addressed.
+static bool isSameOriginRequest(AsyncWebServerRequest *request) {
+    if (const AsyncWebHeader *site = request->getHeader("Sec-Fetch-Site")) {
+        String value = site->value();
+        return value.equalsIgnoreCase("same-origin") || value.equalsIgnoreCase("none");
+    }
+
+    const AsyncWebHeader *origin = request->getHeader("Origin");
+    if (!origin) {
+        return true; // Not a browser, e.g. curl, Home Assistant or a script
+    }
+
+    // "Origin: null" (sandboxed iframe, file:// page) has no scheme separator
+    String value = origin->value();
+    int schemeEnd = value.indexOf("://");
+    return schemeEnd >= 0 && value.substring(schemeEnd + 3).equalsIgnoreCase(request->host());
+}
+
+void WebServer::registerCrossSiteGuard() {
+    // Browsers send cross-site form posts and multipart uploads without a CORS
+    // preflight, so any web page opened on the LAN could otherwise call
+    // state-changing endpoints (including a firmware upload). Handler filters
+    // run as soon as the headers are parsed, so a matching request lands here
+    // before any body or upload chunk reaches the real route. Only requests that
+    // are neither same-origin nor non-browser are rejected, because the bundled
+    // UI sends same-origin requests and tools such as curl send no origin at all.
+    server.on(AsyncURIMatcher::prefix("/api"), HTTP_POST | HTTP_PUT | HTTP_DELETE | HTTP_PATCH,
+              [this](AsyncWebServerRequest *request) {
+                  logger.logRequest(request->method(), request->url(), 403, 0);
+                  sendError(request, 403, "cross-site request rejected");
+              })
+            .setFilter([](AsyncWebServerRequest *request) { return !isSameOriginRequest(request); });
 }
 
 void WebServer::registerApiRoutes() {

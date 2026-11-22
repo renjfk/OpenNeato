@@ -41,6 +41,7 @@ void SettingsManager::begin() {
 void SettingsManager::load() {
     current.hostname = prefs.getString(NVS_KEY_HOSTNAME, DEFAULT_HOSTNAME);
     current.tz = prefs.getString(NVS_KEY_TIMEZONE, NTP_DEFAULT_TZ);
+    current.ntpServer = prefs.getString(NVS_KEY_NTP_SERVER, "");
 
     // TODO: Remove this migration block after v0.5 — all devices will have migrated by then.
     // Migrate legacy "debug" bool to "log_level" int on first boot after upgrade.
@@ -90,6 +91,7 @@ void SettingsManager::load() {
 void SettingsManager::save() {
     prefs.putString(NVS_KEY_HOSTNAME, current.hostname);
     prefs.putString(NVS_KEY_TIMEZONE, current.tz);
+    prefs.putString(NVS_KEY_NTP_SERVER, current.ntpServer);
     prefs.putInt(NVS_KEY_LOG_LEVEL, current.logLevel);
     prefs.putInt(NVS_KEY_WIFI_TX_POWER, current.wifiTxPower);
     prefs.putInt(NVS_KEY_UART_TX_PIN, current.uartTxPin);
@@ -145,10 +147,39 @@ const Settings& SettingsManager::get() {
 
 // -- Partial update ----------------------------------------------------------
 
+// Empty (use the built-in servers), or a hostname / IPv4 literal of at most
+// NTP_SERVER_MAX_LEN chars: dot-separated labels of letters, digits and hyphens,
+// no empty label. Same rule as the settings form.
+static bool isValidNtpServer(const String& s) {
+    if (s.length() > NTP_SERVER_MAX_LEN)
+        return false;
+    bool labelEmpty = true;
+    for (unsigned int i = 0; i < s.length(); i++) {
+        auto c = static_cast<unsigned char>(s.charAt(i));
+        if (c == '.') {
+            if (labelEmpty)
+                return false;
+            labelEmpty = true;
+        } else if (isalnum(c) || c == '-') {
+            labelEmpty = false;
+        } else {
+            return false;
+        }
+    }
+    return s.length() == 0 || !labelEmpty;
+}
+
 ApplyResult SettingsManager::apply(const String& json) {
     Settings incoming = current; // start from current values
     if (!incoming.fromJson(json))
         return APPLY_INVALID;
+
+    // Checked before any field is applied, so a rejected server never leaves
+    // earlier fields of the same request half-committed.
+    if (!isValidNtpServer(incoming.ntpServer)) {
+        LOG("SETTINGS", "Rejected: invalid NTP server");
+        return APPLY_INVALID;
+    }
 
     bool changed = false;
     bool needReboot = false;
@@ -170,13 +201,23 @@ ApplyResult SettingsManager::apply(const String& json) {
         LOG("SETTINGS", "Hostname -> %s (reboot required)", current.hostname.c_str());
     }
 
+    bool timeConfigChanged = false;
     if (incoming.tz != current.tz) {
         current.tz = incoming.tz;
         changed = true;
-        if (tzChangeCb)
-            tzChangeCb(current.tz);
+        timeConfigChanged = true;
         LOG("SETTINGS", "Timezone -> %s", current.tz.c_str());
     }
+    if (incoming.ntpServer != current.ntpServer) {
+        current.ntpServer = incoming.ntpServer;
+        changed = true;
+        timeConfigChanged = true;
+        LOG("SETTINGS", "NTP server -> %s", current.ntpServer.isEmpty() ? "(default)" : current.ntpServer.c_str());
+    }
+    // One reconfigure for both fields, so a request that sets tz and server together
+    // restarts SNTP once with the final pair.
+    if (timeConfigChanged && timeConfigChangeCb)
+        timeConfigChangeCb(current.tz, current.ntpServer);
 
     if (incoming.logLevel != current.logLevel) {
         int clamped = constrain(incoming.logLevel, LOG_LEVEL_OFF, LOG_LEVEL_DEBUG);
@@ -374,6 +415,7 @@ std::vector<Field> Settings::toFields() const {
     std::vector<Field> f = {
             {"hostname", hostname, FIELD_STRING},
             {"tz", tz, FIELD_STRING},
+            {"ntpServer", ntpServer, FIELD_STRING},
             {"logLevel", String(logLevel), FIELD_INT},
             {"wifiTxPower", String(wifiTxPower), FIELD_INT},
             {"uartTxPin", String(uartTxPin), FIELD_INT},
@@ -424,6 +466,10 @@ bool Settings::fromFields(const std::vector<Field>& fields) {
     }
     if ((f = findField(fields, "tz")) && f->type == FIELD_STRING) {
         tz = f->value;
+        applied = true;
+    }
+    if ((f = findField(fields, "ntpServer")) && f->type == FIELD_STRING) {
+        ntpServer = f->value;
         applied = true;
     }
     if ((f = findField(fields, "logLevel")) && f->type == FIELD_INT) {

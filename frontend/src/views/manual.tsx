@@ -61,19 +61,19 @@ interface ManualViewProps {
     onToggleAll: () => Promise<void>;
 }
 
-function safetyWarning(status: ManualStatus | null): string | null {
+function safetyWarning(status: ManualStatus | null, t: (text: string, values?: Record<string, string>) => string) {
     if (!status) return null;
-    if (status.lifted) return "Robot is lifted";
+    if (status.lifted) return t("Robot is lifted");
     // Stall: direction-aware message
-    if (status.stallFront) return "Stall detected - reverse to clear";
-    if (status.stallRear) return "Stall detected - move forward to clear";
+    if (status.stallFront) return t("Stall detected - reverse to clear");
+    if (status.stallRear) return t("Stall detected - move forward to clear");
     // Physical bumper contact
     const bumpers: string[] = [];
-    if (status.bumperFrontLeft) bumpers.push("front-left");
-    if (status.bumperFrontRight) bumpers.push("front-right");
-    if (status.bumperSideLeft) bumpers.push("side-left");
-    if (status.bumperSideRight) bumpers.push("side-right");
-    if (bumpers.length > 0) return `Bumper: ${bumpers.join(", ")} - reverse to clear`;
+    if (status.bumperFrontLeft) bumpers.push(t("front-left"));
+    if (status.bumperFrontRight) bumpers.push(t("front-right"));
+    if (status.bumperSideLeft) bumpers.push(t("side-left"));
+    if (status.bumperSideRight) bumpers.push(t("side-right"));
+    if (bumpers.length > 0) return t("Bumper: {sides} - reverse to clear", { sides: bumpers.join(", ") });
     return null;
 }
 
@@ -90,6 +90,7 @@ export function ManualView({
 }: ManualViewProps) {
     const { t, formatNumber } = useI18n();
     const navigate = useNavigate();
+    const warning = safetyWarning(status, t);
     const charger = usePolling<ChargerData>(api.getCharger, 5000);
     const [stopping, setStopping] = useState(false);
     const [motorPending, setMotorPending] = useState(false);
@@ -229,9 +230,7 @@ export function ManualView({
                                 <T>LIDAR unavailable</T>
                             </div>
                         )}
-                        {safetyWarning(status) && (
-                            <div class="manual-map-warn manual-map-top error">{t(safetyWarning(status) ?? "")}</div>
-                        )}
+                        {warning && <div class="manual-map-warn manual-map-top error">{warning}</div>}
                         {lidar.data &&
                             (lidar.data.validPoints < 90 ||
                                 (lidar.data.rotationSpeed > 0 && lidar.data.rotationSpeed < 4.0)) && (

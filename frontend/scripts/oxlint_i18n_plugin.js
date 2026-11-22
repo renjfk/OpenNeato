@@ -143,7 +143,8 @@ function checkLocaleAlignment(directory = localesDir, root = projectRoot) {
 
     const locales = localeFiles.map((fileName) => {
         const locale = readLocale(fileName, directory);
-        const keys = Object.keys(locale.json);
+        // "<other>|<category>" plural keys are per-locale (e.g. Czech "|few"); only base keys must stay aligned
+        const keys = Object.keys(locale.json).filter((key) => !key.includes("|"));
         return { ...locale, keys, keySet: new Set(keys) };
     });
     const messages = [];

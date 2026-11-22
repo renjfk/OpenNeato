@@ -259,7 +259,7 @@ export function DashboardView({ firmware, state, isManual, updateInfo, robotRead
                         </div>
                         <div class="status-bar-value">
                             <Icon svg={wifiSvg} />
-                            {wifiStrength(system.data.rssi)}
+                            {t(wifiStrength(system.data.rssi))}
                         </div>
                     </div>
                     <div class="status-bar-item">

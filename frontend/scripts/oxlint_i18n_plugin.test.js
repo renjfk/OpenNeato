@@ -270,6 +270,20 @@ test("checkLocaleAlignment accepts absent, empty, single, and aligned locale dir
 });
 
 // Locale meaning:
+// - "<other>|<category>" plural keys are locale-specific (Czech needs "|few"), so they are ignored for alignment.
+test("checkLocaleAlignment ignores plural category keys", () => {
+    const fixture = tempLocales({
+        "cs.json": { Back: "Zpět", "files|few": "soubory", files: "souborů" },
+        "de.json": { Back: "Zurück", files: "Dateien" },
+    });
+    try {
+        assert.deepEqual(__test__.checkLocaleAlignment(fixture.dir, fixture.root), []);
+    } finally {
+        fs.rmSync(fixture.root, { recursive: true, force: true });
+    }
+});
+
+// Locale meaning:
 // - tr.json is missing "Settings" while de.json and fr.json have it.
 // - The rule checks every pair, so both de-vs-tr and fr-vs-tr report the missing key.
 test("checkLocaleAlignment reports missing keys pairwise", () => {

@@ -15,7 +15,7 @@ interface LogsListViewProps {
 }
 
 export function LogsListView({ onError }: LogsListViewProps) {
-    const { t, formatDateTime, formatBytes } = useI18n();
+    const { t, plural, formatDateTime, formatBytes } = useI18n();
     const navigate = useNavigate();
     const [files, setFiles] = useState<LogFileInfo[]>([]);
     const [loading, setLoading] = useState(true);
@@ -85,7 +85,7 @@ export function LogsListView({ onError }: LogsListViewProps) {
             {!loading && files.length > 0 && (
                 <div class="logs-summary">
                     <span>
-                        {files.length} {t(files.length !== 1 ? "files" : "file")} &middot; {formatBytes(totalSize)}
+                        {files.length} {plural(files.length, "file", "files")} &middot; {formatBytes(totalSize)}
                     </span>
                     <button
                         type="button"

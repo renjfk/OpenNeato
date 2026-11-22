@@ -120,7 +120,7 @@ export function HistoryListView({
     onError,
     distanceUnit,
 }: HistoryListViewProps) {
-    const { t } = useI18n();
+    const { t, plural } = useI18n();
     const [confirmTarget, setConfirmTarget] = useState<string | null>(null);
     const [importStatus, setImportStatus] = useState<ImportStatus>("idle");
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -199,7 +199,7 @@ export function HistoryListView({
             {/* Summary bar */}
             <div class="history-summary">
                 <span>
-                    {files.length} {t(files.length === 1 ? "session" : "sessions")}
+                    {files.length} {plural(files.length, "session", "sessions")}
                     {hasRecording ? " · " : ""}
                     {hasRecording && <T>Running...</T>}
                 </span>

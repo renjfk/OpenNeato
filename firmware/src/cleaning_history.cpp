@@ -3,6 +3,7 @@
 #include "neato_serial.h"
 #include "system_manager.h"
 #include <SPIFFS.h>
+#include <WiFi.h>
 #include <cmath>
 
 CleaningHistory::CleaningHistory(NeatoSerial& neato, DataLogger& logger, SystemManager& sysMgr) :
@@ -817,8 +818,11 @@ void CleaningHistory::writeSnapshot(float x, float y, float theta, float time) {
         }
     }
 
+    // WiFi link quality at this pose. 0 means the bridge was not connected -
+    // keep it, because dead zones are exactly what the signal layer is for.
+    const int rssi = WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0;
     String line = "{\"x\":" + String(x, 3) + ",\"y\":" + String(y, 3) + ",\"t\":" + String(theta, 1) +
-                  ",\"ts\":" + String(time, 1) + "}";
+                  ",\"ts\":" + String(time, 1) + ",\"r\":" + String(rssi) + "}";
 
     updateAccumulators(x, y, theta);
     bufferLine(line);

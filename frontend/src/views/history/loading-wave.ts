@@ -14,7 +14,16 @@
 // show the final state.
 
 import type { MapData, MapTransform } from "../../types";
-import { computeMapProjection, drawMapGrid, isDarkSurface, type MapProjection, renderMap } from "./helpers";
+import {
+    computeMapProjection,
+    drawMapGrid,
+    isDarkSurface,
+    renderMap,
+    signalBand,
+    signalFill,
+    type MapProjection,
+    type SignalBand,
+} from "./helpers";
 
 const CELL_SIZE_M = 0.05; // matches CELL_SIZE_M in history-data.ts
 
@@ -134,6 +143,7 @@ export class Wave {
     private map: MapData | null = null;
     private transform: MapTransform | null = null;
     private rotation = 0;
+    private showSignal = false;
     private carrier: Pulse | null = null;
     private pulses: Pulse[] = [];
     private nextSpawnAt = 0;
@@ -164,11 +174,12 @@ export class Wave {
     // and re-anchors any in-flight loading pulses onto the carrier's
     // velocity so they expand at the same rate and expire together
     // instead of trailing as ghosts on their own slower cadence.
-    startReveal(map: MapData, transform: MapTransform, rotation: number = 0): void {
+    startReveal(map: MapData, transform: MapTransform, rotation: number = 0, showSignal = false): void {
         if (this.carrier !== null || this.finished) return;
         this.map = map;
         this.transform = transform;
         this.rotation = rotation;
+        this.showSignal = showSignal;
 
         const W = this.canvas.clientWidth;
         const H = this.canvas.clientHeight;
@@ -265,7 +276,7 @@ export class Wave {
             const front = pulseFront(this.carrier, t);
             const ringW = pulseRingW(this.carrier, t);
             if (front - ringW >= this.carrier.maxR) {
-                renderMap(this.canvas, this.map, false, this.transform, undefined, this.rotation);
+                renderMap(this.canvas, this.map, false, this.transform, undefined, this.rotation, this.showSignal);
                 this.finish();
                 return;
             }
@@ -344,19 +355,52 @@ export class Wave {
         }
     }
 
-    // Paint real coverage cells at native 5cm resolution behind the
-    // carrier wave front. Opacity ramps from 0 at the front edge to full
-    // settled coverage opacity within ~1.5 ringW behind the front.
+    // Paint real coverage cells (or signal cells) at native resolution behind
+    // the carrier wave front. Opacity ramps from 0 at the front edge to full
+    // settled opacity within ~1.5 ringW behind the front.
     private drawRevealCoverage(ctx: CanvasRenderingContext2D, t: number, proj: MapProjection, isDark: boolean): void {
         const carrier = this.carrier;
         const map = this.map;
         if (!carrier || !map) return;
         const ringW = pulseRingW(carrier, t);
         const front = pulseFront(carrier, t);
+        const fadeWidth = ringW * REVEAL_FADE_RING_MULT;
+
+        if (this.showSignal && map.signals.length > 0) {
+            const cellSize = map.signalCellSize;
+            const cellPx = cellSize * proj.scale;
+            const buckets = new Map<SignalBand, number[][]>();
+            for (const [cx, cy, rssi] of map.signals) {
+                const px = proj.toX(cx * cellSize);
+                const py = proj.toY(cy * cellSize);
+                const edge = front - pulseDistancePx(carrier, px, py, ringW);
+                if (edge <= 0) continue;
+                const settle = Math.min(1, edge / fadeWidth);
+                const step = Math.min(9, (settle * 10) | 0);
+                const band = signalBand(rssi);
+                let byStep = buckets.get(band);
+                if (!byStep) {
+                    byStep = Array.from({ length: 10 }, () => []);
+                    buckets.set(band, byStep);
+                }
+                byStep[step].push(px - cellPx / 2, py - cellPx / 2);
+            }
+            for (const [band, byStep] of buckets) {
+                for (let step = 0; step < 10; step++) {
+                    const rects = byStep[step];
+                    if (rects.length === 0) continue;
+                    ctx.fillStyle = signalFill(band, isDark, (step + 1) / 10);
+                    for (let j = 0; j < rects.length; j += 2) {
+                        ctx.fillRect(rects[j], rects[j + 1], cellPx, cellPx);
+                    }
+                }
+            }
+            return;
+        }
+
         const cellPx = CELL_SIZE_M * proj.scale;
         const settledA = isDark ? 0.15 : 0.22;
         const baseRgb = isDark ? "52, 199, 89" : "22, 130, 50";
-        const fadeWidth = ringW * REVEAL_FADE_RING_MULT;
 
         const buckets: number[][] = Array.from({ length: 10 }, () => []);
 

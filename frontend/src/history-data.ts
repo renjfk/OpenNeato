@@ -8,25 +8,29 @@ import type {
     MapPathPoint,
     MapRechargePoint,
     MapSession,
+    MapSignalCell,
     MapSummary,
 } from "./types";
 
 const ROBOT_DIAMETER_M = 0.33; // Neato Botvac diameter
 const CELL_SIZE_M = 0.05; // 5cm grid cells for coverage map
+const SIGNAL_CELL_M = 0.2; // 20cm grid cells for the WiFi signal layer
 
 interface RawPose {
     x: number;
     y: number;
     t: number;
     ts: number;
+    r?: number;
 }
 
 // Pose line structure: {"x":NUM,"y":NUM,"t":NUM,"ts":NUM}
+// Newer firmware appends an optional RSSI field: {"x":..,"y":..,"t":..,"ts":..,"r":-64}
 // Heatshrink decompression can corrupt single bytes in numeric tokens
 // (e.g. '.' -> ':' or '.' -> '"'). Try to recover by matching the structural
 // skeleton permissively and replacing non-numeric garbage with '.'.
 const POSE_RE =
-    /^\{.x.:\s*(-?[\d.eE:"\w-]+)\s*,.y.:\s*(-?[\d.eE:"\w-]+)\s*,.t.:\s*([\d.eE:"\w-]+)\s*,.ts.:\s*([\d.eE:"\w-]+)\s*\}$/;
+    /^\{.x.:\s*(-?[\d.eE:"\w-]+)\s*,.y.:\s*(-?[\d.eE:"\w-]+)\s*,.t.:\s*([\d.eE:"\w-]+)\s*,.ts.:\s*([\d.eE:"\w-]+)\s*(?:,.r.:\s*(-?[\d.eE:"\w-]+)\s*)?\}$/;
 
 function repairNumber(raw: string): number {
     // Replace any character that isn't digit, dot, minus, or 'e'/'E' with '.'
@@ -38,6 +42,14 @@ function repairNumber(raw: string): number {
     return Number.isFinite(n) ? n : Number.NaN;
 }
 
+// Firmware writes whole dBm values in [-127, 0]. Corrupt bytes can turn a
+// token into a plausible but wrong number (for example "64" -> 0.64), so drop
+// anything that does not look like a real reading instead of colouring it.
+function normalizeRssi(value: unknown): number | undefined {
+    if (typeof value !== "number" || !Number.isInteger(value) || value > 0 || value < -127) return undefined;
+    return value;
+}
+
 function tryRepairPoseLine(line: string): RawPose | null {
     const m = line.match(POSE_RE);
     if (!m) return null;
@@ -46,7 +58,8 @@ function tryRepairPoseLine(line: string): RawPose | null {
     const t = repairNumber(m[3]);
     const ts = repairNumber(m[4]);
     if (Number.isNaN(x) || Number.isNaN(y) || Number.isNaN(t) || Number.isNaN(ts)) return null;
-    return { x, y, t, ts };
+    const r = m[5] === undefined ? undefined : repairNumber(m[5]);
+    return { x, y, t, ts, r: r === undefined || Number.isNaN(r) ? undefined : r };
 }
 
 /** Parse raw JSONL text (possibly multiple sessions) into MapData[] */
@@ -117,7 +130,17 @@ function buildSession(lines: string[]): MapData {
     const rawPoses: RawPose[] = parsed.filter(isPose).filter((l) => l.x !== 0 || l.y !== 0 || l.t !== 0);
 
     if (rawPoses.length === 0) {
-        return { session, summary, path: [], coverage: [], recharges: [], bounds: null, cellSize: CELL_SIZE_M };
+        return {
+            session,
+            summary,
+            path: [],
+            coverage: [],
+            signals: [],
+            recharges: [],
+            bounds: null,
+            cellSize: CELL_SIZE_M,
+            signalCellSize: SIGNAL_CELL_M,
+        };
     }
 
     // Firmware records `ts` as seconds since boot, not session start, so
@@ -125,7 +148,11 @@ function buildSession(lines: string[]): MapData {
     // session-relative and keeps them in sync with the summary duration
     // used by the motion player's scrubber.
     const tOrigin = rawPoses[0].ts;
-    const poses: RawPose[] = rawPoses.map((p) => ({ ...p, ts: Math.max(0, p.ts - tOrigin) }));
+    const poses: RawPose[] = rawPoses.map((p) => ({
+        ...p,
+        ts: Math.max(0, p.ts - tOrigin),
+        r: normalizeRssi(p.r),
+    }));
 
     // Detect charge windows from long gaps in the pose timeline. The firmware
     // writes the recharge marker as soon as the robot starts docking, but
@@ -171,7 +198,7 @@ function buildSession(lines: string[]): MapData {
         return { x: r.x, y: r.y, ts: markerTs, endTs: next ? next.ts : markerTs + POSE_INTERVAL_S };
     });
 
-    const path: MapPathPoint[] = poses.map((p) => ({ x: p.x, y: p.y, t: p.t, ts: p.ts }));
+    const path: MapPathPoint[] = poses.map((p) => ({ x: p.x, y: p.y, t: p.t, ts: p.ts, r: p.r }));
 
     // Coverage grid — stamp robot footprint circle at each pose and record
     // the earliest timestamp at which the cell was touched so the motion
@@ -197,6 +224,34 @@ function buildSession(lines: string[]): MapData {
         return [c, r, ts];
     });
 
+    // Signal layer — stamp each pose's RSSI into a coarser cell grid. Cells
+    // keep the first timestamp they were reached (so playback reveals them
+    // like coverage) and the worst reading seen in them, because the point of
+    // the layer is to show where the link degrades, not the average.
+    const signalFirstTs = new Map<string, number>();
+    const signalWorst = new Map<string, number>();
+    for (const p of poses) {
+        if (p.r === undefined) continue;
+        const cx = Math.round(p.x / SIGNAL_CELL_M);
+        const cy = Math.round(p.y / SIGNAL_CELL_M);
+        for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+                const key = `${cx + dx},${cy + dy}`;
+                if (!signalFirstTs.has(key)) signalFirstTs.set(key, p.ts);
+                const prev = signalWorst.get(key);
+                // 0 means disconnected, which is worse than any real reading
+                if (prev === undefined || (p.r === 0 && prev !== 0) || (prev !== 0 && p.r < prev)) {
+                    signalWorst.set(key, p.r);
+                }
+            }
+        }
+    }
+
+    const signals: MapSignalCell[] = Array.from(signalWorst.entries()).map(([k, rssi]) => {
+        const [c, r] = k.split(",").map(Number);
+        return [c, r, rssi, signalFirstTs.get(k) ?? 0];
+    });
+
     // Bounding box padded by robot radius
     const pad = ROBOT_DIAMETER_M / 2 + 0.1;
     const xs = poses.map((p) => p.x);
@@ -208,5 +263,15 @@ function buildSession(lines: string[]): MapData {
         maxY: Math.max(...ys) + pad,
     };
 
-    return { session, summary, path, coverage, recharges, bounds, cellSize: CELL_SIZE_M };
+    return {
+        session,
+        summary,
+        path,
+        coverage,
+        signals,
+        recharges,
+        bounds,
+        cellSize: CELL_SIZE_M,
+        signalCellSize: SIGNAL_CELL_M,
+    };
 }

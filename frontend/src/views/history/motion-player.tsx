@@ -8,9 +8,9 @@ import playSvg from "../../assets/icons/play.svg?raw";
 import restartSvg from "../../assets/icons/restart.svg?raw";
 import { Icon } from "../../components/icon";
 import { useKeyShortcut } from "../../hooks/use-key-shortcut";
-import { useI18n } from "../../i18n";
+import { T, useI18n } from "../../i18n";
 import type { MapData, MapTransform } from "../../types";
-import { renderMap, sessionDuration } from "./helpers";
+import { renderMap, rssiAt, sessionDuration, signalBand } from "./helpers";
 
 interface MotionPlayerProps {
     canvas: HTMLCanvasElement | null;
@@ -24,15 +24,29 @@ interface MotionPlayerProps {
     // touch the canvas. Used by the host UI to keep play/restart/scrubber
     // visible while the loading wave still owns the canvas drawing surface.
     canvasSuspended?: boolean;
+    // Draw the WiFi signal layer instead of the coverage layer.
+    showSignal?: boolean;
 }
 
-export function MotionPlayer({ canvas, map, transform, rotation, speed = 8, canvasSuspended }: MotionPlayerProps) {
+export function MotionPlayer({
+    canvas,
+    map,
+    transform,
+    rotation,
+    speed = 8,
+    canvasSuspended,
+    showSignal = false,
+}: MotionPlayerProps) {
     const { t, formatClock } = useI18n();
     const duration = sessionDuration(map);
     const [playing, setPlaying] = useState(false);
     // Start at the end of the timeline so a freshly opened session shows the
     // completed map. Pressing play rewinds to 0 and animates forward.
     const [currentTime, setCurrentTime] = useState(duration);
+
+    // Current signal reading for the live badge. Undefined for sessions
+    // recorded before the firmware sampled RSSI.
+    const rssi = showSignal ? rssiAt(map.path, currentTime) : undefined;
 
     // Refs used inside the rAF loop so we don't recreate the loop on every
     // state change. The loop reads the latest time via ref.
@@ -53,19 +67,19 @@ export function MotionPlayer({ canvas, map, transform, rotation, speed = 8, canv
     useEffect(() => {
         if (canvasSuspended) return;
         if (!canvas || !map) return;
-        renderMap(canvas, map, false, transform, currentTime, rotation);
-    }, [canvas, map, transform, currentTime, rotation, canvasSuspended]);
+        renderMap(canvas, map, false, transform, currentTime, rotation, showSignal);
+    }, [canvas, map, transform, currentTime, rotation, canvasSuspended, showSignal]);
 
     // Re-render on resize — canvas backing store gets invalidated.
     useEffect(() => {
         if (canvasSuspended) return;
         if (!canvas) return;
         const onResize = () => {
-            renderMap(canvas, map, false, transform, timeRef.current, rotation);
+            renderMap(canvas, map, false, transform, timeRef.current, rotation, showSignal);
         };
         window.addEventListener("resize", onResize);
         return () => window.removeEventListener("resize", onResize);
-    }, [canvas, map, transform, rotation, canvasSuspended]);
+    }, [canvas, map, transform, rotation, canvasSuspended, showSignal]);
 
     // Reset to the completed map whenever the session switches. The scrubber
     // anchors at `duration` so the user sees the full session at rest.
@@ -219,6 +233,20 @@ export function MotionPlayer({ canvas, map, transform, rotation, speed = 8, canv
                 <button type="button" class="history-player-btn" onClick={handleRestart} aria-label={t("Restart")}>
                     <Icon svg={restartSvg} />
                 </button>
+                {rssi !== undefined && (
+                    <span class="history-player-signal" title={t("WiFi signal")}>
+                        <span class={`history-signal-dot ${signalBand(rssi)}`} />
+                        <span class="history-player-signal-value">
+                            <span class={rssi === 0 ? "history-player-signal-hidden" : ""}>
+                                {rssi}
+                                <span class="history-player-signal-unit"> dBm</span>
+                            </span>
+                            <span class={rssi === 0 ? "" : "history-player-signal-hidden"}>
+                                <T>No signal</T>
+                            </span>
+                        </span>
+                    </span>
+                )}
                 <span class="history-player-time" title={t("Elapsed time")}>
                     {formatClock(currentTime)}
                 </span>

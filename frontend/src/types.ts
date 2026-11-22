@@ -35,6 +35,10 @@ export interface MapPathPoint {
     y: number;
     t: number;
     ts: number;
+    // WiFi RSSI in dBm measured by the robot at this pose. 0 means the robot
+    // was not connected. Undefined for sessions recorded before the firmware
+    // started sampling signal strength.
+    r?: number;
 }
 
 export interface MapBounds {
@@ -61,6 +65,11 @@ export interface MapRechargePoint {
 // progressively during playback.
 export type MapCoverageCell = [cx: number, cy: number, ts: number];
 
+// Signal cell with the worst RSSI (dBm) seen in it. 0 means disconnected.
+// `ts` is when the cell was first reached, used to reveal the layer during
+// playback; the colour always reflects the worst reading of the whole session.
+export type MapSignalCell = [cx: number, cy: number, rssi: number, ts: number];
+
 export interface MapTransform {
     panX: number;
     panY: number;
@@ -72,7 +81,9 @@ export interface MapData {
     summary: import("./types.generated").MapSummary | null;
     path: MapPathPoint[];
     coverage: MapCoverageCell[];
+    signals: MapSignalCell[];
     recharges: MapRechargePoint[];
     bounds: MapBounds | null;
     cellSize: number;
+    signalCellSize: number;
 }

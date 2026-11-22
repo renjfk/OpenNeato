@@ -147,7 +147,10 @@ function formatBytesManual(bytes: number): string {
 }
 
 // Picks the CLDR plural category for count. Locales whose plural rules need more than one/other forms (e.g. Czech
-// "few" for 2-4) provide extra "<other>|<category>" keys; those keys hold the plain plural in other locales.
+// "few" for 2-4) provide extra "<other>|<category>" keys only in their own file; a missing category key falls back
+// to the "<other>" translation. The locales-aligned lint rule requires every locale file to have the same base keys
+// in the same order (so a missing translation fails the build instead of silently showing English), but it skips
+// "|" keys so no locale has to carry unreachable plural categories.
 function pluralCategory(locale: Locale, count: number): string {
     try {
         return new Intl.PluralRules(locale).select(count);

@@ -63,7 +63,7 @@ interface SettingsViewProps {
 function languageLabel(locale: string): string {
     try {
         const name = new Intl.DisplayNames([locale], { type: "language" }).of(locale) ?? locale;
-        // Some locales (cs, fr, it, tr) return lowercase names; capitalize for a consistent list
+        // Some locales (cs, fr, it) return lowercase names; capitalize for a consistent list
         return name.charAt(0).toLocaleUpperCase(locale) + name.slice(1);
     } catch {
         return locale;

@@ -2,6 +2,7 @@
 #include <SPIFFS.h>
 #include <WiFi.h>
 #include <ctime>
+#include <esp_sntp.h>
 
 SystemManager::SystemManager(Preferences& prefs) : LoopTask(5000), prefs(prefs) {
     TaskRegistry::add(this);
@@ -29,6 +30,8 @@ void SystemManager::feedTaskWdt() {
 }
 
 void SystemManager::tick() {
+    dropStaleNtpAddresses();
+
     // Detect NTP sync transition
     if (!ntpSynced) {
         time_t t = time(nullptr);
@@ -100,8 +103,25 @@ void SystemManager::applyTimeConfig(const String& tz, const String& ntpServer) {
     ntpServerBufIdx ^= 1;
     char *server = ntpServerBuf[ntpServerBufIdx];
     strlcpy(server, ntpServer.c_str(), sizeof(ntpServerBuf[0]));
-    configTzTime(tz.c_str(), server, NTP_SERVER_1, NTP_SERVER_2);
-    LOG("SYS", "NTP applied: tz=%s servers=%s,%s,%s", tz.c_str(), server, NTP_SERVER_1, NTP_SERVER_2);
+
+    // configTzTime() only clears the names of unused slots. lwIP would keep polling the
+    // address it resolved for them earlier, and sntp_stop() doesn't reset the current
+    // slot, so clear both name and address for the custom server to be the only one.
+    sntp_stop();
+    for (uint8_t i = 1; i < SNTP_MAX_SERVERS; i++)
+        sntp_setserver(i, nullptr);
+    configTzTime(tz.c_str(), server);
+    LOG("SYS", "NTP applied: tz=%s server=%s", tz.c_str(), server);
+}
+
+// A DNS lookup that was running when the servers changed still stores its result
+// in lwIP's current slot, after applyTimeConfig() cleared it. Servers are only ever
+// set by name here, so an address without a name is stale.
+void SystemManager::dropStaleNtpAddresses() {
+    for (uint8_t i = 0; i < SNTP_MAX_SERVERS; i++) {
+        if (!sntp_getservername(i) && !ip_addr_isany(sntp_getserver(i)))
+            sntp_setserver(i, nullptr);
+    }
 }
 
 // -- Deferred reboot ---------------------------------------------------------

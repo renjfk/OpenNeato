@@ -48,8 +48,7 @@ public:
     void setFallbackClock(time_t epoch);
 
     // Apply timezone and NTP server (reconfigures SNTP, does NOT store to NVS).
-    // An empty ntpServer uses NTP_SERVER_1 / NTP_SERVER_2; a custom one is tried
-    // first, with NTP_SERVER_1 / NTP_SERVER_2 kept as fallbacks.
+    // An empty ntpServer uses NTP_SERVER_1 / NTP_SERVER_2; a custom one replaces both.
     void applyTimeConfig(const String& tz, const String& ntpServer);
 
     // System health snapshot (heap, uptime, RSSI, storage, NTP, time)
@@ -89,6 +88,7 @@ private:
     // alternate: the new name is written into the one SNTP is not using.
     char ntpServerBuf[2][NTP_SERVER_MAX_LEN + 1] = {};
     int ntpServerBufIdx = 0;
+    void dropStaleNtpAddresses();
 
     // Deferred reboot state
     unsigned long pendingRebootAt = 0;

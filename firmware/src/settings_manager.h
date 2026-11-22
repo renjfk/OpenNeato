@@ -23,7 +23,7 @@ struct SchedDay {
 struct Settings : public JsonSerializable {
     String hostname = DEFAULT_HOSTNAME;
     String tz = NTP_DEFAULT_TZ;
-    String ntpServer; // Custom NTP host or IPv4, tried before the defaults (empty = defaults only)
+    String ntpServer; // Custom NTP host or IPv4, replaces the defaults (empty = defaults)
     int logLevel = LOG_LEVEL_OFF; // 0=off, 1=info, 2=debug (auto-expires back to off)
     int wifiTxPower = WIFI_DEFAULT_TX_POWER; // 0.25 dBm units (34 = 8.5 dBm)
     int uartTxPin = NEATO_DEFAULT_TX_PIN; // ESP GPIO -> Robot RX

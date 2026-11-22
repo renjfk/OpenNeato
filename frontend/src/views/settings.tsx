@@ -542,13 +542,16 @@ export function SettingsView({
                             onInput={(e) => setNtpServer((e.target as HTMLInputElement).value.trim())}
                             disabled={saving}
                             aria-label={t("NTP server")}
-                            placeholder={t("NTP server (blank = pool.ntp.org)")}
+                            placeholder={t("NTP server (blank = default servers)")}
                         />
-                        {ntpServerError && <div class="settings-field-error">{t(ntpServerError)}</div>}
-                        <div class="settings-robot-time">
-                            <Icon svg={clockSvg} />
-                            <T>A custom server is tried first, the default servers stay as fallback</T>
-                        </div>
+                        {ntpServerError ? (
+                            <div class="settings-field-error">{t(ntpServerError)}</div>
+                        ) : (
+                            <div class="settings-robot-time">
+                                <Icon svg={clockSvg} />
+                                <T>A custom server replaces the default servers</T>
+                            </div>
+                        )}
                     </div>
                     <div class="settings-section">
                         <div class="settings-pin-row" role="group" aria-label={t("UART Pins")}>

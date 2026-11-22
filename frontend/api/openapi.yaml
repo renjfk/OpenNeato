@@ -1404,6 +1404,21 @@ components:
         apFallbackOnDisconnect:
           type: boolean
           description: Bring up the fallback AP automatically when STA drops
+        staticIpEnabled:
+          type: boolean
+          description: Use a static IPv4 configuration instead of DHCP (applied after reboot)
+        staticIp:
+          type: string
+          description: Static IPv4 address (e.g. "192.168.1.50")
+        staticGateway:
+          type: string
+          description: Static IPv4 default gateway (e.g. "192.168.1.1")
+        staticSubnet:
+          type: string
+          description: Static IPv4 subnet mask (e.g. "255.255.255.0")
+        staticDns:
+          type: string
+          description: Optional static IPv4 DNS server (empty = use the gateway)
         syslogEnabled:
           type: boolean
           description: When on, logs go to UDP syslog instead of flash
@@ -1561,6 +1576,11 @@ components:
         - tz
         - logLevel
         - apFallbackOnDisconnect
+        - staticIpEnabled
+        - staticIp
+        - staticGateway
+        - staticSubnet
+        - staticDns
         - syslogEnabled
         - syslogIp
         - wifiTxPower
@@ -1806,6 +1826,9 @@ components:
         apFallbackOnDisconnect:
           type: boolean
           description: Whether the AP is brought up automatically when STA drops
+        staticIpBypassed:
+          type: boolean
+          description: Static IP is configured but DHCP is in use after a failed gateway probe, until the next restart
         lastError:
           type: string
           description: Human-readable description of the most recent STA failure
@@ -1819,6 +1842,7 @@ components:
         - apIp
         - apClients
         - apFallbackOnDisconnect
+        - staticIpBypassed
         - lastError
     WiFiNetwork:
       type: object

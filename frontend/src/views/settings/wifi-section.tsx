@@ -158,6 +158,14 @@ export function WiFiSection({ apFallbackOnDisconnect, onApFallbackChange, saving
                 {status && !status.staConnected && status.lastError && (
                     <div class="settings-field-error">{status.lastError}</div>
                 )}
+                {status?.staticIpBypassed && (
+                    <div class="settings-robot-time settings-hint-warn">
+                        <T>
+                            Static IP is enabled but the gateway did not respond, so the device is using DHCP until the
+                            next restart.
+                        </T>
+                    </div>
+                )}
             </div>
 
             <div class="settings-section">

@@ -23,6 +23,7 @@ struct WiFiStatus : public JsonSerializable {
     String apIp;
     int apClients = 0;
     bool apFallbackOnDisconnect = true;
+    bool staticIpBypassed = false; // Static IP enabled but DHCP in use after a failed gateway probe
     String lastError; // Empty when no error; otherwise human-readable failure reason
 
     std::vector<Field> toFields() const override;
@@ -70,6 +71,14 @@ public:
     // Update the fallback-on-disconnect policy and re-evaluate AP state.
     void setApFallbackOnDisconnect(bool enabled);
 
+    // Static IP configuration. Must be called before begin() or connect();
+    // the addresses are applied right before every STA connect attempt.
+    void setStaticIp(bool enabled, const String& ip, const String& gateway, const String& subnet, const String& dns);
+
+    // Callback fired when the saved network changed to a different SSID, so
+    // the owner can drop a static IP that belongs to the previous network.
+    void onNetworkChanged(std::function<void()> cb) { networkChangeCb = cb; }
+
     // -- API-driven WiFi management ------------------------------------------
     // These methods follow the registerGetRoute / registerPostRoute callback
     // shape so they can be wired directly from the web server.
@@ -105,10 +114,39 @@ private:
     bool apFallbackOnDisconnect = true; // Mirrors setting; updated via setApFallbackOnDisconnect
     String lastStaError; // Last STA failure reason (cleared on successful connect)
 
+    // Static IP (empty when DHCP is used)
+    bool staticIpEnabled = false;
+    bool staticIpApplied = false; // A static config is in effect on the STA interface
+    bool staticIpBypassed = false; // Set when the gateway probe failed this boot
+    String staticIp;
+    String staticGateway;
+    String staticSubnet;
+    String staticDns;
+    std::function<void()> networkChangeCb;
+
     void tick() override; // Called by LoopTask::loop() at WIFI_RECONNECT_INTERVAL cadence
 
     // Apply TX power from NVS (called after WiFi.begin and after reconnect)
     void applyTxPower();
+
+    // Apply the static IP configuration before WiFi.begin(). No-op when the
+    // static IP setting is off or the stored addresses are invalid (the
+    // settings layer validates input, so the latter only happens on NVS
+    // corruption, falling back to DHCP keeps the device reachable).
+    // Returns true when the static configuration is in use for this attempt.
+    // logSuccess=false on reconnect retries so a down network doesn't log the
+    // same applied configuration next to every reconnect_fail event.
+    bool applyStaticIp(bool logSuccess = true);
+
+    // ICMP-probe the configured gateway after associating with a static IP.
+    // A config that associates but cannot reach the gateway leaves the device
+    // unreachable, so it is treated as a failure and DHCP is used instead.
+    bool probeGateway();
+
+    // Return the STA interface to DHCP after a static config was applied. The
+    // Arduino core only leaves static mode through WiFi.config(), so the
+    // previous settings cannot simply be dropped by disconnecting.
+    void resetToDhcp();
 
     // Auto-reconnect state
     bool wasConnected = false;

@@ -168,6 +168,11 @@ const settingsPayload = (state, includeNavMode = true) => {
         "tz",
         "logLevel",
         "apFallbackOnDisconnect",
+        "staticIpEnabled",
+        "staticIp",
+        "staticGateway",
+        "staticSubnet",
+        "staticDns",
         "syslogEnabled",
         "syslogIp",
         "wifiTxPower",
@@ -664,8 +669,28 @@ function createMockApi(context) {
                 const oldTx = state.uartTxPin;
                 const oldRx = state.uartRxPin;
                 const oldHostname = state.hostname;
+                const oldStatic = {
+                    enabled: state.staticIpEnabled,
+                    ip: state.staticIp,
+                    gateway: state.staticGateway,
+                    subnet: state.staticSubnet,
+                    dns: state.staticDns,
+                };
                 Object.assign(state, data);
-                if (state.uartTxPin !== oldTx || state.uartRxPin !== oldRx || state.hostname !== oldHostname)
+                const staticIpChanged =
+                    state.staticIpEnabled !== oldStatic.enabled ||
+                    state.staticIp !== oldStatic.ip ||
+                    state.staticGateway !== oldStatic.gateway ||
+                    state.staticSubnet !== oldStatic.subnet ||
+                    state.staticDns !== oldStatic.dns;
+                // Match the firmware: only a change while static IP was or is on reboots
+                const staticIpNeedsReboot = staticIpChanged && (state.staticIpEnabled || oldStatic.enabled);
+                if (
+                    state.uartTxPin !== oldTx ||
+                    state.uartRxPin !== oldRx ||
+                    state.hostname !== oldHostname ||
+                    staticIpNeedsReboot
+                )
                     context.reboot?.();
                 return jsonResponse(settingsPayload(state, false));
             } catch {
@@ -686,6 +711,7 @@ function createMockApi(context) {
                 apIp: apOn ? "192.168.4.1" : "",
                 apClients: apOn ? (hasCreds ? 1 : 0) : 0,
                 apFallbackOnDisconnect: state.apFallbackOnDisconnect,
+                staticIpBypassed: false,
                 lastError: state.wifiDisconnected && hasCreds ? "wrong password or authentication rejected" : "",
             });
         }

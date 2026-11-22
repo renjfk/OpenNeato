@@ -85,6 +85,8 @@ private:
     String cleanMode;
     time_t sessionStartTime = 0;
     int batteryStart = -1;
+    int batteryLastValid = -1; // Last non-zero reading taken while on battery power
+    unsigned long batterySampleAt = 0;
 
     // -- Session accumulators ------------------------------------------------
     int rechargeCount = 0;
@@ -128,6 +130,7 @@ private:
     unsigned long lastFlushMs = 0;
     void writeSessionHeader();
     void writeSessionSummary(int batteryEnd);
+    void sampleBattery();
     void writeSnapshot(float x, float y, float theta, float time);
     void updateAccumulators(float x, float y, float theta);
     void resetSession();

@@ -45,6 +45,10 @@ void CleaningHistory::tick() {
         return;
 
     if (collecting) {
+        // Keep a recent battery reading from while the robot is on battery power.
+        // The end-of-session read can return 0% right after docking.
+        sampleBattery();
+
         // Periodically flush buffered pose snapshots to disk
         if (!writeBuffer.empty() && millis() - lastFlushMs >= HISTORY_FLUSH_INTERVAL_MS) {
             flushWriteBuffer();
@@ -133,6 +137,8 @@ void CleaningHistory::resetSession() {
     cleanMode = "";
     sessionStartTime = 0;
     batteryStart = -1;
+    batteryLastValid = -1;
+    batterySampleAt = 0;
     recharging = false;
     pendingSessionJson = "";
     pendingSummaryJson = "";
@@ -156,12 +162,15 @@ void CleaningHistory::startCollection(const String& uiState) {
 
     // Fetch battery level for session metadata, then write header
     neato.getCharger([this](bool ok, const ChargerData& charger) {
-        if (ok) {
+        if (ok && charger.fuelPercent > 0) {
             batteryStart = charger.fuelPercent;
+            if (!charger.chargingActive)
+                batteryLastValid = charger.fuelPercent;
         }
         writeSessionHeader();
     });
 
+    batterySampleAt = millis();
     setInterval(HISTORY_INTERVAL_ACTIVE_MS);
     LOG("HIST", "Collection started (mode: %s, file: %s)", cleanMode.c_str(), activeFilePath.c_str());
     dataLogger.logGenericEvent("history_start", {{"mode", cleanMode, FIELD_STRING}});
@@ -187,9 +196,18 @@ void CleaningHistory::stopCollection() {
         return;
     }
 
-    // Fetch final battery level for summary
+    // Fetch final battery level for summary. While docked and charging the robot
+    // can reset its fuel gauge to 0%, so prefer the last reading taken on battery power.
     neato.getCharger([this](bool ok, const ChargerData& charger) {
-        int batteryEnd = ok ? charger.fuelPercent : -1;
+        int batteryEndRaw = ok ? charger.fuelPercent : -1;
+        bool charging = ok && charger.chargingActive;
+        int batteryEnd = batteryEndRaw;
+        if ((!ok || charging || batteryEnd <= 0) && batteryLastValid > 0) {
+            LOG("HIST", "End battery read %d%%, using last valid %d%%", batteryEnd, batteryLastValid);
+            batteryEnd = batteryLastValid;
+        }
+        if (batteryEnd <= 0)
+            batteryEnd = -1; // Unknown - omit instead of writing a misleading 0
 
         writeSessionSummary(batteryEnd);
 
@@ -209,7 +227,9 @@ void CleaningHistory::stopCollection() {
         dataLogger.logGenericEvent("history_stop", {{"snapshots", String(snapshotCount), FIELD_INT},
                                                     {"area_m2", String(areaCovered, 1), FIELD_FLOAT},
                                                     {"recharges", String(rechargeCount), FIELD_INT},
-                                                    {"battery_end", String(batteryEnd), FIELD_INT}});
+                                                    {"battery_end", String(batteryEnd), FIELD_INT},
+                                                    {"battery_end_raw", String(batteryEndRaw), FIELD_INT},
+                                                    {"charging", charging ? "true" : "false", FIELD_BOOL}});
 
         // Start non-blocking compression: raw .jsonl -> .jsonl.hs
         compressSrcPath = activeFilePath;
@@ -687,6 +707,19 @@ void CleaningHistory::finalizeOrphanSessions() {
     activeFile = File();
 }
 
+void CleaningHistory::sampleBattery() {
+    if (recharging || millis() - batterySampleAt < HISTORY_BATTERY_SAMPLE_MS)
+        return;
+    batterySampleAt = millis();
+
+    neato.getCharger([this](bool ok, const ChargerData& charger) {
+        // Ignore readings taken while charging on the dock: FuelPercent can be 0
+        // there even though the battery still holds a charge.
+        if (ok && charger.fuelPercent > 0 && !charger.chargingActive && !recharging)
+            batteryLastValid = charger.fuelPercent;
+    });
+}
+
 void CleaningHistory::collectSnapshot() {
     fetchPending = true;
 
@@ -722,6 +755,8 @@ void CleaningHistory::collectSnapshot() {
 
             if (recharging && isCleaning) {
                 recharging = false;
+                batteryLastValid = -1; // Resumed cleaning makes the pre-recharge level stale
+                batterySampleAt = 0;
                 LOG("HIST", "Recharge done — resuming collection");
                 dataLogger.logGenericEvent("history_recharge_end", {});
             }

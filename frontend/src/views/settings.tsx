@@ -43,6 +43,7 @@ import {
 } from "./settings/constants";
 import { findPresetLabel } from "./settings/helpers";
 import { SettingsCategory } from "./settings/settings-category";
+import { StaticIpSection } from "./settings/static-ip-section";
 import { useFirmwareUpload } from "./settings/use-firmware-upload";
 import { useReboot } from "./settings/use-reboot";
 import { useSettingsForm } from "./settings/use-settings-form";
@@ -116,6 +117,16 @@ export function SettingsView({
         setWifiTxPower,
         apFallbackOnDisconnect,
         setApFallbackOnDisconnect,
+        staticIpEnabled,
+        setStaticIpEnabled,
+        staticIp,
+        setStaticIp,
+        staticGateway,
+        setStaticGateway,
+        staticSubnet,
+        setStaticSubnet,
+        staticDns,
+        setStaticDns,
         uartTxPin,
         setUartTxPin,
         uartRxPin,
@@ -156,11 +167,14 @@ export function SettingsView({
         hostnameError,
         syslogIpError,
         autoRestartTimeError,
+        staticIpError,
         validationError,
         saving,
         showSaveConfirm,
         setShowSaveConfirm,
         saveLabel,
+        rebootAddress,
+        rebootClearsStaticIp,
         handleSave,
         onSaveClick,
     } = useSettingsForm(errorStack, startRebootFlow);
@@ -657,6 +671,20 @@ export function SettingsView({
                         onApFallbackChange={setApFallbackOnDisconnect}
                         saving={saving}
                         errorStack={errorStack}
+                    />
+                    <StaticIpSection
+                        enabled={staticIpEnabled}
+                        ip={staticIp}
+                        gateway={staticGateway}
+                        subnet={staticSubnet}
+                        dns={staticDns}
+                        error={staticIpError}
+                        saving={saving}
+                        onEnabledChange={setStaticIpEnabled}
+                        onIpChange={(value) => setStaticIp(value.trim())}
+                        onGatewayChange={(value) => setStaticGateway(value.trim())}
+                        onSubnetChange={(value) => setStaticSubnet(value.trim())}
+                        onDnsChange={(value) => setStaticDns(value.trim())}
                     />
                 </SettingsCategory>
 
@@ -1456,6 +1484,26 @@ export function SettingsView({
                                     : "Waiting for device to come back online",
                             )}
                         </div>
+                        {!robotRestarting && rebootAddress && (
+                            <div class="loading-subtext">
+                                <T>New address:</T>{" "}
+                                <a class="loading-link" href={`http://${rebootAddress}/#/settings`}>
+                                    {`http://${rebootAddress}`}
+                                </a>
+                            </div>
+                        )}
+                        {!robotRestarting && rebootAddress && (
+                            <div class="loading-subtext">
+                                <T>
+                                    If the gateway does not answer, the device may come back on a DHCP address instead.
+                                </T>
+                            </div>
+                        )}
+                        {!robotRestarting && rebootClearsStaticIp && (
+                            <div class="loading-subtext">
+                                <T>Static IP is off. The device will get a new address from your router.</T>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

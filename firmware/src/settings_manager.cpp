@@ -15,6 +15,76 @@ static String schedKey(int day, int slot, const char *suffix) {
 
 SettingsManager::SettingsManager(Preferences& prefs) : prefs(prefs) {}
 
+// Strict dotted-quad IPv4 validation, mirroring the frontend input check.
+// IPAddress::fromString() alone is not enough: it also accepts IPv6 strings
+// and the unspecified address (0.0.0.0), neither of which is a usable STA IP.
+static bool isValidIpv4(const String& value) {
+    int octets = 0;
+    int sum = 0;
+    int octetStart = 0;
+    int length = static_cast<int>(value.length());
+
+    for (int i = 0; i <= length; i++) {
+        char c = i < length ? value.charAt(i) : '.';
+        if (c == '.') {
+            int octetLength = i - octetStart;
+            if (octetLength < 1 || octetLength > 3)
+                return false;
+            int octet = value.substring(octetStart, i).toInt();
+            if (octet > 255)
+                return false;
+            sum += octet;
+            octets++;
+            octetStart = i + 1;
+        } else if (!isdigit(c)) {
+            return false;
+        }
+    }
+
+    return octets == 4 && sum > 0;
+}
+
+// Parse a validated dotted-quad string into a 32-bit address value.
+static uint32_t ipv4ToUint(const String& value) {
+    uint32_t result = 0;
+    int octetStart = 0;
+    int length = static_cast<int>(value.length());
+
+    for (int i = 0; i <= length; i++) {
+        if (i == length || value.charAt(i) == '.') {
+            result = (result << 8) | static_cast<uint32_t>(value.substring(octetStart, i).toInt());
+            octetStart = i + 1;
+        }
+    }
+
+    return result;
+}
+
+// Validate the address tuple as a usable IPv4 subnet configuration: contiguous
+// mask, distinct host/gateway addresses, gateway inside the same subnet, and a
+// host address (not the network or broadcast address). Wrong values here leave
+// the device associated but unreachable, so they are rejected up front.
+static bool isValidStaticIpConfig(const String& ip, const String& gateway, const String& subnet) {
+    if (!isValidIpv4(ip) || !isValidIpv4(gateway) || !isValidIpv4(subnet))
+        return false;
+
+    uint32_t ipAddr = ipv4ToUint(ip);
+    uint32_t gatewayAddr = ipv4ToUint(gateway);
+    uint32_t mask = ipv4ToUint(subnet);
+    uint32_t inverted = ~mask;
+
+    if ((inverted & (inverted + 1)) != 0) // Mask bits must be contiguous
+        return false;
+    if (ipAddr == gatewayAddr)
+        return false;
+    if ((ipAddr & mask) != (gatewayAddr & mask)) // Gateway outside the subnet
+        return false;
+
+    uint32_t network = ipAddr & mask;
+    uint32_t broadcast = network | inverted;
+    return ipAddr != network && ipAddr != broadcast;
+}
+
 // -- Lifecycle ---------------------------------------------------------------
 
 static const char *logLevelStr(int level) {
@@ -65,6 +135,11 @@ void SettingsManager::load() {
     current.vacuumSpeed = prefs.getInt(NVS_KEY_MC_VACUUM_PCT, MANUAL_VACUUM_SPEED_PCT);
     current.sideBrushPower = prefs.getInt(NVS_KEY_MC_SBRUSH_MW, MANUAL_SIDE_BRUSH_POWER_MW);
     current.apFallbackOnDisconnect = prefs.getBool(NVS_KEY_AP_FALLBACK, true);
+    current.staticIpEnabled = prefs.getBool(NVS_KEY_STATIC_IP_ENABLED, false);
+    current.staticIp = prefs.getString(NVS_KEY_STATIC_IP, "");
+    current.staticGateway = prefs.getString(NVS_KEY_STATIC_GATEWAY, "");
+    current.staticSubnet = prefs.getString(NVS_KEY_STATIC_SUBNET, "");
+    current.staticDns = prefs.getString(NVS_KEY_STATIC_DNS, "");
     current.syslogEnabled = prefs.getBool(NVS_KEY_SYSLOG_ENABLED, false);
     current.syslogIp = prefs.getString(NVS_KEY_SYSLOG_IP, "");
     current.ntfyTopic = prefs.getString(NVS_KEY_NTFY_TOPIC, "");
@@ -100,6 +175,11 @@ void SettingsManager::save() {
     prefs.putInt(NVS_KEY_MC_VACUUM_PCT, current.vacuumSpeed);
     prefs.putInt(NVS_KEY_MC_SBRUSH_MW, current.sideBrushPower);
     prefs.putBool(NVS_KEY_AP_FALLBACK, current.apFallbackOnDisconnect);
+    prefs.putBool(NVS_KEY_STATIC_IP_ENABLED, current.staticIpEnabled);
+    prefs.putString(NVS_KEY_STATIC_IP, current.staticIp);
+    prefs.putString(NVS_KEY_STATIC_GATEWAY, current.staticGateway);
+    prefs.putString(NVS_KEY_STATIC_SUBNET, current.staticSubnet);
+    prefs.putString(NVS_KEY_STATIC_DNS, current.staticDns);
     prefs.putBool(NVS_KEY_SYSLOG_ENABLED, current.syslogEnabled);
     prefs.putString(NVS_KEY_SYSLOG_IP, current.syslogIp);
     prefs.putString(NVS_KEY_NTFY_TOPIC, current.ntfyTopic);
@@ -120,6 +200,18 @@ void SettingsManager::save() {
             prefs.putBool(schedKey(d, s, "on").c_str(), current.sched[d].slots[s].on);
         }
     }
+}
+
+// Disable the static IP setting after the device is provisioned for a
+// different network. Persisted immediately so the next boot uses DHCP.
+bool SettingsManager::disableStaticIp() {
+    if (!current.staticIpEnabled)
+        return false;
+
+    current.staticIpEnabled = false;
+    save();
+    LOG("SETTINGS", "Static IP disabled (saved network changed)");
+    return true;
 }
 
 // -- Debug auto-expire -------------------------------------------------------
@@ -269,6 +361,36 @@ ApplyResult SettingsManager::apply(const String& json) {
         LOG("SETTINGS", "AP fallback -> %s", current.apFallbackOnDisconnect ? "on" : "off");
     }
 
+    // Static IP, reboot required: WiFi.config() must run before the next WiFi.begin()
+    if (incoming.staticIpEnabled != current.staticIpEnabled || incoming.staticIp != current.staticIp ||
+        incoming.staticGateway != current.staticGateway || incoming.staticSubnet != current.staticSubnet ||
+        incoming.staticDns != current.staticDns) {
+        bool enabled = incoming.staticIpEnabled;
+        bool wasEnabled = current.staticIpEnabled;
+        // Only validate while static IP is on: the fields are hidden when off,
+        // so incomplete edits there must not block saving.
+        bool valid =
+                !enabled || (isValidStaticIpConfig(incoming.staticIp, incoming.staticGateway, incoming.staticSubnet) &&
+                             (incoming.staticDns.isEmpty() || isValidIpv4(incoming.staticDns)));
+        if (!valid) {
+            LOG("SETTINGS", "Rejected: invalid static IP configuration");
+            return APPLY_INVALID;
+        }
+        current.staticIpEnabled = enabled;
+        current.staticIp = incoming.staticIp;
+        current.staticGateway = incoming.staticGateway;
+        current.staticSubnet = incoming.staticSubnet;
+        current.staticDns = incoming.staticDns;
+        changed = true;
+        // Hidden-field edits are harmless while static IP stays off on both sides
+        if (enabled || wasEnabled)
+            needReboot = true;
+        LOG("SETTINGS", "Static IP -> %s (ip=%s gw=%s mask=%s dns=%s)%s", enabled ? "on" : "off",
+            current.staticIp.c_str(), current.staticGateway.c_str(), current.staticSubnet.c_str(),
+            current.staticDns.isEmpty() ? "(gateway)" : current.staticDns.c_str(),
+            (enabled || wasEnabled) ? ", reboot required" : "");
+    }
+
     if (incoming.syslogEnabled != current.syslogEnabled) {
         current.syslogEnabled = incoming.syslogEnabled;
         changed = true;
@@ -385,6 +507,11 @@ std::vector<Field> Settings::toFields() const {
             {"vacuumSpeed", String(vacuumSpeed), FIELD_INT},
             {"sideBrushPower", String(sideBrushPower), FIELD_INT},
             {"apFallbackOnDisconnect", apFallbackOnDisconnect ? "true" : "false", FIELD_BOOL},
+            {"staticIpEnabled", staticIpEnabled ? "true" : "false", FIELD_BOOL},
+            {"staticIp", staticIp, FIELD_STRING},
+            {"staticGateway", staticGateway, FIELD_STRING},
+            {"staticSubnet", staticSubnet, FIELD_STRING},
+            {"staticDns", staticDns, FIELD_STRING},
             {"syslogEnabled", syslogEnabled ? "true" : "false", FIELD_BOOL},
             {"syslogIp", syslogIp, FIELD_STRING},
             {"ntfyTopic", ntfyTopic, FIELD_STRING},
@@ -464,6 +591,26 @@ bool Settings::fromFields(const std::vector<Field>& fields) {
     }
     if ((f = findField(fields, "apFallbackOnDisconnect")) && f->type == FIELD_BOOL) {
         apFallbackOnDisconnect = (f->value == "true");
+        applied = true;
+    }
+    if ((f = findField(fields, "staticIpEnabled")) && f->type == FIELD_BOOL) {
+        staticIpEnabled = (f->value == "true");
+        applied = true;
+    }
+    if ((f = findField(fields, "staticIp")) && f->type == FIELD_STRING) {
+        staticIp = f->value;
+        applied = true;
+    }
+    if ((f = findField(fields, "staticGateway")) && f->type == FIELD_STRING) {
+        staticGateway = f->value;
+        applied = true;
+    }
+    if ((f = findField(fields, "staticSubnet")) && f->type == FIELD_STRING) {
+        staticSubnet = f->value;
+        applied = true;
+    }
+    if ((f = findField(fields, "staticDns")) && f->type == FIELD_STRING) {
+        staticDns = f->value;
         applied = true;
     }
     if ((f = findField(fields, "syslogEnabled")) && f->type == FIELD_BOOL) {

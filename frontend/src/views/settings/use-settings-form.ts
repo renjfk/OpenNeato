@@ -6,11 +6,51 @@ import type { SettingsData } from "../../types";
 import { fmtTime, normalizeError, parseTime } from "../../utils";
 import { DEFAULT_SERVER } from "./constants";
 
+const IPV4_PATTERN = /^(\d{1,3}\.){3}\d{1,3}$/;
+
+function isValidIpv4(value: string): boolean {
+    return IPV4_PATTERN.test(value) && value.split(".").every((octet) => +octet <= 255);
+}
+
+function ipv4ToNumber(value: string): number {
+    return value.split(".").reduce((acc, octet) => (acc << 8) + Number(octet), 0) >>> 0;
+}
+
+// Same checks the firmware applies: usable host address, contiguous mask,
+// gateway inside the same subnet, and neither address equal to the gateway,
+// the network address, or the broadcast address.
+function isValidStaticIpConfig(ip: string, gateway: string, subnet: string): boolean {
+    if (!isValidIpv4(ip) || !isValidIpv4(gateway) || !isValidIpv4(subnet)) return false;
+
+    const ipAddr = ipv4ToNumber(ip);
+    const gatewayAddr = ipv4ToNumber(gateway);
+    const mask = ipv4ToNumber(subnet);
+    if (ipAddr === 0 || gatewayAddr === 0 || mask === 0) return false;
+
+    const inverted = ~mask;
+    if ((inverted & (inverted + 1)) !== 0) return false;
+    if (ipAddr === gatewayAddr) return false;
+    if ((ipAddr & mask) !== (gatewayAddr & mask)) return false;
+
+    const network = (ipAddr & mask) >>> 0;
+    const broadcast = (network | inverted) >>> 0;
+    return ipAddr !== network && ipAddr !== broadcast;
+}
+
+function isValidDns(value: string): boolean {
+    return isValidIpv4(value) && ipv4ToNumber(value) !== 0;
+}
+
 export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: () => void) {
     // Local form state
     const [tz, setTz] = useState<string>("UTC0");
     const [logLevel, setLogLevel] = useState(0);
     const [apFallbackOnDisconnect, setApFallbackOnDisconnect] = useState(true);
+    const [staticIpEnabled, setStaticIpEnabled] = useState(false);
+    const [staticIp, setStaticIp] = useState("");
+    const [staticGateway, setStaticGateway] = useState("");
+    const [staticSubnet, setStaticSubnet] = useState("");
+    const [staticDns, setStaticDns] = useState("");
     const [syslogEnabled, setSyslogEnabled] = useState(false);
     const [syslogIp, setSyslogIp] = useState("");
     const [wifiTxPower, setWifiTxPower] = useState(60);
@@ -40,6 +80,10 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
     // Save flow
     const [saving, setSaving] = useState(false);
     const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+    // Reboot overlay hints after a static IP change, the page the user is on
+    // may not answer anymore once the device comes back.
+    const [rebootAddress, setRebootAddress] = useState<string | null>(null);
+    const [rebootClearsStaticIp, setRebootClearsStaticIp] = useState(false);
 
     // Fetch settings on mount (do NOT sync from system polling to avoid races)
     const { data: fetched } = useFetch(api.getSettings);
@@ -50,6 +94,11 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
             setTz(fetched.tz);
             setLogLevel(fetched.logLevel);
             setApFallbackOnDisconnect(fetched.apFallbackOnDisconnect ?? true);
+            setStaticIpEnabled(fetched.staticIpEnabled ?? false);
+            setStaticIp(fetched.staticIp ?? "");
+            setStaticGateway(fetched.staticGateway ?? "");
+            setStaticSubnet(fetched.staticSubnet ?? "");
+            setStaticDns(fetched.staticDns ?? "");
             setSyslogEnabled(fetched.syslogEnabled ?? false);
             setSyslogIp(fetched.syslogIp ?? "");
             setWifiTxPower(fetched.wifiTxPower);
@@ -84,6 +133,11 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         (tz !== server.current.tz ||
             logLevel !== server.current.logLevel ||
             apFallbackOnDisconnect !== (server.current.apFallbackOnDisconnect ?? true) ||
+            staticIpEnabled !== (server.current.staticIpEnabled ?? false) ||
+            staticIp !== (server.current.staticIp ?? "") ||
+            staticGateway !== (server.current.staticGateway ?? "") ||
+            staticSubnet !== (server.current.staticSubnet ?? "") ||
+            staticDns !== (server.current.staticDns ?? "") ||
             syslogEnabled !== (server.current.syslogEnabled ?? false) ||
             syslogIp !== (server.current.syslogIp ?? "") ||
             wifiTxPower !== server.current.wifiTxPower ||
@@ -108,7 +162,12 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
     const needsReboot =
         uartTxPin !== server.current.uartTxPin ||
         uartRxPin !== server.current.uartRxPin ||
-        hostname !== server.current.hostname;
+        hostname !== server.current.hostname ||
+        staticIpEnabled !== (server.current.staticIpEnabled ?? false) ||
+        staticIp !== (server.current.staticIp ?? "") ||
+        staticGateway !== (server.current.staticGateway ?? "") ||
+        staticSubnet !== (server.current.staticSubnet ?? "") ||
+        staticDns !== (server.current.staticDns ?? "");
 
     const pinError =
         uartTxPin === uartRxPin
@@ -126,8 +185,6 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
                 ? "Only letters, numbers, and hyphens"
                 : null;
 
-    const isValidIpv4 = (ip: string) => /^(\d{1,3}\.){3}\d{1,3}$/.test(ip) && ip.split(".").every((n) => +n <= 255);
-
     const syslogIpError = syslogEnabled
         ? syslogIp.trim().length === 0
             ? "IP address is required when syslog is enabled"
@@ -138,7 +195,21 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
 
     const autoRestartTimeError = autoRestartEnabled ? (!parsedMaintenanceTime ? "Use HH:MM format" : null) : null;
 
-    const validationError = pinError || hostnameError || syslogIpError || autoRestartTimeError;
+    const staticIpError = !staticIpEnabled
+        ? null
+        : !isValidIpv4(staticIp)
+          ? "Enter a valid IP address"
+          : !isValidIpv4(staticGateway)
+            ? "Enter a valid gateway address"
+            : !isValidIpv4(staticSubnet)
+              ? "Enter a valid subnet mask"
+              : !isValidStaticIpConfig(staticIp, staticGateway, staticSubnet)
+                ? "IP, gateway, and subnet mask are inconsistent"
+                : staticDns.length > 0 && !isValidDns(staticDns)
+                  ? "Enter a valid DNS address"
+                  : null;
+
+    const validationError = pinError || hostnameError || syslogIpError || autoRestartTimeError || staticIpError;
 
     // --- Unified save ---
 
@@ -148,6 +219,11 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         if (logLevel !== server.current.logLevel) patch.logLevel = logLevel;
         if (apFallbackOnDisconnect !== (server.current.apFallbackOnDisconnect ?? true))
             patch.apFallbackOnDisconnect = apFallbackOnDisconnect;
+        if (staticIpEnabled !== (server.current.staticIpEnabled ?? false)) patch.staticIpEnabled = staticIpEnabled;
+        if (staticIp !== (server.current.staticIp ?? "")) patch.staticIp = staticIp;
+        if (staticGateway !== (server.current.staticGateway ?? "")) patch.staticGateway = staticGateway;
+        if (staticSubnet !== (server.current.staticSubnet ?? "")) patch.staticSubnet = staticSubnet;
+        if (staticDns !== (server.current.staticDns ?? "")) patch.staticDns = staticDns;
         if (syslogEnabled !== (server.current.syslogEnabled ?? false)) patch.syslogEnabled = syslogEnabled;
         if (syslogIp !== (server.current.syslogIp ?? "")) patch.syslogIp = syslogIp;
         if (wifiTxPower !== server.current.wifiTxPower) patch.wifiTxPower = wifiTxPower;
@@ -184,6 +260,11 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         tz,
         logLevel,
         apFallbackOnDisconnect,
+        staticIpEnabled,
+        staticIp,
+        staticGateway,
+        staticSubnet,
+        staticDns,
         syslogEnabled,
         syslogIp,
         wifiTxPower,
@@ -208,9 +289,22 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
 
     const handleSave = useCallback(() => {
         const willReboot = needsReboot;
+        const wasStaticIpEnabled = server.current.staticIpEnabled ?? false;
+        const previousStaticIp = server.current.staticIp ?? "";
         setSaving(true);
         api.updateSettings(buildPatch())
             .then((res) => {
+                const staticIpEnabledNow = res.staticIpEnabled ?? false;
+                const staticIpChanged =
+                    staticIpEnabledNow !== wasStaticIpEnabled || (res.staticIp ?? "") !== previousStaticIp;
+                if (willReboot && staticIpChanged) {
+                    setRebootAddress(
+                        staticIpEnabledNow && res.staticIp && res.staticIp !== window.location.hostname
+                            ? res.staticIp
+                            : null,
+                    );
+                    setRebootClearsStaticIp(wasStaticIpEnabled && !staticIpEnabledNow);
+                }
                 server.current = { ...res };
                 setShowSaveConfirm(false);
                 if (willReboot) {
@@ -239,6 +333,17 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
 
     const saveLabel = saving ? "Saving..." : needsReboot ? "Save & Reboot" : "Save";
 
+    // Turning static IP off hides the address fields, reset them to the saved
+    // values so hidden edits don't force a pointless reboot or trip validation.
+    const updateStaticIpEnabled = useCallback((value: boolean) => {
+        setStaticIpEnabled(value);
+        if (value) return;
+        setStaticIp(server.current.staticIp ?? "");
+        setStaticGateway(server.current.staticGateway ?? "");
+        setStaticSubnet(server.current.staticSubnet ?? "");
+        setStaticDns(server.current.staticDns ?? "");
+    }, []);
+
     return {
         // Form fields
         tz,
@@ -247,6 +352,16 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         setLogLevel,
         apFallbackOnDisconnect,
         setApFallbackOnDisconnect,
+        staticIpEnabled,
+        setStaticIpEnabled: updateStaticIpEnabled,
+        staticIp,
+        setStaticIp,
+        staticGateway,
+        setStaticGateway,
+        staticSubnet,
+        setStaticSubnet,
+        staticDns,
+        setStaticDns,
         syslogEnabled,
         setSyslogEnabled,
         syslogIp,
@@ -295,12 +410,15 @@ export function useSettingsForm(errorStack: ErrorStackHandle, startRebootFlow: (
         hostnameError,
         syslogIpError,
         autoRestartTimeError,
+        staticIpError,
         validationError,
         // Save flow
         saving,
         showSaveConfirm,
         setShowSaveConfirm,
         saveLabel,
+        rebootAddress,
+        rebootClearsStaticIp,
         handleSave,
         onSaveClick,
     };

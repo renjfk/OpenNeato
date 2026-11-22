@@ -40,6 +40,14 @@ struct Settings : public JsonSerializable {
     // saved; controlled by this flag once credentials exist.
     bool apFallbackOnDisconnect = true;
 
+    // Static IP: when enabled the device skips DHCP and uses the addresses
+    // below. Applied before every STA connect attempt; takes effect after reboot.
+    bool staticIpEnabled = false;
+    String staticIp; // IPv4 address, e.g. "192.168.1.50"
+    String staticGateway; // IPv4 default gateway
+    String staticSubnet; // IPv4 subnet mask
+    String staticDns; // Optional IPv4 DNS server (empty = use gateway)
+
     // Remote syslog (UDP) — when enabled, logs go to network instead of flash
     bool syslogEnabled = false;
     String syslogIp; // IPv4 address of syslog receiver
@@ -96,6 +104,11 @@ public:
     // re-evaluate whether the AP should be active right now).
     using ApFallbackChangeCallback = std::function<void(bool enabled)>;
     void onApFallbackChange(ApFallbackChangeCallback cb) { apFallbackChangeCb = cb; }
+
+    // Disable the static IP setting and persist it. Called when the device is
+    // provisioned for a different network, where the saved address is unlikely
+    // to be valid.
+    bool disableStaticIp();
 
 private:
     Preferences& prefs;

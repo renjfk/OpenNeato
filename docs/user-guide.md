@@ -452,6 +452,35 @@ To wipe credentials entirely and force the device back into first-time setup mod
 AP, no auto-reconnect), use **Settings -> WiFi -> Forget current network**. The device will
 broadcast `<hostname>-ap` until you provision a new network.
 
+> [!NOTE]
+> The saved static IP belongs to the network it was set up for. Connecting to a different
+> network, or to any network after forgetting the current one, turns **Static IP** off
+> automatically and the device uses DHCP again; turn it back on with addresses that fit the
+> new network.
+
+#### Static IP
+
+If your router's DHCP reservations are limited, or you simply prefer a predictable address,
+the bridge can skip DHCP. Open **Settings -> WiFi**, turn on **Static IP**, and fill in the IP
+address, gateway, and subnet mask. DNS is optional and defaults to the gateway. Saving
+restarts the device so the address can be applied before the WiFi connection comes up.
+
+Pick an address outside your router's DHCP range and use your router's current gateway and
+subnet mask. The gateway has to be inside the same subnet as the chosen address, otherwise
+the configuration is rejected before it is saved. When the device connects during startup or
+after new credentials are saved, it pings the gateway a few times; if it does not answer, the
+device falls back to DHCP for that boot and keeps the static settings so you can correct them.
+The WiFi section shows a warning while the fallback is in effect.
+
+> [!WARNING]
+> A static IP that is valid but wrong for your network can still leave the device unreachable,
+> for example when the address is already used by another device or when something else
+> answers on the configured gateway address. In that case the fallback AP does not come up,
+> because the device believes it is connected. The recovery path is a factory reset: hold the
+> **BOOT** button for 5 seconds (see [Factory Reset](#factory-reset)). That erases all
+> settings, WiFi credentials, logs, and cleaning history, so the device comes back in
+> first-time setup mode.
+
 ### UART Pin Configuration
 
 After connecting to the web UI, check that the UART pins match the GPIOs used for the robot

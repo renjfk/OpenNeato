@@ -3,6 +3,7 @@
 #include <ESPmDNS.h>
 #include <esp_task_wdt.h>
 #include <esp_wifi.h>
+#include "ping/ping_sock.h"
 
 // -- Helper structs ----------------------------------------------------------
 
@@ -17,6 +18,7 @@ std::vector<Field> WiFiStatus::toFields() const {
             {"apIp", apIp, FIELD_STRING},
             {"apClients", String(apClients), FIELD_INT},
             {"apFallbackOnDisconnect", apFallbackOnDisconnect ? "true" : "false", FIELD_BOOL},
+            {"staticIpBypassed", staticIpBypassed ? "true" : "false", FIELD_BOOL},
             {"lastError", lastError, FIELD_STRING},
     };
 }
@@ -38,6 +40,28 @@ String WiFiScanResult::toJson() const {
     }
     json += "]}";
     return json;
+}
+
+// -- Gateway probe -----------------------------------------------------------
+
+namespace {
+    // Written by the esp_ping task, read by the caller waiting in probeGateway().
+    struct PingResult {
+        volatile bool replied = false;
+        volatile bool finished = false;
+    };
+
+    // File scope so a late callback from the ping task can never reference dead
+    // stack memory. WiFiManager is a singleton, so one instance is enough.
+    PingResult pingResult;
+} // namespace
+
+static void onPingSuccess(esp_ping_handle_t /*handle*/, void *args) {
+    static_cast<PingResult *>(args)->replied = true;
+}
+
+static void onPingEnd(esp_ping_handle_t /*handle*/, void *args) {
+    static_cast<PingResult *>(args)->finished = true;
 }
 
 // -- WiFiManager -------------------------------------------------------------
@@ -336,6 +360,7 @@ bool WiFiManager::connectToWiFi(const String& ssid, const String& password) {
     esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
 
     applyTxPower(); // Set before WiFi.begin — improves association reliability
+    bool staticIpInUse = applyStaticIp(); // Must run before WiFi.begin so no DHCP request is sent
     WiFi.begin(ssid.c_str(), password.c_str());
 
     // Wait up to 30 seconds (60 attempts x 500ms).
@@ -352,6 +377,28 @@ bool WiFiManager::connectToWiFi(const String& ssid, const String& password) {
     unsigned long connectMs = millis() - connectStart;
 
     if (WiFi.status() == WL_CONNECTED) {
+        // Associating is not enough with a static IP: a wrong address or
+        // subnet leaves the device connected but unreachable. Probe the
+        // gateway and fall back to DHCP for this boot when it does not answer.
+        if (staticIpInUse) {
+            bool gatewayOk = probeGateway();
+            if (!gatewayOk) {
+                // A router that is still booting or briefly busy should not
+                // drop the configuration, so retry once before falling back.
+                LOG("WIFI", "Gateway %s did not answer, retrying probe", staticGateway.c_str());
+                esp_task_wdt_reset();
+                delay(GATEWAY_PROBE_RETRY_DELAY_MS);
+                gatewayOk = probeGateway();
+            }
+            if (!gatewayOk) {
+                LOG("WIFI", "Gateway %s unreachable, falling back to DHCP for this boot", staticGateway.c_str());
+                dataLogger.logWifi("static_ip_fallback",
+                                   {{"ip", staticIp, FIELD_STRING}, {"gateway", staticGateway, FIELD_STRING}});
+                staticIpBypassed = true;
+                return connectToWiFi(ssid, password); // staticIpBypassed prevents a second probe
+            }
+        }
+
         LOG("WIFI", "Connected in %lu ms (%d attempts)", connectMs, attempts);
         wasConnected = true;
         reconnectBackoff = WIFI_RECONNECT_INTERVAL;
@@ -385,6 +432,118 @@ void WiFiManager::setApFallbackOnDisconnect(bool enabled) {
     reevaluateFallbackAp();
 }
 
+void WiFiManager::setStaticIp(bool enabled, const String& ip, const String& gateway, const String& subnet,
+                              const String& dns) {
+    staticIpEnabled = enabled;
+    staticIp = ip;
+    staticGateway = gateway;
+    staticSubnet = subnet;
+    staticDns = dns;
+}
+
+bool WiFiManager::applyStaticIp(bool logSuccess) {
+    if (!staticIpEnabled || staticIpBypassed) {
+        // A static config applied earlier in this boot must be cleared through
+        // WiFi.config(), otherwise the core keeps using it and skips DHCP.
+        if (staticIpApplied)
+            resetToDhcp();
+        return false;
+    }
+
+    IPAddress ip, gateway, subnet;
+    if (!ip.fromString(staticIp) || !gateway.fromString(staticGateway) || !subnet.fromString(staticSubnet)) {
+        LOG("WIFI", "Static IP config invalid, using DHCP");
+        dataLogger.logWifi("static_ip_invalid", {{"ip", staticIp, FIELD_STRING},
+                                                 {"gateway", staticGateway, FIELD_STRING},
+                                                 {"subnet", staticSubnet, FIELD_STRING}});
+        return false;
+    }
+
+    IPAddress dns;
+    if (staticDns.isEmpty() || !dns.fromString(staticDns))
+        dns = gateway; // No usable DNS server configured, use the gateway
+    bool ok = WiFi.config(ip, gateway, subnet, dns);
+
+    if (!ok) {
+        LOG("WIFI", "Static IP %s could not be applied", ip.toString().c_str());
+        dataLogger.logWifi("static_ip_fail", {{"ip", ip.toString(), FIELD_STRING}});
+        return false;
+    }
+
+    if (logSuccess) {
+        LOG("WIFI", "Static IP %s, gateway %s, subnet %s, DNS %s", ip.toString().c_str(), gateway.toString().c_str(),
+            subnet.toString().c_str(), dns.toString().c_str());
+        dataLogger.logWifi("static_ip", {{"ip", ip.toString(), FIELD_STRING},
+                                         {"gateway", gateway.toString(), FIELD_STRING},
+                                         {"subnet", subnet.toString(), FIELD_STRING},
+                                         {"dns", dns.toString(), FIELD_STRING}});
+    }
+
+    staticIpApplied = true;
+    return true;
+}
+
+void WiFiManager::resetToDhcp() {
+    IPAddress any(0, 0, 0, 0);
+    // The core interprets a zero address in WiFi.config() as "start DHCP".
+    bool ok = WiFi.config(any, any, any);
+    staticIpApplied = false;
+    LOG("WIFI", "Static IP cleared, DHCP enabled: %s", ok ? "ok" : "failed");
+    dataLogger.logWifi("static_ip_cleared", {{"ok", ok ? "true" : "false", FIELD_BOOL}});
+}
+
+bool WiFiManager::probeGateway() {
+    IPAddress gateway;
+    if (!gateway.fromString(staticGateway))
+        return true; // Nothing to probe, keep the static configuration
+
+    esp_ping_config_t config = ESP_PING_DEFAULT_CONFIG();
+    config.count = 2;
+    config.interval_ms = 200;
+    config.timeout_ms = 1000;
+    config.target_addr.type = IPADDR_TYPE_V4;
+    config.target_addr.u_addr.ip4.addr = static_cast<uint32_t>(gateway);
+
+    pingResult.replied = false;
+    pingResult.finished = false;
+    esp_ping_callbacks_t callbacks = {};
+    callbacks.cb_args = &pingResult;
+    callbacks.on_ping_success = onPingSuccess;
+    callbacks.on_ping_end = onPingEnd;
+
+    esp_ping_handle_t handle = nullptr;
+    esp_err_t err = esp_ping_new_session(&config, &callbacks, &handle);
+    if (err != ESP_OK) {
+        LOG("WIFI", "Gateway probe unavailable (err=%d), keeping static IP", err);
+        return true;
+    }
+
+    if (esp_ping_start(handle) != ESP_OK) {
+        LOG("WIFI", "Gateway probe could not start, keeping static IP");
+        esp_ping_delete_session(handle);
+        return true;
+    }
+
+    unsigned long start = millis();
+    while (!pingResult.finished && millis() - start < GATEWAY_PROBE_TIMEOUT_MS) {
+        esp_task_wdt_reset();
+        delay(50);
+    }
+
+    esp_ping_stop(handle);
+    // esp_ping_stop() does not wait for the ping task; give it a moment so the
+    // session is not deleted while the task may still be running.
+    start = millis();
+    while (!pingResult.finished && millis() - start < 1000) {
+        esp_task_wdt_reset();
+        delay(10);
+    }
+    esp_ping_delete_session(handle);
+
+    LOG("WIFI", "Gateway %s probe: %s", staticGateway.c_str(), pingResult.replied ? "reachable" : "no reply");
+    return pingResult.replied;
+}
+
 void WiFiManager::tick() {
     // Re-evaluate the AP regardless of STA state , this also handles the
     // recovery case where credentials are wiped via the API.
@@ -410,6 +569,7 @@ void WiFiManager::tick() {
 
     WiFi.disconnect(true);
     delay(100);
+    applyStaticIp(/*logSuccess=*/false);
     WiFi.begin(ssid.c_str(), password.c_str());
 
     // Brief wait — shorter than initial connect but still blocks loop().
@@ -472,9 +632,26 @@ String WiFiManager::wifiStatusReason(wl_status_t status) {
 }
 
 void WiFiManager::saveCredentials(const String& ssid, const String& password) {
+    String previousSsid;
+    String previousPassword;
+    bool hadCredentials = loadCredentials(previousSsid, previousPassword);
+
     prefs.putString(NVS_KEY_WIFI_SSID, ssid);
     prefs.putString(NVS_KEY_WIFI_PASS, password);
     LOG("WIFI", "Credentials saved");
+
+    // A static IP belongs to the network it was set up for. When the saved
+    // network changes, drop back to DHCP so the device stays reachable on the
+    // new network (and on the next boot).
+    if (staticIpEnabled && (!hadCredentials || previousSsid != ssid)) {
+        staticIpEnabled = false;
+        LOG("WIFI", "Saved network changed (%s -> %s), static IP disabled",
+            hadCredentials ? previousSsid.c_str() : "(none)", ssid.c_str());
+        dataLogger.logWifi("static_ip_disabled",
+                           {{"previousSsid", previousSsid, FIELD_STRING}, {"ssid", ssid, FIELD_STRING}});
+        if (networkChangeCb)
+            networkChangeCb();
+    }
 }
 
 bool WiFiManager::loadCredentials(String& ssid, String& password) {
@@ -610,6 +787,7 @@ void WiFiManager::getStatus(std::function<void(bool, const WiFiStatus&)> cb) {
         s.apClients = WiFi.softAPgetStationNum();
     }
     s.apFallbackOnDisconnect = apFallbackOnDisconnect;
+    s.staticIpBypassed = staticIpBypassed;
     s.lastError = lastStaError;
     cb(true, s);
 }

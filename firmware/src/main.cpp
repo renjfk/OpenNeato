@@ -57,6 +57,9 @@ void setup() {
     settingsManager.onApFallbackChange([&](bool enabled) { wifiManager.setApFallbackOnDisconnect(enabled); });
     settingsManager.begin();
 
+    // Drop the static IP when the device is provisioned for a different network
+    wifiManager.onNetworkChanged([&] { settingsManager.disableStaticIp(); });
+
     // Push initial AP fallback policy into WiFiManager before begin()
     wifiManager.setApFallbackOnDisconnect(settingsManager.get().apFallbackOnDisconnect);
 
@@ -66,6 +69,9 @@ void setup() {
     manualClean.setBrushRpm(s.brushRpm);
     manualClean.setVacuumSpeed(s.vacuumSpeed);
     manualClean.setSideBrushPower(s.sideBrushPower);
+
+    // Push static IP config before begin() so the first connect attempt uses it
+    wifiManager.setStaticIp(s.staticIpEnabled, s.staticIp, s.staticGateway, s.staticSubnet, s.staticDns);
 
     // Initialize notification manager
     notifMgr.begin();

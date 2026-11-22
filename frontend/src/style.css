@@ -1651,6 +1651,11 @@ input:disabled {
     text-align: center;
 }
 
+.loading-link {
+    color: var(--accent, #5ac8fa);
+    overflow-wrap: anywhere;
+}
+
 /* Logs page */
 
 .logs-page {

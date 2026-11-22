@@ -21,6 +21,8 @@
        //   34 = 8.5 dBm,  52 = 13 dBm,  60 = 15 dBm (recommended)
        //   68 = 17 dBm,  78 = 19.5 dBm
 #define WIFI_MAX_RECONNECT_BACKOFF 30000 // Max backoff between reconnect attempts (ms)
+#define GATEWAY_PROBE_TIMEOUT_MS 5000 // Static IP: wait this long for a gateway ICMP reply
+#define GATEWAY_PROBE_RETRY_DELAY_MS 1500 // Static IP: pause before the second gateway probe
 
 // Pin Configuration — boot/reset button and default UART pins vary by chip.
 // Original ESP32: BOOT is GPIO0, GPIO1/3 are the USB-UART bridge (U0TXD/U0RXD).
@@ -128,6 +130,13 @@ enum CommandStatus {
 #define AP_SUBNET IPAddress(255, 255, 255, 0)
 #define AP_CHANNEL 1
 #define AP_MAX_CONNECTIONS 4
+
+// NVS keys, static IP
+#define NVS_KEY_STATIC_IP_ENABLED "static_ip_on"
+#define NVS_KEY_STATIC_IP "static_ip"
+#define NVS_KEY_STATIC_GATEWAY "static_gw"
+#define NVS_KEY_STATIC_SUBNET "static_mask"
+#define NVS_KEY_STATIC_DNS "static_dns"
 
 // NVS keys — Time/NTP
 #define NVS_KEY_TIMEZONE "tz"

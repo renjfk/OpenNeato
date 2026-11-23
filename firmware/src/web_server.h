@@ -4,6 +4,7 @@
 #include <ESPAsyncWebServer.h>
 #include <array>
 #include <functional>
+#include <map>
 #include <initializer_list>
 #include <tuple>
 #include "config.h"
@@ -13,6 +14,7 @@
 class NeatoSerial;
 class SystemManager;
 class FirmwareManager;
+class FirmwareUpdater;
 class SettingsManager;
 class ManualCleanManager;
 class NotificationManager;
@@ -23,8 +25,8 @@ class Scheduler;
 class WebServer {
 public:
     WebServer(AsyncWebServer& server, NeatoSerial& neato, DataLogger& logger, SystemManager& sys, FirmwareManager& fw,
-              SettingsManager& settings, ManualCleanManager& manual, NotificationManager& notif,
-              CleaningHistory& history, WiFiManager& wifi, Scheduler& scheduler);
+              FirmwareUpdater& updater, SettingsManager& settings, ManualCleanManager& manual,
+              NotificationManager& notif, CleaningHistory& history, WiFiManager& wifi, Scheduler& scheduler);
     void begin();
 
     // Last time any API request was received (millis()). Any module can check
@@ -37,12 +39,23 @@ private:
     DataLogger& logger;
     SystemManager& sysMgr;
     FirmwareManager& fwMgr;
+    FirmwareUpdater& updaterMgr;
     SettingsManager& settingsMgr;
     ManualCleanManager& manualMgr;
     NotificationManager& notifMgr;
     CleaningHistory& historyMgr;
     WiFiManager& wifiMgr;
     Scheduler& scheduler;
+
+    // Per-request firmware upload state. Only one request can own the flasher,
+    // but concurrent requests (two tabs) each keep their own outcome. The
+    // AsyncTCP task owns every request callback, so no lock is needed here.
+    struct WebUpload {
+        uint32_t session = 0;
+        String error;
+    };
+    std::map<AsyncWebServerRequest *, WebUpload> webUploads;
+    void finishWebUpload(AsyncWebServerRequest *request);
 
     void registerCrossSiteGuard();
     void registerApiRoutes();

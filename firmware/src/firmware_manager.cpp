@@ -48,10 +48,65 @@ bool FirmwareManager::validateChip(uint8_t *data, size_t len) {
     return true;
 }
 
-bool FirmwareManager::beginUpdate(const String& md5Hash) {
+bool FirmwareManager::supportsSignedUpdates() const {
+    return OTA_KEYS_ARE_RELEASE && updateKeysConfigured();
+}
+
+void FirmwareManager::releaseSession(uint32_t session) {
+    portENTER_CRITICAL(&sessionMux);
+    if (activeSession == session) {
+        activeSession = 0;
+    }
+    portEXIT_CRITICAL(&sessionMux);
+}
+
+void FirmwareManager::abortUpdate(uint32_t session) {
+    if (!ownsSession(session)) {
+        return; // Never touch a session owned by another caller
+    }
+    if (Update.isRunning()) {
+        Update.abort();
+    }
+    token.clear();
+    chipValidated = false;
+    currentProgress = 0;
+    releaseSession(session);
+}
+
+uint32_t FirmwareManager::beginUpdate(const String& md5Hash, const String& tokenText, const String& expectedVersion,
+                                      bool *busy) {
+    if (busy) {
+        *busy = false;
+    }
+
+    // Claim the flasher atomically: the web server and the automatic updater run
+    // on different tasks, and on dual-core boards truly in parallel.
+    uint32_t session = 0;
+    portENTER_CRITICAL(&sessionMux);
+    if (activeSession == 0) {
+        session = nextSession++;
+        if (nextSession == 0) {
+            nextSession = 1;
+        }
+        activeSession = session;
+    }
+    portEXIT_CRITICAL(&sessionMux);
+
+    if (!session) {
+        if (busy) {
+            *busy = true;
+        }
+        LOG("FW", "Update refused: another session is running");
+        return 0;
+    }
+
     currentProgress = 0;
     chipValidated = false;
     updateError = "";
+
+    // Drop token state from an interrupted signed attempt, so a manual upload
+    // never inherits its size or hash.
+    token.clear();
 
     // Abort any stale Update from a previous failed attempt — the ESP32
     // Update singleton keeps _size > 0 after a failed upload, which causes
@@ -61,35 +116,54 @@ bool FirmwareManager::beginUpdate(const String& md5Hash) {
         LOG("FW", "Aborted stale update from previous attempt");
     }
 
-    if (md5Hash.isEmpty()) {
-        updateError = "MD5 hash required";
-        LOG("FW", "%s", updateError.c_str());
-        return false;
-    }
-    if (!Update.setMD5(md5Hash.c_str())) {
-        updateError = "MD5 parameter invalid";
-        LOG("FW", "%s", updateError.c_str());
-        return false;
-    }
-    LOG("FW", "MD5 hash set: %s", md5Hash.c_str());
+    auto reject = [this, session](const String& reason) {
+        updateError = reason;
+        LOG("FW", "Update rejected: %s", reason.c_str());
+        dataLogger.logOta("reject", {{"reason", reason, FIELD_STRING}});
+        abortUpdate(session);
+        return 0;
+    };
 
-    LOG("FW", "Update started");
-    updateInProgress = true;
+    // A signed token takes precedence: it pins the exact image and version.
+    if (!tokenText.isEmpty()) {
+        String tokenError;
+        if (!token.authorize(tokenText, tokenError, expectedVersion)) {
+            return reject(tokenError);
+        }
+        LOG("FW", "Signed update accepted: version %s, %zu bytes", token.getVersion().c_str(), token.getSize());
+        token.beginHash();
+    } else {
+        if (md5Hash.isEmpty()) {
+            return reject("MD5 hash or update token required");
+        }
+        if (!Update.setMD5(md5Hash.c_str())) {
+            return reject("MD5 parameter invalid");
+        }
+        LOG("FW", "MD5 hash set: %s", md5Hash.c_str());
+    }
+
+    LOG("FW", "Update started (session %lu)", static_cast<unsigned long>(session));
     dataLogger.logOta("start", {});
 
-    if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) {
+    // Reserve exactly the signed size when available, so a short or padded
+    // image fails at end() instead of writing past the intended image.
+    size_t expected = token.isActive() ? token.getSize() : UPDATE_SIZE_UNKNOWN;
+    if (!Update.begin(expected, U_FLASH)) {
         StreamString err;
         Update.printError(err);
         updateError = err.c_str();
         LOG("FW", "Failed to start: %s", updateError.c_str());
-        updateInProgress = false;
-        return false;
+        abortUpdate(session);
+        return 0;
     }
 
-    return true;
+    return session;
 }
 
-bool FirmwareManager::writeChunk(uint8_t *data, size_t len) {
+bool FirmwareManager::writeChunk(uint32_t session, uint8_t *data, size_t len) {
+    if (!ownsSession(session)) {
+        return false;
+    }
     if (updateError.length()) {
         return false;
     }
@@ -97,8 +171,7 @@ bool FirmwareManager::writeChunk(uint8_t *data, size_t len) {
     // Validate chip ID from image header on first chunk
     if (!chipValidated && len >= 16) {
         if (!validateChip(data, len)) {
-            Update.abort();
-            updateInProgress = false;
+            abortUpdate(session);
             return false;
         }
         chipValidated = true;
@@ -112,16 +185,33 @@ bool FirmwareManager::writeChunk(uint8_t *data, size_t len) {
         return false;
     }
 
+    token.updateHash(data, len);
     currentProgress += len;
     return true;
 }
 
-bool FirmwareManager::endUpdate() {
+bool FirmwareManager::endUpdate(uint32_t session) {
+    if (!ownsSession(session)) {
+        return false;
+    }
+
+    // Signature-implied hash check runs before end(), because end() commits the
+    // image to the OTA slot.
+    String hashError;
+    if (!token.finishHash(hashError)) {
+        updateError = hashError;
+        abortUpdate(session);
+        LOG("FW", "%s", updateError.c_str());
+        dataLogger.logOta("reject", {{"reason", updateError, FIELD_STRING}});
+        return false;
+    }
+
     if (!Update.end(true)) {
         StreamString err;
         Update.printError(err);
         updateError = err.c_str();
         LOG("FW", "Finalize error: %s", updateError.c_str());
+        abortUpdate(session);
         return false;
     }
 
@@ -129,6 +219,8 @@ bool FirmwareManager::endUpdate() {
 
     dataLogger.logOta("end", {{"ok", "true", FIELD_BOOL}});
 
+    // Keep the session claimed until the reboot so nothing else can start
+    // writing to the slot in the meantime.
     rebootRequestMs = millis();
     rebootPending = true;
     return true;

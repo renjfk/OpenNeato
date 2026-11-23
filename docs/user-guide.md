@@ -15,6 +15,10 @@ Everything you need to set up, configure, and troubleshoot OpenNeato.
     - [Command Reference](#command-reference)
     - [Manual Flashing with esptool](#manual-flashing-with-esptool)
     - [Troubleshooting Flash Issues](#troubleshooting-flash-issues)
+- [Updating an Installed Bridge](#updating-an-installed-bridge)
+    - [Install a release](#install-a-release)
+    - [Automatic updates](#automatic-updates)
+    - [Manual install](#manual-install)
 - [First-Time Setup](#first-time-setup)
     - [WiFi Setup](#wifi-setup)
     - [UART Pin Configuration](#uart-pin-configuration)
@@ -330,6 +334,41 @@ again. If using `-firmware`, make sure `checksums.txt` matches the archive.
 Windows, close any other serial monitor that might have the port open.
 
 ---
+
+## Updating an Installed Bridge
+
+Once the bridge is running, firmware updates do not need a cable. Open the web
+UI, go to **Settings → Firmware**.
+
+### Install a release
+
+The **Releases** list shows versions published for your board. Tap **Install**
+next to one and leave the page open: the browser downloads the image, sends it
+to the bridge, and the bridge reboots when it is done.
+
+Pre-releases appear with a `pre-release` badge. They contain the newest changes
+and are how you help test upcoming releases; install them only if you are
+comfortable recovering with a cable if something goes wrong.
+
+### Automatic updates
+
+Turn on **Install updates automatically** to let the bridge install new stable
+releases on its own. It only does this while the robot is docked and idle, so a
+clean is never interrupted, and pre-releases are never installed this way.
+
+The robot may reboot once during the install. Nothing else is needed.
+
+### Manual install
+
+The upload field installs a `.bin` from your computer. Use it for custom builds,
+for installing an image you already have, or when the bridge cannot reach the
+update host. This path is unchanged from earlier versions and still accepts a
+`checksums.txt` to verify the file.
+
+If the bridge refuses an image from the release list, the message says why, for
+example `Update is for esp32-c3, this device is seeed-xiao-esp32c3` (wrong
+board), `Update signature invalid` (not an official build), or `Update is not
+newer than running firmware` (older than what is installed).
 
 ## First-Time Setup
 

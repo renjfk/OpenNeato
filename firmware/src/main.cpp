@@ -5,6 +5,7 @@
 #include "config.h"
 #include "wifi_manager.h"
 #include "firmware_manager.h"
+#include "firmware_updater.h"
 #include "system_manager.h"
 #include "settings_manager.h"
 #include "web_server.h"
@@ -25,12 +26,13 @@ SettingsManager settingsManager(prefs);
 DataLogger dataLogger(neatoSerial, systemManager);
 WiFiManager wifiManager(prefs, dataLogger);
 FirmwareManager firmwareManager(dataLogger);
+FirmwareUpdater firmwareUpdater(dataLogger, settingsManager, firmwareManager, neatoSerial);
 Scheduler scheduler(settingsManager, systemManager, neatoSerial, dataLogger, prefs);
 ManualCleanManager manualClean(neatoSerial);
 NotificationManager notifMgr(neatoSerial, settingsManager, dataLogger);
 CleaningHistory cleaningHistory(neatoSerial, dataLogger, systemManager);
-WebServer webServer(server, neatoSerial, dataLogger, systemManager, firmwareManager, settingsManager, manualClean,
-                    notifMgr, cleaningHistory, wifiManager, scheduler);
+WebServer webServer(server, neatoSerial, dataLogger, systemManager, firmwareManager, firmwareUpdater, settingsManager,
+                    manualClean, notifMgr, cleaningHistory, wifiManager, scheduler);
 
 // Tracks whether web server has been started (may be deferred if WiFi was slow at boot)
 bool webServerStarted = false;
@@ -251,6 +253,11 @@ void loop() {
     // the AP.
     if (wifiManager.isConnected() || wifiManager.isApActive()) {
         firmwareManager.loop();
+        // Unattended signed updates. Never runs during an upload and only while
+        // the robot is docked and idle, so a reboot cannot interrupt a clean.
+        if (!firmwareManager.isInProgress()) {
+            firmwareUpdater.loop();
+        }
 
         // Skip other operations during firmware update
         if (firmwareManager.isInProgress()) {

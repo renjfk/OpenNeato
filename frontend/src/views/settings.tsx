@@ -44,6 +44,7 @@ import {
 import { findPresetLabel } from "./settings/helpers";
 import { SettingsCategory } from "./settings/settings-category";
 import { useFirmwareUpload } from "./settings/use-firmware-upload";
+import { UpdateSection } from "./settings/update-section";
 import { useReboot } from "./settings/use-reboot";
 import { useSettingsForm } from "./settings/use-settings-form";
 import { WiFiSection } from "./settings/wifi-section";
@@ -103,7 +104,20 @@ export function SettingsView({
     const [errors, errorStack] = useErrorStack();
     const { rebooting, startRebootFlow } = useReboot(system?.uptime ?? 0);
 
-    const fw = useFirmwareUpload(firmware?.chip ?? null, errorStack, startRebootFlow);
+    const fw = useFirmwareUpload(firmware?.chip ?? null, firmware?.board ?? null, errorStack, startRebootFlow);
+
+    // Nudge the bridge to run its automatic update check now instead of waiting
+    // for the periodic one.
+    const [checkingUpdate, setCheckingUpdate] = useState(false);
+    const [updateCheckResult, setUpdateCheckResult] = useState<string | null>(null);
+    const handleCheckForUpdate = useCallback(() => {
+        setCheckingUpdate(true);
+        api.checkForFirmwareUpdate()
+            .then(() => setUpdateCheckResult("Check requested"))
+            .catch((e: unknown) => errorStack.push(normalizeError(e, "Update check failed")))
+            .finally(() => setCheckingUpdate(false));
+    }, [errorStack]);
+    const installingFirmware = fw.status !== "idle" && fw.status !== "done";
 
     const {
         tz,
@@ -153,6 +167,9 @@ export function SettingsView({
         setAutoRestartTime,
         restartBeforeClean,
         setRestartBeforeClean,
+        autoUpdate,
+        setAutoUpdate,
+        savedAutoUpdate,
         isDirty,
         pinError,
         hostnameError,
@@ -895,9 +912,48 @@ export function SettingsView({
                                 <span>{firmware?.chip ?? "..."}</span>
                             </div>
                         </div>
+                        <div class="settings-toggle-row">
+                            <div class="settings-toggle-label">
+                                <span class="settings-toggle-title">
+                                    <T>Install updates automatically</T>
+                                </span>
+                                <span class="settings-toggle-desc">
+                                    <T>Stable releases only, installed while the robot is docked and idle</T>
+                                </span>
+                            </div>
+                            <button
+                                type="button"
+                                class={`settings-toggle${autoUpdate ? " on" : ""}`}
+                                onClick={() => setAutoUpdate(!autoUpdate)}
+                                disabled={saving || !firmware?.signedUpdates}
+                                aria-label={t("Toggle automatic updates")}
+                            />
+                        </div>
+                        {autoUpdate && savedAutoUpdate && (
+                            <div class="fw-check-row">
+                                <button
+                                    type="button"
+                                    class="fw-release-refresh"
+                                    onClick={handleCheckForUpdate}
+                                    disabled={checkingUpdate || installingFirmware}
+                                >
+                                    {checkingUpdate ? t("Checking...") : t("Check now")}
+                                </button>
+                                {updateCheckResult && <span class="fw-check-result">{t(updateCheckResult)}</span>}
+                            </div>
+                        )}
                     </div>
-                    <div class="settings-section" role="group" aria-label={t("Update")}>
-                        {fw.status === "idle" && (
+                    <UpdateSection
+                        firmware={firmware}
+                        installing={installingFirmware}
+                        onInstall={(release) => void fw.installRelease(release)}
+                        errorStack={errorStack}
+                    />
+                    {fw.status === "idle" && (
+                        <div class="settings-section" role="group" aria-label={t("Update")}>
+                            <div class="fw-manual-title">
+                                <T>Manual install</T>
+                            </div>
                             <>
                                 <label class="fw-file-label">
                                     <input
@@ -970,40 +1026,55 @@ export function SettingsView({
                                     </>
                                 )}
                             </>
-                        )}
-                        {fw.status === "hashing" && (
-                            <div class="fw-progress-wrap">
-                                <div class="fw-progress-bar">
-                                    <div class="fw-progress-fill indeterminate" />
+                        </div>
+                    )}
+                    {/* A signed install shows the same progress UI, outside the manual section. */}
+                    {fw.status !== "idle" && (
+                        <div class="settings-section" role="group" aria-label={t("Update")}>
+                            {fw.status === "downloading" && (
+                                <div class="fw-progress-wrap">
+                                    <div class="fw-progress-bar">
+                                        <div class="fw-progress-fill" style={{ width: `${fw.progress}%` }} />
+                                    </div>
+                                    <div class="fw-progress-text">
+                                        {t("Downloading firmware... {progress}%", { progress: fw.progress })}
+                                    </div>
                                 </div>
-                                <div class="fw-progress-text">
-                                    <T>Computing checksum...</T>
+                            )}
+                            {fw.status === "hashing" && (
+                                <div class="fw-progress-wrap">
+                                    <div class="fw-progress-bar">
+                                        <div class="fw-progress-fill indeterminate" />
+                                    </div>
+                                    <div class="fw-progress-text">
+                                        <T>Computing checksum...</T>
+                                    </div>
                                 </div>
-                            </div>
-                        )}
-                        {fw.status === "uploading" && (
-                            <div class="fw-progress-wrap">
-                                <div class="fw-progress-bar">
-                                    <div class="fw-progress-fill" style={{ width: `${fw.progress}%` }} />
+                            )}
+                            {fw.status === "uploading" && (
+                                <div class="fw-progress-wrap">
+                                    <div class="fw-progress-bar">
+                                        <div class="fw-progress-fill" style={{ width: `${fw.progress}%` }} />
+                                    </div>
+                                    <div class="fw-progress-text">
+                                        {fw.progress >= 90
+                                            ? t("Writing firmware...")
+                                            : t("Uploading... {progress}%", { progress: fw.progress })}
+                                    </div>
                                 </div>
-                                <div class="fw-progress-text">
-                                    {fw.progress >= 90
-                                        ? t("Writing firmware...")
-                                        : t("Uploading... {progress}%", { progress: fw.progress })}
+                            )}
+                            {fw.status === "done" && (
+                                <div class="fw-progress-wrap">
+                                    <div class="fw-progress-bar">
+                                        <div class="fw-progress-fill" style={{ width: "100%" }} />
+                                    </div>
+                                    <div class="fw-progress-text">
+                                        <T>Upload complete. Rebooting...</T>
+                                    </div>
                                 </div>
-                            </div>
-                        )}
-                        {fw.status === "done" && (
-                            <div class="fw-progress-wrap">
-                                <div class="fw-progress-bar">
-                                    <div class="fw-progress-fill" style={{ width: "100%" }} />
-                                </div>
-                                <div class="fw-progress-text">
-                                    <T>Upload complete. Rebooting...</T>
-                                </div>
-                            </div>
-                        )}
-                    </div>
+                            )}
+                        </div>
+                    )}
                 </SettingsCategory>
 
                 <SettingsCategory title={t("Diagnostics")} icon={stethoscopeSvg} lazy>

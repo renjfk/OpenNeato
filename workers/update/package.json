@@ -1,0 +1,13 @@
+{
+    "name": "openneato-update-worker",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "test": "node --test test/*.test.js",
+        "dev": "wrangler dev",
+        "deploy": "wrangler deploy"
+    },
+    "devDependencies": {
+        "wrangler": "4.120.1"
+    }
+}

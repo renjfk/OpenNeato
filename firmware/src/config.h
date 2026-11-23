@@ -6,9 +6,21 @@
 #define FIRMWARE_VERSION "0.0"
 #endif
 
+// OTA image bounds. The app slots in firmware/partition.csv are 0x190000 bytes;
+// anything bigger cannot be flashed, and a signed token never legitimately is.
+#define OTA_MAX_IMAGE_BYTES 0x190000
+
 // Chip model — passed via build flag (-DCHIP_MODEL=...) from board section in platformio.ini
 #ifndef CHIP_MODEL
 #error "CHIP_MODEL must be defined (e.g. -DCHIP_MODEL=\\\"ESP32-C3\\\")"
+#endif
+
+// Board identifier used for release asset names, update tokens, and signed
+// update verification. Derived from the artifact name by scripts/env_config.py,
+// which injects -DBOARD_ID. Boards sharing a chip (XIAO vs generic C3) must
+// differ, otherwise the wrong image would be offered.
+#ifndef BOARD_ID
+#define BOARD_ID "unknown"
 #endif
 
 // WiFi Configuration
@@ -168,6 +180,24 @@ enum CommandStatus {
 #define NVS_KEY_NTFY_ON_ERR "ntfy_on_err"
 #define NVS_KEY_NTFY_ON_ALERT "ntfy_on_alrt"
 #define NVS_KEY_NTFY_ON_DOCK "ntfy_on_dock"
+
+// NVS keys — Firmware updates
+#define NVS_KEY_AUTO_UPDATE "auto_upd"
+
+// Signed update source. Checked over plain HTTP; trust comes from the signed
+// token, not from the transport. Override the host with -DOTA_UPDATE_HOST=...
+// when running your own copy of workers/update.
+#ifndef OTA_UPDATE_HOST
+#define OTA_UPDATE_HOST "openneato-update.renjfk.com"
+#endif
+#ifndef OTA_UPDATE_PORT
+#define OTA_UPDATE_PORT 80
+#endif
+#define OTA_CHECK_INTERVAL_MS (6UL * 60UL * 60UL * 1000UL) // 6 hours between checks
+#define OTA_RETRY_INTERVAL_MS (60UL * 60UL * 1000UL) // 1 hour after a failed attempt
+#define OTA_CONNECT_TIMEOUT_MS 5000
+#define OTA_FEED_TIMEOUT_MS 30000 // Whole feed request, not just one read
+#define OTA_DOWNLOAD_TIMEOUT_MS (5UL * 60UL * 1000UL) // Whole image transfer
 
 // NVS keys — Schedule (ESP32-managed, not robot serial)
 #define NVS_KEY_SCHED_ENABLED "sched_on"

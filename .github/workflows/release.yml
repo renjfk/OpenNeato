@@ -18,15 +18,20 @@ on:
         type: boolean
         default: false
 
+# Least privilege: only the jobs that push the tag or publish the release need
+# write access; the rest, including the signing jobs, are read-only.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   prepare:
     name: Prepare Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       version: ${{ steps.version.outputs.version }}
+      signing_ref: ${{ steps.version.outputs.signing_ref }}
 
     steps:
       - name: Checkout code
@@ -74,7 +79,16 @@ jobs:
             git tag -a "$RELEASE_TAG" -m "Release $RELEASE_TAG"
             git push origin "$RELEASE_TAG"
           else
-            echo "Tag $RELEASE_TAG already exists"
+            # An existing tag must already be part of the default branch. Without
+            # this, anything holding a write token (for example a prerelease
+            # workflow run) could point a stable tag at unreviewed code and have
+            # this workflow build, sign and publish it.
+            DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+            if ! git merge-base --is-ancestor "${RELEASE_TAG}^{commit}" "origin/${DEFAULT_BRANCH}"; then
+              echo "Tag ${RELEASE_TAG} is not on ${DEFAULT_BRANCH}; refusing to release it" >&2
+              exit 1
+            fi
+            echo "Tag $RELEASE_TAG already exists and is on ${DEFAULT_BRANCH}"
           fi
 
       - name: Extract version from tag
@@ -82,8 +96,57 @@ jobs:
         run: |
           RELEASE_TAG="${{ github.event.inputs.release_tag }}"
           VERSION=${RELEASE_TAG#v}
+          DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+          SIGNING_REF=$(git rev-parse "origin/${DEFAULT_BRANCH}")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Setting version to: $VERSION"
+          echo "signing_ref=$SIGNING_REF" >> "$GITHUB_OUTPUT"
+          echo "Setting version to: $VERSION (signing scripts at $SIGNING_REF)"
+
+  signing-key:
+    name: Derive signing key
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      # Trusted code only: the key is handed to scripts from the default branch,
+      # never to whatever an arbitrary ref contains.
+      - name: Checkout signing scripts
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.signing_ref }}
+          persist-credentials: false
+
+      # Firmware only trusts releases signed by this key. The header is derived
+      # from the secret and handed to the firmware jobs, so a stale or wrong key
+      # in the repository cannot ship: devices would reject it.
+      # vars.OTA_ROTATION_PUBLIC_KEY adds the next key while the current secret
+      # still signs (see the rotation steps in docs/firmware-signing.md).
+      - name: Derive firmware signing public key
+        env:
+          OTA_SIGNING_KEY: ${{ secrets.OTA_SIGNING_KEY }}
+          ROTATION_KEY: ${{ vars.OTA_ROTATION_PUBLIC_KEY }}
+        run: |
+          if [ -z "$OTA_SIGNING_KEY" ]; then
+            echo "OTA_SIGNING_KEY secret is not set (see docs/firmware-signing.md)" >&2
+            exit 1
+          fi
+          key="$RUNNER_TEMP/ota-signing-key.pem"
+          header=firmware/src/ota_public_keys.h
+          printf '%s' "$OTA_SIGNING_KEY" > "$key"
+          if [ -n "$ROTATION_KEY" ]; then
+            python3 scripts/ota_keygen.py --key "$key" --release --extra-key "$ROTATION_KEY" --out-header "$header"
+          else
+            python3 scripts/ota_keygen.py --key "$key" --release --out-header "$header"
+          fi
+          rm -f "$key"
+
+      - name: Upload firmware signing public key
+        uses: actions/upload-artifact@v7
+        with:
+          name: ota-pubkey
+          path: firmware/src/ota_public_keys.h
 
   resolve-firmware-envs:
     name: Resolve firmware environments
@@ -103,6 +166,8 @@ jobs:
         uses: ./.github/actions/list-pio-envs
         with:
           mode: release
+          # No pip cache: prerelease runs write the same cache keys.
+          cache: "false"
 
   frontend-assets:
     name: Build frontend assets
@@ -139,7 +204,7 @@ jobs:
 
   firmware:
     name: Firmware (${{ matrix.env }})
-    needs: [prepare, resolve-firmware-envs, frontend-assets]
+    needs: [prepare, resolve-firmware-envs, frontend-assets, signing-key]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -159,22 +224,19 @@ jobs:
           name: web-assets
           path: firmware/src
 
+      - name: Download firmware signing public key
+        uses: actions/download-artifact@v8
+        with:
+          name: ota-pubkey
+          path: firmware/src
+
+      # No pip or PlatformIO cache here: the prerelease workflow runs code from
+      # pull requests and can write the same cache keys, and a release image must
+      # not be built with a toolchain an untrusted run could have replaced.
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: .github/platformio-requirements.txt
-
-      - name: Cache PlatformIO
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.platformio/.cache
-            ~/.platformio/platforms
-            ~/.platformio/packages
-            .pio/libdeps
-          key: platformio-${{ matrix.env }}-${{ hashFiles('platformio.ini') }}
 
       - name: Install PlatformIO
         run: pip install -r .github/platformio-requirements.txt
@@ -182,9 +244,10 @@ jobs:
       - name: Build firmware and package release artifacts
         env:
           FIRMWARE_VERSION: ${{ needs.prepare.outputs.version }}
+          PIO_ENV: ${{ matrix.env }}
         run: |
-          echo "Building ${{ matrix.env }}..."
-          pio run -e "${{ matrix.env }}"
+          echo "Building $PIO_ENV..."
+          pio run -e "$PIO_ENV"
 
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v7
@@ -194,10 +257,68 @@ jobs:
             .pio/build/${{ matrix.env }}/*-firmware.bin
             .pio/build/${{ matrix.env }}/*-full.tar.gz
 
+  sign-artifacts:
+    name: Sign firmware artifacts
+    needs: [prepare, firmware]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      # Trusted code only, as in the signing-key job.
+      - name: Checkout signing scripts
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.signing_ref }}
+          persist-credentials: false
+
+      - name: Download firmware artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: '*-release'
+          path: .pio/build
+
+      # Each <board>-firmware.bin gets a sibling .token that the firmware and
+      # the update host serve. Devices verify the token against the public key
+      # compiled into the image, so this is what makes an unattended update
+      # trustworthy even though the transport is plain HTTP.
+      - name: Sign firmware images
+        env:
+          OTA_SIGNING_KEY: ${{ secrets.OTA_SIGNING_KEY }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          if [ -z "$OTA_SIGNING_KEY" ]; then
+            echo "OTA_SIGNING_KEY secret is not set (see docs/firmware-signing.md)" >&2
+            exit 1
+          fi
+          key="$RUNNER_TEMP/ota-signing-key.pem"
+          pubkey="$RUNNER_TEMP/ota-signing-key.pub.pem"
+          printf '%s' "$OTA_SIGNING_KEY" > "$key"
+          openssl pkey -in "$key" -pubout -out "$pubkey"
+
+          bins=$(find .pio/build -name 'openneato-*-firmware.bin' -type f)
+          if [ -z "$bins" ]; then
+            echo "no firmware images to sign" >&2
+            exit 1
+          fi
+          for bin in $bins; do
+            ./scripts/ota_sign.py sign --key "$key" --version "$VERSION" --bin "$bin"
+            ./scripts/ota_sign.py verify --pubkey "$pubkey" --bin "$bin" --token "$bin.token"
+          done
+          rm -f "$key" "$pubkey"
+
+      - name: Upload signed firmware artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: signed-firmware
+          path: .pio/build
+
   release:
     name: Build and Release
     runs-on: macos-latest
-    needs: [prepare, firmware]
+    needs: [prepare, sign-artifacts]
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
@@ -206,10 +327,10 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.inputs.release_tag }}
 
-      - name: Download firmware artifacts
+      - name: Download signed firmware artifacts
         uses: actions/download-artifact@v8
         with:
-          pattern: '*-release'
+          name: signed-firmware
           path: .pio/build
 
       # --- Flash tool + GitHub Release ---

@@ -116,3 +116,53 @@ jobs:
       - name: Build
         run: go build -o openneato-flash .
         working-directory: flash
+
+  update-worker:
+    name: Update Host
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      # No dependencies to install: the tests run the Worker handler directly.
+      - name: Test update host
+        run: npm test
+        working-directory: workers/update
+
+  signing-scripts:
+    name: Signing Scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # Round-trip a throwaway key so the signer and verifier cannot drift apart.
+      - name: Sign and verify a sample image
+        run: |
+          key="$RUNNER_TEMP/test-key.pem"
+          pub="$RUNNER_TEMP/test-key.pub.pem"
+          work="$RUNNER_TEMP/firmware"
+          mkdir -p "$work"
+          head -c 4096 /dev/urandom > "$work/openneato-esp32-c3-firmware.bin"
+
+          ./scripts/ota_keygen.py --out-key "$key" --out-header "$RUNNER_TEMP/ota_public_keys.h"
+          openssl pkey -in "$key" -pubout -out "$pub"
+          ./scripts/ota_sign.py sign --key "$key" --version 9.9 --bin "$work/openneato-esp32-c3-firmware.bin"
+          ./scripts/ota_sign.py verify --pubkey "$pub" \
+            --bin "$work/openneato-esp32-c3-firmware.bin" \
+            --token "$work/openneato-esp32-c3-firmware.bin.token"
+
+          # Tampering has to be detected.
+          printf 'x' >> "$work/openneato-esp32-c3-firmware.bin"
+          if ./scripts/ota_sign.py verify --pubkey "$pub" \
+            --bin "$work/openneato-esp32-c3-firmware.bin" \
+            --token "$work/openneato-esp32-c3-firmware.bin.token"; then
+            echo "verification accepted a tampered image" >&2
+            exit 1
+          fi

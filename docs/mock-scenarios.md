@@ -47,6 +47,10 @@ https://openneato-demo.renjfk.com/?scenario=man%7Cllq#/manual
 The demo persists the selected scenario in the same `openneato_scenario` cookie. Firmware and history uploads are
 blocked server-side in demo mode.
 
+The local dev server also answers the update host's `/v1/...` routes with two fake releases, a 64 KB firmware image,
+and a placeholder token, so the release list and the signed install flow can be exercised without a device or network
+access. The demo build lists real releases from the deployed update host without offering an install.
+
 ## Scenario keys
 
 Robot state:

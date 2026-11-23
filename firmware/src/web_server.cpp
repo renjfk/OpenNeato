@@ -5,6 +5,7 @@
 #include "system_manager.h"
 #include "settings_manager.h"
 #include "firmware_manager.h"
+#include "firmware_updater.h"
 #include "manual_clean_manager.h"
 #include "notification_manager.h"
 #include "cleaning_history.h"
@@ -15,10 +16,11 @@
 unsigned long WebServer::lastApiActivity = 0;
 
 WebServer::WebServer(AsyncWebServer& server, NeatoSerial& neato, DataLogger& logger, SystemManager& sys,
-                     FirmwareManager& fw, SettingsManager& settings, ManualCleanManager& manual,
-                     NotificationManager& notif, CleaningHistory& history, WiFiManager& wifi, Scheduler& scheduler) :
-    server(server), neato(neato), logger(logger), sysMgr(sys), fwMgr(fw), settingsMgr(settings), manualMgr(manual),
-    notifMgr(notif), historyMgr(history), wifiMgr(wifi), scheduler(scheduler) {}
+                     FirmwareManager& fw, FirmwareUpdater& updater, SettingsManager& settings,
+                     ManualCleanManager& manual, NotificationManager& notif, CleaningHistory& history,
+                     WiFiManager& wifi, Scheduler& scheduler) :
+    server(server), neato(neato), logger(logger), sysMgr(sys), fwMgr(fw), updaterMgr(updater), settingsMgr(settings),
+    manualMgr(manual), notifMgr(notif), historyMgr(history), wifiMgr(wifi), scheduler(scheduler) {}
 
 void WebServer::loggedRoute(const char *path, WebRequestMethodComposite httpMethod, SyncHandler handler) {
     server.on(path, httpMethod, [this, handler](AsyncWebServerRequest *request) {
@@ -355,6 +357,8 @@ void WebServer::registerFirmwareRoutes() {
                 {"name", "OpenNeato", FIELD_STRING},
                 {"version", fwMgr.getFirmwareVersion(), FIELD_STRING},
                 {"chip", fwMgr.getChipModel(), FIELD_STRING},
+                {"board", fwMgr.getBoardId(), FIELD_STRING},
+                {"signedUpdates", fwMgr.supportsSignedUpdates() ? "true" : "false", FIELD_BOOL},
                 {"model", neato.getModelName(), FIELD_STRING},
                 {"hostname", settingsMgr.get().hostname, FIELD_STRING},
                 {"supported", isSupportedModel(neato.getModelName()) ? "true" : "false", FIELD_BOOL},
@@ -366,41 +370,74 @@ void WebServer::registerFirmwareRoutes() {
         return 200;
     });
 
-    // POST /api/firmware/update?hash=<md5> — single-request firmware upload
+    // POST /api/firmware/update?hash=<md5>|token=<token> — single-request upload.
+    //
+    // The request owns the flasher from its first chunk until it responds or the
+    // client disconnects. Requests that do not own a session never call into the
+    // flasher, so a second browser tab (or a retry after a dropped connection)
+    // cannot interrupt an install in progress.
     server.on(
             "/api/firmware/update", HTTP_POST,
             // Response handler (called after upload completes)
             [this](AsyncWebServerRequest *request) {
                 unsigned long startMs = millis();
-                bool ok = fwMgr.getError().isEmpty();
+                auto it = webUploads.find(request);
+                WebUpload upload = it != webUploads.end() ? it->second : WebUpload{};
+                if (it != webUploads.end()) {
+                    webUploads.erase(it);
+                }
 
+                bool ok = upload.session != 0 && fwMgr.getError().isEmpty();
                 if (ok) {
-                    ok = fwMgr.endUpdate();
+                    ok = fwMgr.endUpdate(upload.session);
                 }
 
                 if (!ok) {
+                    String reason = upload.session != 0 ? fwMgr.getError() : upload.error;
+                    if (upload.session != 0) {
+                        fwMgr.abortUpdate(upload.session);
+                    }
+                    if (reason.isEmpty()) {
+                        reason = "Firmware upload failed";
+                    }
                     logger.logRequest(HTTP_POST, "/api/firmware/update", 400, millis() - startMs);
-                    sendError(request, 400, fwMgr.getError());
-                } else {
-                    logger.logRequest(HTTP_POST, "/api/firmware/update", 200, millis() - startMs);
-                    AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "OK");
-                    response->addHeader("Connection", "close");
-                    request->send(response);
+                    sendError(request, 400, reason);
+                    return;
                 }
+
+                logger.logRequest(HTTP_POST, "/api/firmware/update", 200, millis() - startMs);
+                AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", "OK");
+                response->addHeader("Connection", "close");
+                request->send(response);
             },
             // Upload handler (called per chunk)
             [this](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len,
                    bool final) {
-                // First chunk: initialize update session
-                if (!index) {
+                // First chunk of the first file part: claim the flasher. A
+                // signed token from a release manifest replaces the MD5 hash;
+                // manual uploads keep the hash. A second file part reuses the
+                // same entry rather than claiming again (which would orphan the
+                // session and leave the flasher held).
+                if (!index && webUploads.find(request) == webUploads.end()) {
+                    WebUpload& upload = webUploads[request];
                     String md5 = request->hasParam("hash") ? request->getParam("hash")->value() : "";
-                    if (!fwMgr.beginUpdate(md5)) {
-                        return;
+                    String token = request->hasParam("token") ? request->getParam("token")->value() : "";
+                    bool busy = false;
+                    upload.session = fwMgr.beginUpdate(md5, token, "", &busy);
+                    if (!upload.session) {
+                        // Do not read updateError: it may belong to the session
+                        // that is already running on the other task.
+                        upload.error = busy ? "Another update is in progress" : fwMgr.getError();
                     }
+
+                    // Registered for refusals too, so an abandoned request does
+                    // not leave its entry (and possibly a session) behind.
+                    request->onDisconnect([this, request] { finishWebUpload(request); });
                 }
 
-                if (len) {
-                    fwMgr.writeChunk(data, len);
+                auto it = webUploads.find(request);
+                if (len && it != webUploads.end() && it->second.session != 0) {
+                    fwMgr.writeChunk(it->second.session, data, len);
 
                     // Report progress at most once per second
                     static unsigned long lastProgressMs = 0;
@@ -417,8 +454,31 @@ void WebServer::registerFirmwareRoutes() {
                 }
             });
 
+    // POST /api/firmware/check — run the automatic update check on the next tick.
+    // Used by the UI right after enabling automatic updates, so the user does
+    // not have to wait for the periodic check.
+    loggedRoute("/api/firmware/check", HTTP_POST, [this](AsyncWebServerRequest *request) -> int {
+        updaterMgr.requestCheck();
+        sendOk(request);
+        return 200;
+    });
+
     LOG("WEB", "Firmware routes registered");
 }
+
+// Abandon a web upload whose client went away, so the flasher is released
+// instead of staying claimed until the device reboots.
+void WebServer::finishWebUpload(AsyncWebServerRequest *request) {
+    auto it = webUploads.find(request);
+    if (it == webUploads.end()) {
+        return;
+    }
+    if (it->second.session != 0) {
+        fwMgr.abortUpdate(it->second.session);
+    }
+    webUploads.erase(it);
+}
+
 
 // -- Map data endpoints -------------------------------------------------------
 

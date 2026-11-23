@@ -11,7 +11,11 @@ export default defineConfig(async ({ command, mode }) => {
         plugins: [preact(), ...(mockApiPlugin ? [mockApiPlugin()] : [])],
         define: {
             __DEMO_BUILD__: JSON.stringify(isDemo),
-            ...(isDev ? { __GITHUB_API_BASE__: JSON.stringify(`http://${serverHost}:${serverPort}`) } : {}),
+            // Release feed host. The Worker serves the listing, tokens, and
+            // firmware bytes with CORS enabled for the device's LAN origin.
+            __UPDATE_API_BASE__: JSON.stringify(
+                isDev ? `http://${serverHost}:${serverPort}` : "https://openneato-update.renjfk.com",
+            ),
         },
         server: {
             host: serverHost,

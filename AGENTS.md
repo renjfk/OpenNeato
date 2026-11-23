@@ -18,7 +18,8 @@ machines) is in [`docs/neato-serial-protocol.md`](docs/neato-serial-protocol.md)
 ## Architecture
 
 Three top-level components: `firmware/` (ESP32 C/C++), `frontend/` (Preact SPA),
-`flash/` (Go CLI). `platformio.ini` at root.
+`flash/` (Go CLI), plus `workers/update/` (Cloudflare Worker serving the signed
+release feed). `platformio.ini` at root.
 
 - Firmware: non-blocking `loop()`, managers wired via dependency injection in `main.cpp`
 - Frontend: hash-based routing, polling hooks, dark/light theme, mobile-first, embedded in firmware via PROGMEM
@@ -44,6 +45,25 @@ All significant events must be logged via `DataLogger` (injected by reference).
 needs logging, add a new typed helper following the existing pattern. Log both
 success and failure outcomes. At info level, only failures and state transitions
 are logged; at debug level, all serial commands including raw responses are included.
+
+### Firmware Updates
+
+Two install paths share one flasher, and both must keep working:
+
+- **Manual upload** (`POST /api/firmware/update?hash=<md5>`, no token) for custom
+  builds, offline installs and recovery. Never gate this behind signing.
+- **Signed release** (`?token=<token>`) used by the web UI and by automatic
+  updates. The token binds board, version, size and SHA-256 and is verified with
+  ECDSA P-256 against keys compiled into the firmware, because the device has no
+  TLS stack and fetches over plain HTTP.
+
+Invariants: release builds regenerate `firmware/src/ota_public_keys.h` from the
+`OTA_SIGNING_KEY` secret (the committed key is a development key, marked
+non-release); `BOARD_ID` must match the release artifact name; prereleases are
+never installed automatically; automatic installs only run while the robot is
+docked and idle. The signing key must only ever be handled by jobs checked out
+from the default branch — never by jobs that build a PR or branch ref.
+Details: [`docs/firmware-signing.md`](docs/firmware-signing.md).
 
 ### API Documentation
 
@@ -76,6 +96,11 @@ Verify firmware changes: `pio run -e c3-debug` + `./scripts/check_format.py` +
 Verify frontend changes: `npm run check` + `npm run build` in `frontend/`.
 
 Verify flash tool changes: `golangci-lint run ./...` + `go build` in `flash/`.
+
+Verify update host changes: `npm test` in `workers/update/`.
+
+Verify signing script changes: `./scripts/ota_sign.py sign ... --print` then
+`./scripts/ota_sign.py verify ...` with a throwaway key under `openssl`.
 
 Verify GitHub Actions workflow changes: install `actionlint` if missing, then run
 `actionlint` from the repository root.

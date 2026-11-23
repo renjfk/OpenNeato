@@ -5,6 +5,10 @@ inputs:
   mode:
     description: Environment mode suffix to list
     required: true
+  cache:
+    description: Restore the pip cache (disable where the caller must not read caches another workflow can write)
+    required: false
+    default: "true"
 
 outputs:
   envs-json:
@@ -21,7 +25,7 @@ runs:
       uses: actions/setup-python@v7
       with:
         python-version: "3.12"
-        cache: pip
+        cache: ${{ inputs.cache == 'true' && 'pip' || '' }}
         cache-dependency-path: .github/platformio-requirements.txt
 
     - name: Install PlatformIO

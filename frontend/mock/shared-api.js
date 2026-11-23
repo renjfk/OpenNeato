@@ -777,6 +777,8 @@ function createMockApi(context) {
                 name: "OpenNeato",
                 version,
                 chip: "ESP32-C3",
+                board: "esp32-c3",
+                signedUpdates: true,
                 model: state.identifying ? "" : state.unsupported ? "Botvac Connected" : "Botvac D7",
                 hostname: "neato-kitchen",
                 supported: !state.unsupported && !state.identifying,
@@ -788,7 +790,8 @@ function createMockApi(context) {
 
         if (method === "POST" && path === "/api/firmware/update") {
             const expectedMd5 = query.hash || "";
-            if (!expectedMd5) return errorResponse("MD5 hash required", 400);
+            const token = query.token || "";
+            if (!expectedMd5 && !token) return errorResponse("MD5 hash required", 400);
             const bodyBytes = await request.bytes();
             const fileBytes = extractFirmwarePayload(bodyBytes);
             if (fileBytes) {
@@ -796,10 +799,14 @@ function createMockApi(context) {
                 if (fileBytes.length >= 16 && fileBytes[12] !== mockChipId) {
                     return errorResponse("Firmware chip mismatch: file targets a different ESP32 variant", 400);
                 }
-                if (!context.md5Hex) return errorResponse("MD5 verification unavailable", 500);
-                const actualMd5 = await context.md5Hex(fileBytes);
-                if (actualMd5 !== expectedMd5.toLowerCase())
-                    return errorResponse("MD5 mismatch: firmware integrity check failed", 400);
+                if (expectedMd5) {
+                    if (!context.md5Hex) return errorResponse("MD5 verification unavailable", 500);
+                    const actualMd5 = await context.md5Hex(fileBytes);
+                    if (actualMd5 !== expectedMd5.toLowerCase())
+                        return errorResponse("MD5 mismatch: firmware integrity check failed", 400);
+                } else if (!token.startsWith("v1|")) {
+                    return errorResponse("Update token malformed", 400);
+                }
             }
             await sleep(rand(3000, 5000));
             context.reboot?.();

@@ -174,6 +174,12 @@ For frontend development without hardware, use the mock API scenarios documented
 [`docs/mock-scenarios.md`](docs/mock-scenarios.md). The same `?scenario=...` URLs work in local Vite dev and the
 Cloudflare demo.
 
+### Firmware updates
+
+Released firmware is signed, and the web UI installs it straight from the release
+feed without a cable. How the signing key, tokens and update host work:
+[docs/firmware-signing.md](docs/firmware-signing.md).
+
 ### Release Process
 
 Manual releases via opencode; see [RELEASE_PROCESS.md](RELEASE_PROCESS.md).

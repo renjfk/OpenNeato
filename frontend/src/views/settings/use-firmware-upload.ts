@@ -149,18 +149,18 @@ export function useFirmwareUpload(
 
     // Compute SHA-256 of firmware file and check against loaded checksums.
     // Uses pure-JS sha256 - crypto.subtle is unavailable over plain HTTP (non-secure context).
-    // Prefer an exact release filename match for board-specific builds, then fall back to the
-    // canonical chip filename so renamed downloads (e.g. "firmware(1).bin") still match.
+    // Prefer an exact release filename match. Board-specific builds share a chip ID, so a renamed
+    // download (e.g. "firmware(1).bin") matches if its hash equals any firmware entry.
     const verifyFirmwareFile = useCallback(async (fw: File, checksums: Map<string, string>) => {
         const buf = await fw.arrayBuffer();
         const hash = sha256(buf);
         const chip = parseChipFromBin(buf);
-        const lookupName = checksums.has(fw.name.toLowerCase())
-            ? fw.name
-            : chip
-              ? canonicalFirmwareName(chip)
-              : fw.name;
-        setChecksumResult(verifyChecksum(checksums, lookupName, hash));
+        if (checksums.has(fw.name.toLowerCase()) || !chip) {
+            setChecksumResult(verifyChecksum(checksums, fw.name, hash));
+            return;
+        }
+        const known = [...checksums].some(([name, sum]) => name.endsWith("-firmware.bin") && sum === hash);
+        setChecksumResult(known ? "match" : verifyChecksum(checksums, canonicalFirmwareName(chip), hash));
     }, []);
 
     const selectChecksumFile = useCallback(

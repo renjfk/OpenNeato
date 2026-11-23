@@ -198,14 +198,19 @@ tool refuses to flash.
 
 ### Command Reference
 
-| Flag          | Default       | Description                                             |
-|---------------|---------------|---------------------------------------------------------|
-| `-port`       | auto-detected | Serial port path (e.g. `/dev/ttyUSB0`, `COM3`)          |
-| `-chip`       | auto-detected | Chip type (e.g. `esp32-c3`, `esp32-s3`)                 |
-| `-firmware`   | —             | Path to a local `.tar.gz` firmware pack; skips download |
-| `-list`       | `false`       | List available serial ports and exit                    |
-| `-no-monitor` | `false`       | Skip the serial monitor after flashing                  |
-| `-monitor`    | `false`       | Open serial monitor only, don't flash                   |
+| Flag          | Default       | Description                                                                  |
+|---------------|---------------|------------------------------------------------------------------------------|
+| `-port`       | auto-detected | Serial port path (e.g. `/dev/ttyUSB0`, `COM3`)                               |
+| `-chip`       | auto-detected | Chip or board pack name (e.g. `esp32-c3`, `esp32-s3`, `seeed-xiao-esp32c3`)  |
+| `-firmware`   | —             | Path to a local `.tar.gz` firmware pack; skips download                      |
+| `-list`       | `false`       | List available serial ports and exit                                         |
+| `-no-monitor` | `false`       | Skip the serial monitor after flashing                                       |
+| `-monitor`    | `false`       | Open serial monitor only, don't flash                                        |
+
+> [!NOTE]
+> Auto-detection reports the chip, not the board. Both a generic ESP32-C3 and a Seeed XIAO
+> ESP32C3 report `esp32-c3`, so use `-chip seeed-xiao-esp32c3` when you need the Seeed-specific
+> pack. `-chip` accepts any pack name from the release.
 
 > [!IMPORTANT]
 > When using `-firmware` with a local firmware pack, place `checksums.txt` in the same
@@ -236,8 +241,9 @@ files, offsets, baud rate, compression, and reset behavior as `openneato-flash`.
    ./esptool chip-id
    ```
 
-   Look for a line like `Detecting chip type... ESP32-C3`, then use the lowercase chip name in
-   the firmware filename: `esp32-c3`, `esp32-s3`, or `esp32`.
+   Look for a line like `Detecting chip type... ESP32-C3`, then use the pack name that matches
+   your board in the firmware filename: `esp32-c3`, `esp32-s3`, `esp32`, or
+   `seeed-xiao-esp32c3` (Seeed XIAO ESP32C3).
 
 4. Download the full firmware pack and `checksums.txt` from the
    [OpenNeato Releases](https://github.com/renjfk/OpenNeato/releases) page.
@@ -321,7 +327,7 @@ it. Run `openneato-flash -list` to see what's detected.
 
 **"Failed to detect chip"** — The ESP32 may not be in download mode. Try holding the BOOT
 button while plugging in USB. If the issue persists, use `-chip` to skip detection
-(e.g. `-chip esp32-c3` or `-chip esp32`).
+(e.g. `-chip esp32-c3`, `-chip seeed-xiao-esp32c3`, or `-chip esp32`).
 
 **"Checksum mismatch"** — The downloaded firmware is corrupted. Re-run the tool to download
 again. If using `-firmware`, make sure `checksums.txt` matches the archive.

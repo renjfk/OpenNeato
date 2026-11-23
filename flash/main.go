@@ -19,7 +19,7 @@ import (
 
 func main() {
 	port := flag.String("port", "", "Serial port (auto-detected if not set)")
-	chip := flag.String("chip", "", "Chip type (auto-detected, e.g. esp32-c3, esp32-s3)")
+	chip := flag.String("chip", "", "Chip or board pack name (auto-detected, e.g. esp32-c3, esp32-s3, seeed-xiao-esp32c3)")
 	firmwarePack := flag.String("firmware", "", "Path to local firmware pack .tar.gz (skips download)")
 	listPorts := flag.Bool("list", false, "List available serial ports")
 	noMonitor := flag.Bool("no-monitor", false, "Skip serial monitor after flashing")
@@ -90,7 +90,7 @@ func main() {
 			defer func() { _ = os.RemoveAll(fwDir) }()
 		} else {
 			// Need to know the chip to download firmware
-			chipName := *chip
+			chipName := normalizeChip(*chip)
 			if chipName == "" {
 				fmt.Println("Detecting chip type...")
 				chipName, err = detectChip(esptoolPath, portName)

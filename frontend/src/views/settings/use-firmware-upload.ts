@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { api } from "../../api";
 import type { ErrorStackHandle } from "../../components/error-banner";
 import { md5 } from "../../md5";
+import { downloadFirmware, fetchReleaseToken, type ReleaseInfo } from "../../releases";
 import { sha256 } from "../../sha256";
 import { normalizeError } from "../../utils";
 
-type UploadStatus = "idle" | "hashing" | "uploading" | "done";
+type UploadStatus = "idle" | "downloading" | "hashing" | "uploading" | "done";
 
 // Checksum verification result after comparing firmware SHA-256 against checksums.txt.
 // "match" = firmware hash found and matches, "mismatch" = found but different,
@@ -39,6 +40,13 @@ function canonicalFirmwareName(chip: string): string {
     return `openneato-${chip.toLowerCase()}-firmware.bin`;
 }
 
+// Release asset name for this device. The board id distinguishes builds that
+// share a chip (XIAO ESP32C3 vs generic C3), which the chip header cannot.
+function releaseAssetName(board: string | null, chip: string | null): string | null {
+    if (board) return `openneato-${board.toLowerCase()}-firmware.bin`;
+    return chip ? canonicalFirmwareName(chip) : null;
+}
+
 // Parse GoReleaser checksums.txt format: "<sha256hex>  <filename>\n" per line.
 // Returns a map of lowercase filename -> lowercase sha256 hex.
 function parseChecksums(text: string): Map<string, string> {
@@ -64,6 +72,7 @@ function verifyChecksum(checksums: Map<string, string>, firmwareName: string, sh
 
 export function useFirmwareUpload(
     deviceChip: string | null,
+    deviceBoard: string | null,
     errorStack: ErrorStackHandle,
     startRebootFlow: () => void,
 ) {
@@ -151,13 +160,16 @@ export function useFirmwareUpload(
     // Uses pure-JS sha256 - crypto.subtle is unavailable over plain HTTP (non-secure context).
     // Looks up by canonical release filename derived from the chip ID in the binary header,
     // so renamed files (e.g. "firmware(1).bin") still match.
-    const verifyFirmwareFile = useCallback(async (fw: File, checksums: Map<string, string>) => {
-        const buf = await fw.arrayBuffer();
-        const hash = sha256(buf);
-        const chip = parseChipFromBin(buf);
-        const lookupName = chip ? canonicalFirmwareName(chip) : fw.name;
-        setChecksumResult(verifyChecksum(checksums, lookupName, hash));
-    }, []);
+    const verifyFirmwareFile = useCallback(
+        async (fw: File, checksums: Map<string, string>) => {
+            const buf = await fw.arrayBuffer();
+            const hash = sha256(buf);
+            const chip = parseChipFromBin(buf);
+            const lookupName = releaseAssetName(deviceBoard, chip) ?? fw.name;
+            setChecksumResult(verifyChecksum(checksums, lookupName, hash));
+        },
+        [deviceBoard],
+    );
 
     const selectChecksumFile = useCallback(
         async (f: File | null) => {
@@ -184,6 +196,35 @@ export function useFirmwareUpload(
             }
         },
         [file, errorStack, verifyFirmwareFile],
+    );
+
+    // Install a release straight from the update host. The token identifies the
+    // exact image and is verified on the device, so a corrupted or swapped
+    // download is rejected there rather than trusted here.
+    const installRelease = useCallback(
+        async (release: ReleaseInfo) => {
+            try {
+                setStatus("downloading");
+                startProgressAnim();
+                realProgress.current = 0;
+
+                const image = await downloadFirmware(release, onUploadProgress);
+                const token = await fetchReleaseToken(release);
+
+                setStatus("uploading");
+                await api.installFirmware(image, token, onUploadProgress);
+
+                stopProgressAnim();
+                setDisplayProgress(100);
+                setStatus("done");
+                startRebootFlow();
+            } catch (e: unknown) {
+                stopProgressAnim();
+                setStatus("idle");
+                errorStack.push(normalizeError(e, "Firmware install failed"));
+            }
+        },
+        [errorStack, startProgressAnim, stopProgressAnim, onUploadProgress, startRebootFlow],
     );
 
     const startUpload = useCallback(async () => {
@@ -225,5 +266,6 @@ export function useFirmwareUpload(
         selectFile,
         selectChecksumFile,
         startUpload,
+        installRelease,
     };
 }

@@ -59,6 +59,7 @@ release:
     name: OpenNeato
   extra_files:
     - glob: .pio/build/*-release/*-firmware.bin
+    - glob: .pio/build/*-release/*-firmware.bin.token
     - glob: .pio/build/*-release/*-full.tar.gz
     - glob: frontend/api/openapi.yaml
 
@@ -66,6 +67,7 @@ checksum:
   name_template: checksums.txt
   extra_files:
     - glob: .pio/build/*-release/*-firmware.bin
+    - glob: .pio/build/*-release/*-firmware.bin.token
     - glob: .pio/build/*-release/*-full.tar.gz
     - glob: frontend/api/openapi.yaml
 

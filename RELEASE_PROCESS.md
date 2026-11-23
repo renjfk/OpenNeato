@@ -25,6 +25,9 @@ The manual release process involves:
 - Understanding of conventional commit patterns
 - Familiarity with major.minor versioning (no patch versions)
 - The release notes committed on the branch you dispatch from (the workflow refuses a tag with no notes)
+- The `OTA_SIGNING_KEY` repository secret (firmware signing key, see
+  [docs/firmware-signing.md](docs/firmware-signing.md)). The workflow refuses to build without it, because
+  firmware that is not signed cannot be installed from the web UI or updated automatically
 
 ## AI-Assisted Release Process
 

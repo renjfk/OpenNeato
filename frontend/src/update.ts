@@ -1,27 +1,26 @@
-// Browser-side update checker — ports logic from tash/internal/data/update.go
-// Fetches GitHub releases API, compares versions, stores state in localStorage.
-// ESP32 makes no outbound connections; this runs entirely in the browser.
+// Browser-side update checker.
+//
+// Asks the update host for the release list of this board, compares the newest
+// stable release with the running version, and remembers the result in
+// localStorage so the dashboard banner survives a page reload. Installs are
+// driven from Settings and verified on the device; this file only decides
+// whether to advertise an update.
 
-declare const __GITHUB_API_BASE__: string | undefined;
-const GITHUB_API_BASE = typeof __GITHUB_API_BASE__ !== "undefined" ? __GITHUB_API_BASE__ : "https://api.github.com";
-const GITHUB_RELEASES_URL = `${GITHUB_API_BASE}/repos/renjfk/OpenNeato/releases/latest`;
+import { fetchReleases, type ReleaseInfo } from "./releases";
+
 const RELEASE_URL_BASE = "https://github.com/renjfk/OpenNeato/releases/tag/";
 const LS_KEY_LATEST = "update_latest_version";
 const LS_KEY_TIMESTAMP = "update_last_check";
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
-
-interface GitHubRelease {
-    tag_name: string;
-}
 
 export interface UpdateInfo {
     version: string;
     url: string;
 }
 
-// Strip leading "v", trim whitespace, drop suffix after "-" so that
-// dev builds ("0.0-abc1234"), snapshots, and pre-release tags all
-// reduce to their numeric base ("0.0").
+// Strip a leading "v", trim, and drop any suffix after "-" so dev builds
+// ("0.0-abc1234") and prereleases ("0.15-pr220.abc1234") reduce to their
+// numeric base for comparison.
 function cleanVersion(v: string): string {
     v = v.trim();
     if (v.startsWith("v")) v = v.slice(1);
@@ -75,31 +74,52 @@ export function clearUpdateCache(): void {
     localStorage.removeItem(LS_KEY_TIMESTAMP);
 }
 
-// Fetch latest release from GitHub, compare against current version,
-// store result in localStorage. Fails silently on network errors.
-export async function checkForUpdate(currentVersion: string): Promise<void> {
+// True when a release's base version is older than the running one. Such a
+// release is listed for reference but the device would refuse it.
+export function isOlderVersion(candidate: string, currentVersion: string): boolean {
+    const candidateBase = splitVersion(cleanVersion(candidate));
+    const currentBase = splitVersion(cleanVersion(currentVersion));
+    if (!candidateBase || !currentBase) return false;
+    for (let i = 0; i < 2; i++) {
+        if (candidateBase[i] < currentBase[i]) return true;
+        if (candidateBase[i] > currentBase[i]) return false;
+    }
+    return false;
+}
+
+// Newest stable release that is newer than the running version, if any.
+export function newestStable(releases: ReleaseInfo[], currentVersion: string): ReleaseInfo | null {
+    const local = cleanVersion(currentVersion);
+    if (!local || local === "0.0") return null;
+
+    let best: ReleaseInfo | null = null;
+    for (const release of releases) {
+        if (release.prerelease) continue;
+        const base = cleanVersion(release.version);
+        if (!isNewerVersion(base, local)) continue;
+        if (!best || isNewerVersion(base, cleanVersion(best.version))) best = release;
+    }
+    return best;
+}
+
+// Refresh the cached result from the release feed. Fails silently: an offline
+// device or an unreachable update host must not surface an error.
+export async function checkForUpdate(currentVersion: string, board: string): Promise<void> {
     const local = cleanVersion(currentVersion);
     if (!local || local === "0.0") return; // dev build, skip
-
+    if (!board) return;
     if (!shouldCheck()) return;
     writeTimestamp();
 
     try {
-        const res = await fetch(GITHUB_RELEASES_URL, {
-            headers: { Accept: "application/vnd.github+json" },
-        });
-        if (!res.ok) return;
-
-        const release: GitHubRelease = await res.json();
-        const latest = cleanVersion(release.tag_name);
-
-        if (isNewerVersion(latest, local)) {
-            localStorage.setItem(LS_KEY_LATEST, latest);
+        const best = newestStable(await fetchReleases(board), currentVersion);
+        if (best) {
+            localStorage.setItem(LS_KEY_LATEST, cleanVersion(best.version));
         } else {
             localStorage.removeItem(LS_KEY_LATEST);
         }
     } catch {
-        // fail silently — network errors, rate limits, CORS issues
+        // fail silently — offline, blocked, or the update host is down
     }
 }
 

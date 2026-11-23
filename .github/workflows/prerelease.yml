@@ -10,14 +10,19 @@ on:
         description: "Comment ID for reply (set by slash-command dispatcher)"
         required: false
 
+# Least privilege: jobs that run code from the ref under test get read-only
+# access, so a malicious branch or PR cannot merge itself or push over main
+# before the signing jobs check it out.
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   resolve:
     name: Resolve context
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       pr_number: ${{ steps.resolve.outputs.pr_number }}
       head_sha: ${{ steps.resolve.outputs.head_sha }}
@@ -25,6 +30,7 @@ jobs:
       checkout_ref: ${{ steps.resolve.outputs.checkout_ref }}
       release_tag: ${{ steps.resolve.outputs.tag }}
       version: ${{ steps.resolve.outputs.version }}
+      signing_ref: ${{ steps.resolve.outputs.signing_ref }}
 
     steps:
       - name: Resolve
@@ -58,6 +64,16 @@ jobs:
             TAG="v${BASE}-${SAFE_REF}.${SHORT_SHA}"
           fi
 
+          # Pin the commit the signing jobs will use, before any code from the
+          # ref under test runs. Checking out the branch by name later would let
+          # that code move the branch first.
+          DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+          SIGNING_REF=$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}" "refs/heads/${DEFAULT_BRANCH}" | cut -f1)
+          if [ -z "$SIGNING_REF" ]; then
+            echo "could not resolve ${DEFAULT_BRANCH}" >&2
+            exit 1
+          fi
+
           {
             echo "pr_number=$PR_NUMBER"
             echo "head_sha=$HEAD_SHA"
@@ -65,6 +81,7 @@ jobs:
             echo "checkout_ref=$CHECKOUT_REF"
             echo "tag=$TAG"
             echo "version=${TAG#v}"
+            echo "signing_ref=$SIGNING_REF"
           } >> "$GITHUB_OUTPUT"
           echo "Release: $TAG ($HEAD_REF @ $SHORT_SHA)"
 
@@ -72,6 +89,8 @@ jobs:
     name: Create release tag
     needs: resolve
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
@@ -86,6 +105,49 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "${{ needs.resolve.outputs.release_tag }}" -m "Prerelease ${{ needs.resolve.outputs.release_tag }}"
           git push origin "${{ needs.resolve.outputs.release_tag }}"
+
+  signing-key:
+    name: Derive signing key
+    needs: [resolve, create-tag]
+    runs-on: ubuntu-latest
+
+    steps:
+      # The prerelease builds code from the PR/branch under test, so the key is
+      # only ever handled by scripts checked out from a commit of the default
+      # branch recorded before that code ran.
+      - name: Checkout signing scripts
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve.outputs.signing_ref }}
+          persist-credentials: false
+
+      # Prerelease images are signed with the same key as stable releases, so a
+      # tester can install them from the web UI. They are never installed
+      # automatically.
+      - name: Derive firmware signing public key
+        env:
+          OTA_SIGNING_KEY: ${{ secrets.OTA_SIGNING_KEY }}
+          ROTATION_KEY: ${{ vars.OTA_ROTATION_PUBLIC_KEY }}
+        run: |
+          if [ -z "$OTA_SIGNING_KEY" ]; then
+            echo "OTA_SIGNING_KEY secret is not set (see docs/firmware-signing.md)" >&2
+            exit 1
+          fi
+          key="$RUNNER_TEMP/ota-signing-key.pem"
+          header=firmware/src/ota_public_keys.h
+          printf '%s' "$OTA_SIGNING_KEY" > "$key"
+          if [ -n "$ROTATION_KEY" ]; then
+            python3 scripts/ota_keygen.py --key "$key" --release --extra-key "$ROTATION_KEY" --out-header "$header"
+          else
+            python3 scripts/ota_keygen.py --key "$key" --release --out-header "$header"
+          fi
+          rm -f "$key"
+
+      - name: Upload firmware signing public key
+        uses: actions/upload-artifact@v7
+        with:
+          name: ota-pubkey
+          path: firmware/src/ota_public_keys.h
 
   resolve-firmware-envs:
     name: Resolve firmware environments
@@ -117,6 +179,7 @@ jobs:
         with:
           ref: ${{ needs.resolve.outputs.release_tag }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -141,7 +204,7 @@ jobs:
 
   firmware:
     name: Firmware (${{ matrix.env }})
-    needs: [resolve, create-tag, resolve-firmware-envs, frontend-assets]
+    needs: [resolve, create-tag, resolve-firmware-envs, frontend-assets, signing-key]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -154,11 +217,18 @@ jobs:
         with:
           ref: ${{ needs.resolve.outputs.release_tag }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Download embedded frontend header
         uses: actions/download-artifact@v8
         with:
           name: web-assets
+          path: firmware/src
+
+      - name: Download firmware signing public key
+        uses: actions/download-artifact@v8
+        with:
+          name: ota-pubkey
           path: firmware/src
 
       - name: Set up Python
@@ -184,9 +254,10 @@ jobs:
       - name: Build firmware
         env:
           FIRMWARE_VERSION: ${{ needs.resolve.outputs.version }}
+          PIO_ENV: ${{ matrix.env }}
         run: |
-          echo "Building ${{ matrix.env }}..."
-          pio run -e "${{ matrix.env }}"
+          echo "Building $PIO_ENV..."
+          pio run -e "$PIO_ENV"
 
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v7
@@ -196,10 +267,63 @@ jobs:
             .pio/build/${{ matrix.env }}/*-firmware.bin
             .pio/build/${{ matrix.env }}/*-full.tar.gz
 
+  sign-artifacts:
+    name: Sign firmware artifacts
+    needs: [resolve, firmware]
+    runs-on: ubuntu-latest
+
+    steps:
+      # Trusted code only, as in the signing-key job.
+      - name: Checkout signing scripts
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve.outputs.signing_ref }}
+          persist-credentials: false
+
+      - name: Download firmware artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: '*-release'
+          path: .pio/build
+
+      - name: Sign firmware images
+        env:
+          OTA_SIGNING_KEY: ${{ secrets.OTA_SIGNING_KEY }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          if [ -z "$OTA_SIGNING_KEY" ]; then
+            echo "OTA_SIGNING_KEY secret is not set (see docs/firmware-signing.md)" >&2
+            exit 1
+          fi
+          key="$RUNNER_TEMP/ota-signing-key.pem"
+          pubkey="$RUNNER_TEMP/ota-signing-key.pub.pem"
+          printf '%s' "$OTA_SIGNING_KEY" > "$key"
+          openssl pkey -in "$key" -pubout -out "$pubkey"
+
+          bins=$(find .pio/build -name 'openneato-*-firmware.bin' -type f)
+          if [ -z "$bins" ]; then
+            echo "no firmware images to sign" >&2
+            exit 1
+          fi
+          for bin in $bins; do
+            ./scripts/ota_sign.py sign --key "$key" --version "$VERSION" --bin "$bin"
+            ./scripts/ota_sign.py verify --pubkey "$pubkey" --bin "$bin" --token "$bin.token"
+          done
+          rm -f "$key" "$pubkey"
+
+      - name: Upload signed firmware artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: signed-firmware
+          path: .pio/build
+
   prerelease:
     name: Build and Prerelease
     runs-on: macos-latest
-    needs: [resolve, create-tag, firmware]
+    needs: [resolve, create-tag, sign-artifacts]
+    permissions:
+      contents: write
+      pull-requests: write
 
     steps:
       - name: Checkout
@@ -207,12 +331,32 @@ jobs:
         with:
           ref: ${{ needs.resolve.outputs.release_tag }}
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Download firmware artifacts
+      - name: Download signed firmware artifacts
         uses: actions/download-artifact@v8
         with:
-          pattern: '*-release'
+          name: signed-firmware
           path: .pio/build
+
+      # GoReleaser hooks are arbitrary shell, and this job holds a write token.
+      # Run it with the config from the pinned default-branch commit, copied into
+      # the working tree so relative globs resolve as before.
+      - name: Checkout trusted release config
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve.outputs.signing_ref }}
+          path: .trusted
+          persist-credentials: false
+
+      - name: Use trusted GoReleaser config
+        run: |
+          cp .trusted/.goreleaser.yml .goreleaser.trusted.yml
+          # GoReleaser refuses to run on a dirty tree. Both paths are ours, not
+          # the ref under test: .git/info/exclude is outside the checkout.
+          exclude="$(git rev-parse --git-dir)/info/exclude"
+          mkdir -p "$(dirname "$exclude")"
+          printf '.trusted/\n.goreleaser.trusted.yml\n' >> "$exclude"
 
       # --- Flash tool + GitHub Release ---
 
@@ -225,7 +369,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
-          args: release --clean
+          args: release --clean --config .goreleaser.trusted.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

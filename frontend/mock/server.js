@@ -106,6 +106,57 @@ const loadHistorySessions = () => {
     return sessions;
 };
 
+// Release feed (/v1/...) as served by the update Worker in production. Local dev
+// gets two fake releases and a tiny firmware image so the install flow can be
+// exercised without reaching the network.
+const MOCK_RELEASES = [
+    { version: "0.16", tag: "v0.16", prerelease: false, size: 65536 },
+    { version: "0.17-pr42.abcdef0", tag: "v0.17-pr42.abcdef0", prerelease: true, size: 65536 },
+];
+
+const mockFirmwareImage = () => {
+    // ESP32-C3 image header: byte 12 carries the chip id (5), which the mock API
+    // validates the same way the firmware does.
+    const image = Buffer.alloc(65536);
+    image[12] = 5;
+    return image;
+};
+
+const handleReleaseFeed = (req, res, parsed) => {
+    const [, , kind, tag, board] = parsed.pathname.split("/");
+    if (kind === "releases") {
+        const releases = MOCK_RELEASES.map((release) => ({
+            ...release,
+            publishedAt: "2026-11-01T00:00:00Z",
+            url: `http://${req.headers.host}/v1/firmware/${release.tag}/${board || "esp32-c3"}`,
+            tokenUrl: `http://${req.headers.host}/v1/token/${release.tag}/${board || "esp32-c3"}`,
+        }));
+        sendResponse(res, {
+            status: 200,
+            headers: { "Content-Type": "application/json; charset=utf-8" },
+            body: JSON.stringify(releases),
+        });
+        return true;
+    }
+    if (kind === "firmware" && tag && board) {
+        sendResponse(res, {
+            status: 200,
+            headers: { "Content-Type": "application/octet-stream" },
+            body: mockFirmwareImage(),
+        });
+        return true;
+    }
+    if (kind === "token" && tag && board) {
+        sendResponse(res, {
+            status: 200,
+            headers: { "Content-Type": "text/plain; charset=utf-8" },
+            body: `v1|${board}|mock|65536|${"0".repeat(64)}|${"0".repeat(128)}\n`,
+        });
+        return true;
+    }
+    return false;
+};
+
 const context = {
     state: {},
     faults: {},
@@ -168,6 +219,10 @@ const api = createMockApi(context);
 const handleRequest = async (req, res) => {
     const parsed = new URL(req.url, "http://localhost");
     initScenario(scenarioFromRequest(parsed.searchParams, req.headers.cookie));
+    if (parsed.pathname.startsWith("/v1/")) {
+        if (handleReleaseFeed(req, res, parsed)) return true;
+        return false;
+    }
     const response = await api.handle(createRequestAdapter(req, parsed));
     if (response === false) return false;
     if (response.offline) {
@@ -190,7 +245,9 @@ function mockApiPlugin() {
                 }
             });
             server.middlewares.use(async (req, res, next) => {
-                if (!req.url.startsWith("/api") && !req.url.startsWith("/repos")) return next();
+                if (!req.url.startsWith("/api") && !req.url.startsWith("/repos") && !req.url.startsWith("/v1/")) {
+                    return next();
+                }
 
                 logRequest(req, res);
                 await new Promise((resolve) => setTimeout(resolve, rand(50, 200)));

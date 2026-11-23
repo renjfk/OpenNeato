@@ -6,7 +6,7 @@ Usage:
     python scripts/check_format.py          # check (dry-run)
     python scripts/check_format.py --fix    # auto-fix in place
 
-Skips generated files (web_assets*).
+Skips generated files (web_assets*, ota_public_keys*).
 """
 
 import glob
@@ -21,7 +21,8 @@ SRC_DIR = os.path.join(PROJECT_DIR, "firmware", "src")
 sources = glob.glob(os.path.join(SRC_DIR, "*.cpp")) + glob.glob(
     os.path.join(SRC_DIR, "*.h")
 )
-sources = [f for f in sources if not os.path.basename(f).startswith("web_assets")]
+GENERATED_PREFIXES = ("web_assets", "ota_public_keys")
+sources = [f for f in sources if not os.path.basename(f).startswith(GENERATED_PREFIXES)]
 
 if not sources:
     print("No source files to check")

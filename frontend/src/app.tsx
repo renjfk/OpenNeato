@@ -85,17 +85,18 @@ export function App() {
 
     useEffect(() => {
         const version = firmware.data?.version;
-        if (!version || updateChecked.current) return;
+        const board = firmware.data?.board;
+        if (!version || !board || updateChecked.current) return;
         updateChecked.current = true;
 
         // Read any previously stored result immediately
         setUpdateInfo(getAvailableUpdate(version));
 
         // Fire-and-forget check (respects 6h interval internally)
-        checkForUpdate(version).then(() => {
+        checkForUpdate(version, board).then(() => {
             setUpdateInfo(getAvailableUpdate(version));
         });
-    }, [firmware.data?.version]);
+    }, [firmware.data?.version, firmware.data?.board]);
 
     // Derive manual mode from polled state — single source of truth
     const isManual = state.data?.uiState?.includes("MANUALCLEANING") ?? false;

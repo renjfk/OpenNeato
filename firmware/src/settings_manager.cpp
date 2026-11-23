@@ -73,6 +73,7 @@ void SettingsManager::load() {
     current.ntfyOnError = prefs.getBool(NVS_KEY_NTFY_ON_ERR, true);
     current.ntfyOnAlert = prefs.getBool(NVS_KEY_NTFY_ON_ALERT, true);
     current.ntfyOnDocking = prefs.getBool(NVS_KEY_NTFY_ON_DOCK, true);
+    current.autoUpdate = prefs.getBool(NVS_KEY_AUTO_UPDATE, false);
     current.scheduleEnabled = prefs.getBool(NVS_KEY_SCHED_ENABLED, false);
     current.autoRestartEnabled = prefs.getBool(NVS_KEY_AUTO_RESTART_ENABLED, false);
     current.autoRestartHour = prefs.getInt(NVS_KEY_AUTO_RESTART_HOUR, 3);
@@ -108,6 +109,7 @@ void SettingsManager::save() {
     prefs.putBool(NVS_KEY_NTFY_ON_ERR, current.ntfyOnError);
     prefs.putBool(NVS_KEY_NTFY_ON_ALERT, current.ntfyOnAlert);
     prefs.putBool(NVS_KEY_NTFY_ON_DOCK, current.ntfyOnDocking);
+    prefs.putBool(NVS_KEY_AUTO_UPDATE, current.autoUpdate);
     prefs.putBool(NVS_KEY_SCHED_ENABLED, current.scheduleEnabled);
     prefs.putBool(NVS_KEY_AUTO_RESTART_ENABLED, current.autoRestartEnabled);
     prefs.putInt(NVS_KEY_AUTO_RESTART_HOUR, current.autoRestartHour);
@@ -312,6 +314,12 @@ ApplyResult SettingsManager::apply(const String& json) {
         LOG("SETTINGS", "ntfy on docking -> %s", current.ntfyOnDocking ? "on" : "off");
     }
 
+    if (incoming.autoUpdate != current.autoUpdate) {
+        current.autoUpdate = incoming.autoUpdate;
+        changed = true;
+        LOG("SETTINGS", "Auto update -> %s", current.autoUpdate ? "on" : "off");
+    }
+
     if (incoming.scheduleEnabled != current.scheduleEnabled) {
         current.scheduleEnabled = incoming.scheduleEnabled;
         changed = true;
@@ -398,6 +406,7 @@ std::vector<Field> Settings::toFields() const {
             {"autoRestartHour", String(autoRestartHour), FIELD_INT},
             {"autoRestartMinute", String(autoRestartMinute), FIELD_INT},
             {"restartBeforeClean", restartBeforeClean ? "true" : "false", FIELD_BOOL},
+            {"autoUpdate", autoUpdate ? "true" : "false", FIELD_BOOL},
     };
     for (int d = 0; d < SCHEDULE_DAYS; d++) {
         for (int s = 0; s < SCHEDULE_SLOTS_PER_DAY; s++) {
@@ -512,6 +521,10 @@ bool Settings::fromFields(const std::vector<Field>& fields) {
     }
     if ((f = findField(fields, "autoRestartMinute")) && f->type == FIELD_INT) {
         autoRestartMinute = f->value.toInt();
+        applied = true;
+    }
+    if ((f = findField(fields, "autoUpdate")) && f->type == FIELD_BOOL) {
+        autoUpdate = (f->value == "true");
         applied = true;
     }
     if ((f = findField(fields, "restartBeforeClean")) && f->type == FIELD_BOOL) {

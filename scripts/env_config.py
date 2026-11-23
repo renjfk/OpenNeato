@@ -31,6 +31,41 @@ import tempfile
 
 Import("env")
 
+
+def _define_value(env, key):
+    """Read a -D value from either CPPDEFINES or the raw BUILD_FLAGS.
+
+    Pre-build scripts run before PlatformIO expands build_flags into
+    CPPDEFINES, so both sources are needed: pre-build reads BUILD_FLAGS,
+    post-build reads CPPDEFINES.
+    """
+    for define in env.get("CPPDEFINES") or []:
+        if isinstance(define, (list, tuple)) and len(define) == 2:
+            if define[0] == key:
+                return str(define[1])
+        elif isinstance(define, str) and define.startswith(key + "="):
+            return define.split("=", 1)[1]
+
+    for flag in env.get("BUILD_FLAGS") or []:
+        if flag.startswith("-D" + key + "="):
+            return flag.split("=", 1)[1]
+    return None
+
+
+def resolve_release_name(env):
+    """Release artifact name for this build.
+
+    OPENNEATO_RELEASE_ID can distinguish board-specific builds that use the same
+    underlying chip, e.g. Seeed XIAO ESP32C3 vs generic ESP32-C3. Falls back to
+    CHIP_MODEL for existing release artifact names. The same value is compiled in
+    as BOARD_ID so signed update tokens can be matched to the running build.
+    """
+    value = _define_value(env, "OPENNEATO_RELEASE_ID") or _define_value(env, "CHIP_MODEL")
+    if not value:
+        return None
+    return value.replace('\\"', '"').strip('"').lower()
+
+
 # -- Frontend build (Full environments) ----------------------------------------
 
 if os.environ.get("BUILD_FRONTEND"):
@@ -63,6 +98,15 @@ if not version:
 if version:
     env.Append(CPPDEFINES=[("FIRMWARE_VERSION", '\\"%s\\"' % version)])
 
+# -- BOARD_ID ------------------------------------------------------------------
+# Compiled in so a signed update token (which names a board) can be matched
+# against the running build. Same value the release artifacts are named after,
+# resolved here because it depends on build flags.
+
+board_id = resolve_release_name(env)
+if board_id:
+    env.Append(CPPDEFINES=[("BOARD_ID", '\\"%s\\"' % board_id)])
+
 # -- OTA_HOST (OTA upload) -----------------------------------------------------
 
 host = os.environ.get("OTA_HOST")
@@ -84,33 +128,6 @@ elif env["PIOENV"].endswith("-ota") and "upload" in COMMAND_LINE_TARGETS:
 #   openneato-<chip>-full.tar.gz  — full flash pack for the flash tool
 #
 # GoReleaser picks these up via extra_files globs at release time.
-
-
-def resolve_release_name(env):
-    """Extract release artifact name from build flags.
-
-    OPENNEATO_RELEASE_ID can distinguish board-specific builds that use the same
-    underlying chip, e.g. Seeed XIAO ESP32C3 vs generic ESP32-C3. Falls back to
-    CHIP_MODEL for existing release artifact names.
-    """
-    for define in env.get("CPPDEFINES", []):
-        # CPPDEFINES entries can be strings or tuples/lists
-        if isinstance(define, (list, tuple)) and len(define) == 2:
-            key, val = define
-            if key == "OPENNEATO_RELEASE_ID":
-                return str(val).strip('\\"').lower()
-        elif isinstance(define, str) and define.startswith("OPENNEATO_RELEASE_ID="):
-            return define.split("=", 1)[1].strip('\\"').lower()
-
-    for define in env.get("CPPDEFINES", []):
-        # CPPDEFINES entries can be strings or tuples/lists
-        if isinstance(define, (list, tuple)) and len(define) == 2:
-            key, val = define
-            if key == "CHIP_MODEL":
-                return str(val).strip('\\"').lower()
-        elif isinstance(define, str) and define.startswith("CHIP_MODEL="):
-            return define.split("=", 1)[1].strip('\\"').lower()
-    return None
 
 
 def package_release(source, target, env):

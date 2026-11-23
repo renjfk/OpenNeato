@@ -52,6 +52,11 @@ struct Settings : public JsonSerializable {
     bool ntfyOnAlert = true; // Notify on robot alert (UI_ALERT_*, code 201-242)
     bool ntfyOnDocking = true; // Notify when robot returns to base
 
+    // Firmware updates. Automatic installation needs a signed release token and
+    // only runs while the robot is docked and idle. Off by default: the device
+    // then contacts nothing and updates are installed from the web UI.
+    bool autoUpdate = false;
+
     // Schedule (ESP32-managed, not robot serial)
     bool scheduleEnabled = false;
     SchedDay sched[SCHEDULE_DAYS]; // Mon=0 .. Sun=6

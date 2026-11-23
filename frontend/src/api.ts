@@ -84,7 +84,7 @@ async function fetchSessionData(filename: string): Promise<MapData[]> {
     return parseMapData(raw);
 }
 
-function uploadFile(url: string, file: File, onProgress: (pct: number) => void): Promise<void> {
+function uploadFile(url: string, file: Blob, filename: string, onProgress: (pct: number) => void): Promise<void> {
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", url);
@@ -106,17 +106,24 @@ function uploadFile(url: string, file: File, onProgress: (pct: number) => void):
         xhr.addEventListener("error", () => reject(new Error("Network error during upload")));
         xhr.addEventListener("abort", () => reject(new Error("Upload aborted")));
         const form = new FormData();
-        form.append("file", file);
+        form.append("file", file, filename);
         xhr.send(form);
     });
 }
 
 function importSession(file: File, onProgress: (pct: number) => void): Promise<void> {
-    return uploadFile("/api/history/import", file, onProgress);
+    return uploadFile("/api/history/import", file, file.name || "session", onProgress);
 }
 
+// Manual upload: the device verifies the MD5 of the body.
 function uploadFirmware(file: File, md5: string, onProgress: (pct: number) => void): Promise<void> {
-    return uploadFile(`/api/firmware/update?hash=${md5}`, file, onProgress);
+    return uploadFile(`/api/firmware/update?hash=${md5}`, file, file.name || "firmware.bin", onProgress);
+}
+
+// Signed install: the device verifies the release token and the image hash,
+// so no client-side MD5 is involved.
+function installFirmware(image: Blob, token: string, onProgress: (pct: number) => void): Promise<void> {
+    return uploadFile(`/api/firmware/update?token=${encodeURIComponent(token)}`, image, "firmware.bin", onProgress);
 }
 
 export const api = {
@@ -166,6 +173,9 @@ export const api = {
     importSession: (file: File, onProgress: (pct: number) => void) => importSession(file, onProgress),
     uploadFirmware: (file: File, md5: string, onProgress: (pct: number) => void) =>
         uploadFirmware(file, md5, onProgress),
+    installFirmware: (image: Blob, token: string, onProgress: (pct: number) => void) =>
+        installFirmware(image, token, onProgress),
+    checkForFirmwareUpdate: () => post("/api/firmware/check"),
     saveSchedule: (patch: Partial<SettingsData>) => put<SettingsData>("/api/settings", patch),
 
     getUserSettings: () => get<UserSettingsData>("/api/user-settings"),

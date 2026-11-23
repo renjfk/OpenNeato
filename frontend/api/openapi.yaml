@@ -758,12 +758,27 @@ paths:
     post:
       tags:
         - Firmware
-      summary: Upload a new firmware image and verify against the supplied MD5
+      summary: Install a firmware image, verified by MD5 or a signed release token
+      description: |
+        Two ways to install an image:
+
+        - Manual upload: pass `hash`, the MD5 of the uploaded binary.
+        - Signed release: pass `token`, the signed token published with the
+          release. The token names the board, version, size and SHA-256 of the
+          image and is verified against keys compiled into the firmware, so the
+          image is rejected if it was altered in transit or is not newer than
+          the running firmware. `hash` is optional when a token is supplied.
       parameters:
         - name: hash
           in: query
-          required: true
-          description: MD5 of firmware binary
+          required: false
+          description: MD5 of firmware binary (required for manual uploads without a token)
+          schema:
+            type: string
+        - name: token
+          in: query
+          required: false
+          description: Signed release token (v1|board|version|size|sha256|signature)
           schema:
             type: string
       requestBody:
@@ -791,6 +806,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /api/firmware/check:
+    post:
+      tags:
+        - Firmware
+      summary: Run the automatic update check on the next tick
+      description: |
+        Asks the update host whether a newer stable release exists for this
+        board and installs it if automatic updates are enabled and the robot is
+        docked and idle. Returns immediately; the check runs in the background.
+      responses:
+        "200":
+          $ref: "#/components/responses/Ok"
   /api/history:
     get:
       tags:
@@ -1473,6 +1500,9 @@ components:
         restartBeforeClean:
           type: boolean
           description: Restart the robot before each scheduled clean to ensure responsiveness
+        autoUpdate:
+          type: boolean
+          description: Install signed stable firmware releases automatically while the robot is docked and idle
         sched0Hour:
           type: number
         sched0Min:
@@ -1584,6 +1614,7 @@ components:
         - autoRestartHour
         - autoRestartMinute
         - restartBeforeClean
+        - autoUpdate
         - sched0Hour
         - sched0Min
         - sched0On
@@ -1638,6 +1669,12 @@ components:
         chip:
           type: string
           description: ESP32 chip model (e.g. "ESP32-C3")
+        board:
+          type: string
+          description: Release board identifier (e.g. "esp32-c3", "seeed-xiao-esp32c3")
+        signedUpdates:
+          type: boolean
+          description: True when this build carries release signing keys and accepts signed update tokens
         model:
           type: string
           description: Robot model name (e.g. "Botvac D7", empty until identified)
@@ -1660,6 +1697,8 @@ components:
         - name
         - version
         - chip
+        - board
+        - signedUpdates
         - model
         - hostname
         - supported

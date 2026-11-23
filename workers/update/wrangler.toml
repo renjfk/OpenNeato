@@ -1,0 +1,21 @@
+name = "openneato-update"
+main = "src/index.js"
+compatibility_date = "2026-05-17"
+
+# The device queries this Worker over plain HTTP (no TLS stack in the firmware),
+# so the route must not be redirected to HTTPS. Add a Configuration Rule in the
+# Cloudflare dashboard for this hostname with "Always Use HTTPS" off. Authenticity
+# comes from the signed release token, not from the transport.
+workers_dev = false
+
+[[routes]]
+pattern = "openneato-update.renjfk.com"
+custom_domain = true
+
+[vars]
+# Optional: a read-only token raises the GitHub API limit from 60/h (shared
+# egress IPs) to 5000/h. Set with: wrangler secret put GITHUB_TOKEN
+REPO = "renjfk/OpenNeato"
+
+[observability]
+enabled = true

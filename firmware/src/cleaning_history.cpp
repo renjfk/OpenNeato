@@ -133,6 +133,8 @@ void CleaningHistory::resetSession() {
     cleanMode = "";
     sessionStartTime = 0;
     batteryStart = -1;
+    firstSnapshotTs = -1.0f;
+    maxSnapshotTs = -1.0f;
     recharging = false;
     pendingSessionJson = "";
     pendingSummaryJson = "";
@@ -325,8 +327,9 @@ void CleaningHistory::writeSessionHeader() {
     writeLine(json);
 }
 
-void CleaningHistory::writeSessionSummary(int batteryEnd) {
-    time_t endTime = systemManager.now();
+void CleaningHistory::writeSessionSummary(int batteryEnd, time_t endTime) {
+    if (endTime <= 0)
+        endTime = systemManager.now();
     long duration =
             (sessionStartTime > 0 && endTime > sessionStartTime) ? static_cast<long>(endTime - sessionStartTime) : 0;
     float areaCovered = static_cast<float>(visitedCells.size()) * HISTORY_AREA_CELL_M * HISTORY_AREA_CELL_M;
@@ -445,6 +448,14 @@ bool CleaningHistory::replayLine(const String& line) {
     const Field *tf = findField(fields, "t");
     if (xf && yf && tf) {
         updateAccumulators(xf->value.toFloat(), yf->value.toFloat(), tf->value.toFloat());
+        const Field *tsField = findField(fields, "ts");
+        if (tsField) {
+            float ts = tsField->value.toFloat();
+            if (firstSnapshotTs < 0.0f)
+                firstSnapshotTs = ts;
+            if (ts > maxSnapshotTs)
+                maxSnapshotTs = ts;
+        }
         snapshotCount++;
     }
     return false;
@@ -655,7 +666,16 @@ void CleaningHistory::finalizeOrphanSessions() {
         if (!activeFile)
             continue;
 
-        writeSessionSummary(-1); // Battery end unknown for interrupted sessions
+        // Finalization runs at boot, so now() may be hours or days after the robot
+        // powered off. Snapshots store the robot's uptime in "ts", so the span
+        // from the first snapshot to the highest uptime seen is how long the clean
+        // actually ran. The highest value wins so a truncated last line cannot
+        // shorten the estimate.
+        time_t endTime = sessionStartTime;
+        if (sessionStartTime > 0 && firstSnapshotTs >= 0.0f && maxSnapshotTs >= firstSnapshotTs)
+            endTime = sessionStartTime + static_cast<time_t>(maxSnapshotTs - firstSnapshotTs);
+
+        writeSessionSummary(-1, endTime); // Battery end unknown for interrupted sessions
         activeFile.close();
 
         LOG("HIST", "Finalized orphan: %s (%u snapshots)", orphanPath.c_str(), snapshotCount);

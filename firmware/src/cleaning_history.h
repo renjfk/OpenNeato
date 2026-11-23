@@ -85,6 +85,11 @@ private:
     String cleanMode;
     time_t sessionStartTime = 0;
     int batteryStart = -1;
+    // Robot uptime ("ts" in snapshots) of the first snapshot and the highest
+    // uptime seen. Used to estimate when an orphan session ended: finalizing
+    // happens at boot, so now() can be hours or days after the robot stopped.
+    float firstSnapshotTs = -1.0f;
+    float maxSnapshotTs = -1.0f;
 
     // -- Session accumulators ------------------------------------------------
     int rechargeCount = 0;
@@ -127,7 +132,7 @@ private:
     std::vector<String> writeBuffer;
     unsigned long lastFlushMs = 0;
     void writeSessionHeader();
-    void writeSessionSummary(int batteryEnd);
+    void writeSessionSummary(int batteryEnd, time_t endTime = 0);
     void writeSnapshot(float x, float y, float theta, float time);
     void updateAccumulators(float x, float y, float theta);
     void resetSession();

@@ -129,7 +129,7 @@ jobs:
 
       # No dependencies to install: the tests run the Worker handler directly.
       - name: Test update host
-        run: node --test test/
+        run: npm test
         working-directory: workers/update
 
   signing-scripts:

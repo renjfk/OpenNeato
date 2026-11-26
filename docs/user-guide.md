@@ -109,9 +109,6 @@ the setting to match.
 > values take precedence over firmware defaults. Check your board's actual pin labels.
 > GPIO12/13 are reserved for native USB.
 >
-> On an ESP32-C6FH4 Super Mini, USB flashing, startup, fallback WiFi, and WiFi client
-> access to the web UI have been verified. Robot communication and cleaning, OTA/rollback,
-> and factory reset have not yet been verified on this board.
 > The C6 uses a different partition layout from the other chips (1728 KB OTA slots and
 > 512 KB storage for logs/history). Install the full pack over USB when changing partition
 > layouts: an application-only OTA update does not replace the partition table.

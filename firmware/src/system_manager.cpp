@@ -2,6 +2,7 @@
 #include <SPIFFS.h>
 #include <WiFi.h>
 #include <ctime>
+#include <esp_idf_version.h>
 
 SystemManager::SystemManager(Preferences& prefs) : LoopTask(5000), prefs(prefs) {
     TaskRegistry::add(this);
@@ -19,7 +20,27 @@ void SystemManager::begin() {
 void SystemManager::initTaskWdt() {
     // Initialize TWDT with configured timeout. If loop() stops calling
     // feedTaskWdt(), the hardware watchdog resets the ESP32.
+#if ESP_IDF_VERSION_MAJOR >= 5
+    // ESP-IDF 5 takes a config struct and the TWDT is usually already running
+    // (started by the core), so reconfigure it and keep its idle-task checks.
+    uint32_t idleCoreMask = 0;
+#if CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0
+    idleCoreMask |= 1U << 0;
+#endif
+#if CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1
+    idleCoreMask |= 1U << 1;
+#endif
+    esp_task_wdt_config_t wdtConfig = {
+            .timeout_ms = TASK_WDT_TIMEOUT_S * 1000,
+            .idle_core_mask = idleCoreMask,
+            .trigger_panic = true, // panic (reset) on timeout
+    };
+    if (esp_task_wdt_reconfigure(&wdtConfig) == ESP_ERR_INVALID_STATE) {
+        esp_task_wdt_init(&wdtConfig); // Not started by the core yet
+    }
+#else
     esp_task_wdt_init(TASK_WDT_TIMEOUT_S, true); // true = panic (reset) on timeout
+#endif
     esp_task_wdt_add(nullptr); // nullptr = subscribe current task (loopTask)
     LOG("SYS", "Task watchdog initialized (%ds timeout)", TASK_WDT_TIMEOUT_S);
 }

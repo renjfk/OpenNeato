@@ -19,7 +19,7 @@ import (
 
 func main() {
 	port := flag.String("port", "", "Serial port (auto-detected if not set)")
-	chip := flag.String("chip", "", "Chip type (auto-detected, e.g. esp32-c3, esp32-s3)")
+	chip := flag.String("chip", "", "Chip type (auto-detected, e.g. esp32-c3, esp32-s3, esp32-c6)")
 	firmwarePack := flag.String("firmware", "", "Path to local firmware pack .tar.gz (skips download)")
 	listPorts := flag.Bool("list", false, "List available serial ports")
 	noMonitor := flag.Bool("no-monitor", false, "Skip serial monitor after flashing")

@@ -341,10 +341,14 @@ bool WiFiManager::connectToWiFi(const String& ssid, const String& password) {
     // Wait up to 30 seconds (60 attempts x 500ms).
     // Feed the task watchdog each iteration so slow associations (mesh APs,
     // weak signal) don't trigger a TWDT reset when called from loop().
+    // During boot (begin()) the task is not subscribed yet; ESP-IDF 5 logs an
+    // error for every reset of an unsubscribed task, so only feed when subscribed.
+    const bool feedWdt = esp_task_wdt_status(nullptr) == ESP_OK;
     unsigned long connectStart = millis();
     int attempts = 0;
     while (WiFi.status() != WL_CONNECTED && attempts < 60) {
-        esp_task_wdt_reset();
+        if (feedWdt)
+            esp_task_wdt_reset();
         delay(500);
         attempts++;
     }

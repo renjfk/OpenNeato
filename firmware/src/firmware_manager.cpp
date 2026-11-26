@@ -6,8 +6,8 @@ FirmwareManager::FirmwareManager(DataLogger& logger) : LoopTask(250), dataLogger
 
 // ESP32 image extended header byte 12 contains the chip ID (ESP_CHIP_ID_*),
 // which is a different enum from esp_chip_info_t::model (esp_chip_model_t).
-// They happen to match for C3 (5) and S3 (9), but not for the original ESP32
-// (header=0, model=1) or H2. Translate explicitly before comparing.
+// They happen to match for C3 (5), S3 (9) and C6 (13), but not for the original
+// ESP32 (header=0, model=1) or H2. Translate explicitly before comparing.
 bool FirmwareManager::validateChip(uint8_t *data, size_t len) {
     if (len < 16) {
         return true; // Not enough data yet, defer validation
@@ -21,6 +21,8 @@ bool FirmwareManager::validateChip(uint8_t *data, size_t len) {
             {0x02, CHIP_ESP32S2},
             {0x05, CHIP_ESP32C3},
             {0x09, CHIP_ESP32S3},
+            // C6 uses the raw model value: CHIP_ESP32C6 only exists in ESP-IDF 5+
+            {0x0D, 13},
     };
     auto binChipId = static_cast<uint8_t>(data[12]);
     const ChipMap *match = nullptr;

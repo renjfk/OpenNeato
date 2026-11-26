@@ -71,7 +71,8 @@ pio check -e c3-debug                      # Static analysis (clang-tidy)
 ```
 
 Verify firmware changes: `pio run -e c3-debug` + `./scripts/check_format.py` +
-`pio check -e c3-debug` with zero defects.
+`pio check -e c3-debug` with zero defects. Also run `pio run -e c6-debug`, which
+builds against Arduino core 3.x (see Hardware).
 
 Verify frontend changes: `npm run check` + `npm run build` in `frontend/`.
 
@@ -130,5 +131,10 @@ CSS frameworks, routing, or HTTP wrapper libraries.
 
 - **Board**: ESP32-C3-DevKitM-1 (RISC-V, 160MHz, 320KB RAM, 4MB flash)
 - **Flash layout**: Dual OTA slots (1600KB each), 768KB SPIFFS, 20KB NVS
+- **ESP32-C6**: Builds on `espressif32 @ 8.0.0` (Arduino core 3.x / ESP-IDF 5), all
+  other boards on 7.0.1 (Arduino core 2.x / ESP-IDF 4.4). Firmware must compile on both;
+  guard API differences with `ESP_IDF_VERSION_MAJOR`. C6 uses `firmware/partition_c6.csv`
+  (1728KB OTA slots, 512KB SPIFFS) because Arduino core 3.x images are ~200KB larger.
+  Check real image size with `firmware.bin`, not the PlatformIO "Flash:" figure, which omits ~85KB.
 - **NVS**: Single `"neato"` namespace, opened once, passed by reference
 - **Reset**: GPIO9, hold 5s for factory reset
